@@ -1,11 +1,13 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
+import { logger } from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
 
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_mock_secret_key';
-const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2026-04-22.dahlia' as any });
+const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 
-export const stripeCreatePortal = onCall(async (request) => {
+export const stripeCreatePortal = onCall({ secrets: [stripeSecretKey] }, async (request) => {
+  const stripe = new Stripe(stripeSecretKey.value() || 'sk_test_mock_secret_key', { apiVersion: '2026-04-22.dahlia' as any });
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'User must be authenticated.');
@@ -41,7 +43,7 @@ export const stripeCreatePortal = onCall(async (request) => {
 
     return { url: portalSession.url };
   } catch (error: any) {
-    console.error('Stripe Portal error:', error);
+    logger.error('Stripe Portal error:', error);
     throw new HttpsError('internal', error.message || 'Failed to create portal session.');
   }
 });

@@ -90,6 +90,15 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Client-side error reports (best-effort diagnostics from GlobalErrorHandler).
+    // Any signed-in user may create one about their own session; nobody may
+    // read, edit, or delete except platform super-admins reviewing them.
+    match /clientErrorLogs/{logId} {
+      allow create: if signedIn();
+      allow read:   if isSuperAdmin();
+      allow update, delete: if false;
+    }
+
     // ──────────────────────────────────────────────
     // ORG ROOT
     // ──────────────────────────────────────────────

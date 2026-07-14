@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { logger } from 'firebase-functions';
 import { initFirebase } from '../infra/firebase';
 import { getClaims, requireSuperAdmin } from '../infra/auth';
 
@@ -29,7 +30,7 @@ export const getGlobalAuditLogs = onCall(async (req) => {
       };
     });
   } catch (e: any) {
-    console.error('Error fetching global audit logs:', e);
+    logger.error('Error fetching global audit logs:', e);
     const code = String(e?.code ?? '').trim();
     const message = String(e?.message ?? '').trim();
 

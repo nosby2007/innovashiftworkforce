@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { logger } from 'firebase-functions';
 import { initFirebase } from '../infra/firebase';
 import { getClaims, requireSuperAdmin } from '../infra/auth';
 
@@ -52,7 +53,7 @@ export const lookupUserByEmail = onCall(async (req) => {
     if (e?.code === 'auth/invalid-email') {
       throw new HttpsError('invalid-argument', 'Enter a valid email address.');
     }
-    console.error('lookupUserByEmail failed', e);
+    logger.error('lookupUserByEmail failed', e);
     throw new HttpsError('internal', 'Lookup failed.');
   }
 });

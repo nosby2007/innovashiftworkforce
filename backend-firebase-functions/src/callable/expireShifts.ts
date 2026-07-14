@@ -1,4 +1,5 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { logger } from 'firebase-functions';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { initFirebase } from '../infra/firebase';
 
@@ -53,6 +54,6 @@ export const expireShifts = onSchedule(
 
     await batch.commit();
 
-    console.log(`[expireShifts] Expired ${batchCount} shifts.`);
+    logger.info(`[expireShifts] Expired ${batchCount} shifts.`);
   }
 );

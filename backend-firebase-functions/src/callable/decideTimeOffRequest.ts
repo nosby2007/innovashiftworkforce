@@ -3,30 +3,13 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { initFirebase } from '../infra/firebase';
 import { resolveTenantWithFallback } from '../infra/tenancy';
 import { writeAudit } from '../infra/audit';
+import { toMillis, dayBoundsMs } from '../domain/dates';
 
 const INACTIVE_SHIFT_STATUSES = new Set(['cancelled', 'completed', 'expired', 'no_show']);
 
 function num(value: unknown): number {
   const n = Number(value ?? 0);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
-}
-
-function toMillis(value: any): number {
-  if (!value) return 0;
-  if (typeof value.toMillis === 'function') return value.toMillis();
-  if (typeof value.seconds === 'number') return value.seconds * 1000;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-/** Day bounds for a plain 'YYYY-MM-DD' request date, UTC — consistent with the
- *  UTC-day convention already used by assignShift.ts/claimShift.ts. */
-function dayBoundsMs(dateStr: string, endOfDay: boolean): number {
-  const [y, m, d] = String(dateStr || '').split('-').map(Number);
-  if (!y || !m || !d) return 0;
-  return endOfDay
-    ? Date.UTC(y, m - 1, d, 23, 59, 59, 999)
-    : Date.UTC(y, m - 1, d, 0, 0, 0, 0);
 }
 
 function normalizeBalance(data: any) {

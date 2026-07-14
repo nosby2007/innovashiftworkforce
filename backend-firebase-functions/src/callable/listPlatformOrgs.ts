@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { logger } from 'firebase-functions';
 import { initFirebase } from '../infra/firebase';
 import { getClaims, requireSuperAdmin } from '../infra/auth';
 
@@ -52,7 +53,7 @@ export const listPlatformOrgs = onCall(async (req) => {
 
     return { ok: true, items };
   } catch (e: any) {
-    console.error('listPlatformOrgs failed', e);
+    logger.error('listPlatformOrgs failed', e);
     throw new HttpsError('internal', 'Unable to load organizations.');
   }
 });

@@ -6,6 +6,7 @@
   "scripts": {
     "lint": "eslint . --ext .ts,.js",
     "build": "tsc",
+    "test": "vitest run",
     "repair:attendance": "node tools/repair-stuck-attendance.mjs"
   },
   "dependencies": {
@@ -15,7 +16,8 @@
   },
   "devDependencies": {
     "@types/node": "^25.0.9",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
   },
   "engines": {
     "node": "22"

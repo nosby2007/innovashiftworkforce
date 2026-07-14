@@ -7,6 +7,7 @@
     "src/app/app.config.ts",
     "src/app/core/dev/seed-shifts.ts",
     "src/app/features/admin/admin-shell.page.ts",
-    "src/app/features/schedule/post-shift.dialog.ts"
+    "src/app/features/schedule/post-shift.dialog.ts",
+    "src/**/*.spec.ts"
   ]
 }

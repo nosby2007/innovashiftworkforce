@@ -47,16 +47,10 @@
           }
         },
         "test": {
-          "builder": "@angular-devkit/build-angular:karma",
+          "builder": "@angular/build:unit-test",
           "options": {
-            "main": "src/test.ts",
-            "polyfills": ["zone.js"],
-            "tsConfig": "tsconfig.spec.json",
-            "assets": ["src/assets"],
-            "styles": [
-              "src/material-theme.scss",
-              "src/styles.scss"],
-            "scripts": []
+            "runner": "vitest",
+            "buildTarget": "innovacare-shift-frontend:build"
           }
         }
       }

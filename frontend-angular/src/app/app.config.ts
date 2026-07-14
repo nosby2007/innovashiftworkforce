@@ -1,4 +1,4 @@
-import { ApplicationConfig, APP_INITIALIZER, importProvidersFrom, isDevMode } from '@angular/core';
+import { ApplicationConfig, APP_INITIALIZER, ErrorHandler, importProvidersFrom, isDevMode } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideServiceWorker } from '@angular/service-worker';
@@ -7,6 +7,7 @@ import { APP_ROUTES } from './app.routes';
 
 import { ThemeService } from './core/theme/theme.service';
 import { SessionBootstrapService } from './core/auth/session-bootstrap.service';
+import { GlobalErrorHandler } from './core/error-handling/global-error-handler';
 
 // Material modules you want globally
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -27,6 +28,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(APP_ROUTES),
     provideHttpClient(),
+    { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),
       registrationStrategy: 'registerWhenStable:30000',

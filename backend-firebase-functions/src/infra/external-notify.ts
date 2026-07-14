@@ -1,3 +1,5 @@
+import { logger } from 'firebase-functions';
+
 /**
  * Placeholder: external notifications (email/SMS).
  * - For production: integrate SendGrid/Mailgun for email, Twilio for SMS.
@@ -11,6 +13,6 @@ export async function externalNotify(payload: {
   meta?: any;
 }) {
   // Intentionally NO-OP for MVP.
-  console.log('[externalNotify placeholder]', payload);
+  logger.info('[externalNotify placeholder]', payload);
   return { ok: true };
 }
