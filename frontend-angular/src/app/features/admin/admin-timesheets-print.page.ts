@@ -9,6 +9,7 @@ import { ShiftsRepo } from '../../core/repos/shifts.repo';
 import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
 import { TimeEntry } from '../../shared/models/time-entry.model';
 import { formatDateTime, tsToDate } from '../../shared/utils/date.util';
+import { payrollHours } from '../../shared/utils/payroll.util';
 
 @Component({
   standalone: true,
@@ -36,6 +37,7 @@ import { formatDateTime, tsToDate } from '../../shared/utils/date.util';
             <th>Shift</th>
             <th>Check In</th>
             <th>Check Out</th>
+            <th>Break</th>
             <th>Hours</th>
             <th>Exception</th>
           </tr>
@@ -45,6 +47,7 @@ import { formatDateTime, tsToDate } from '../../shared/utils/date.util';
             <td><strong>{{ r.shiftTitle }}</strong></td>
             <td>{{ r.checkIn }}</td>
             <td>{{ r.checkOut }}</td>
+            <td>{{ r.breakLabel }}</td>
             <td>{{ r.hours }}</td>
             <td>{{ r.exceptionStatus }}</td>
           </tr>
@@ -139,11 +142,18 @@ export class AdminTimesheetsPrintPage implements OnDestroy {
         const s = shiftMap[e.shiftId];
         const inD = tsToDate(e.checkInAt);
         const outD = tsToDate(e.checkOutAt);
-        const hours = (inD && outD) ? ((outD.getTime() - inD.getTime()) / 3600000).toFixed(2) : '';
+        const hours = (inD && outD) ? payrollHours(e).toFixed(2) : '';
+        const breakMs = Number(e.totalBreakMs || 0);
+        const breakLabel = e.onBreak
+          ? 'On break'
+          : breakMs > 0
+            ? `${Math.round(breakMs / 60000)} min`
+            : '—';
         return {
           shiftTitle: s?.title || e.shiftId,
           checkIn: formatDateTime(e.checkInAt),
           checkOut: formatDateTime(e.checkOutAt),
+          breakLabel,
           hours,
           exceptionStatus: e.exceptionStatus,
         };

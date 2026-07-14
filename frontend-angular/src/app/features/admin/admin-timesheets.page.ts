@@ -10,6 +10,7 @@ import { ShiftsRepo } from '../../core/repos/shifts.repo';
 import { AdminCommands } from '../../core/commands/admin.commands';
 import { TimeEntry } from '../../shared/models/time-entry.model';
 import { formatDateTime, tsToDate } from '../../shared/utils/date.util';
+import { payrollHours } from '../../shared/utils/payroll.util';
 import { toCsv, downloadTextFile } from '../../shared/utils/csv.util';
 import { ToastService } from '../../core/ui/toast.service';
 import { PrintLauncherService } from '../../core/ui/print-launcher.service';
@@ -122,6 +123,7 @@ import { MatIconModule } from '@angular/material/icon';
                 <th>Shift Title</th>
                 <th>Check In</th>
                 <th>Check Out</th>
+                <th>Break</th>
                 <th>Hours</th>
                 <th>Status</th>
                 <th class="ts-right">Actions</th>
@@ -132,6 +134,7 @@ import { MatIconModule } from '@angular/material/icon';
                 <td><span class="vs-strong">{{ r.shiftTitle }}</span></td>
                 <td>{{ r.checkIn }}</td>
                 <td>{{ r.checkOut }}</td>
+                <td>{{ r.breakLabel }}</td>
                 <td><strong>{{ r.hours }}</strong></td>
                 <td>
                   <span class="vs-badge" 
@@ -317,11 +320,19 @@ export class AdminTimesheetsPage implements OnDestroy {
         const s = shiftMap[e.shiftId];
         const inD = tsToDate(e.checkInAt);
         const outD = tsToDate(e.checkOutAt);
-        const hours = (inD && outD) ? ((outD.getTime() - inD.getTime()) / 3600000).toFixed(2) : '';
+        const hours = (inD && outD) ? payrollHours(e).toFixed(2) : '';
+        const breakMs = Number(e.totalBreakMs || 0);
+        const breakLabel = e.onBreak
+          ? 'On break'
+          : breakMs > 0
+            ? `${Math.round(breakMs / 60000)} min`
+            : '—';
         return {
           shiftTitle: s?.title || e.shiftId,
           checkIn: formatDateTime(e.checkInAt),
           checkOut: formatDateTime(e.checkOutAt),
+          breakLabel,
+          breakMinutes: Math.round(breakMs / 60000),
           hours,
           exceptionStatus: e.exceptionStatus,
           entryId: e.id,
@@ -340,7 +351,7 @@ export class AdminTimesheetsPage implements OnDestroy {
   }
 
 exportCsv() {
-    const headers = ['shiftTitle','checkIn','checkOut','hours','exceptionStatus'];
+    const headers = ['shiftTitle','checkIn','checkOut','breakMinutes','hours','exceptionStatus'];
     const csv = toCsv(this.rows(), headers);
     const filename = `timesheet_${this.safeFileLabel(this.staffLabel(this.selectedUid))}_${this.fromDate}_to_${this.toDate}.csv`;
     downloadTextFile(filename, csv, 'text/csv');
