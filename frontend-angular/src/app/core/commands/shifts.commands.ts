@@ -10,6 +10,11 @@ export class ShiftsCommands {
     return this.fx.call('claimShift', { shiftId });
   }
 
+  async callOutShift(shiftId: string, reason?: string) {
+    if (!this.ctx.orgId()) throw new Error('Missing org context.');
+    return this.fx.call('callOutShift', { shiftId, reason: reason || undefined });
+  }
+
   async listShiftSwapCandidates(shiftId: string) {
     if (!this.ctx.orgId()) throw new Error('Missing org context.');
     return this.fx.call('listShiftSwapCandidates', { shiftId });

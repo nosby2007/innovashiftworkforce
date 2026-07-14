@@ -39,6 +39,7 @@ import { expireShifts } from './callable/expireShifts';
 import { contactIntake } from './http/contactIntake';
 import { decideTimeOffRequest } from './callable/decideTimeOffRequest';
 import { accrueTimeOff } from './callable/accrueTimeOff';
+import { callOutShift } from './callable/callOutShift';
 
 // ----------------------------------------------------------------------
 // Stripe Billing
@@ -91,4 +92,5 @@ export {
   contactIntake,
   decideTimeOffRequest,
   accrueTimeOff,
+  callOutShift,
 };

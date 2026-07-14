@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { Router } from '@angular/router';
 import { AttendanceCommands } from '../../core/commands/attendance.commands';
+import { ShiftsCommands } from '../../core/commands/shifts.commands';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { TimeEntriesRepo } from '../../core/repos/time-entries.repo';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
@@ -179,8 +180,29 @@ import { fmtShiftDate, fmtShiftTime, shiftHours } from '../../shared/utils/shift
                 <span>{{ fmtTime(s.startAt) }} &ndash; {{ fmtTime(s.endAt) }}</span>
                 <span class="at-loc"><mat-icon>location_on</mat-icon>{{ s.locationName }}</span>
               </div>
-              <button class="vs-btn-primary at-btn-in" (click)="clockInToShift(s)" [disabled]="busy">
-                <mat-icon>login</mat-icon> Clock In
+              <div class="at-schedule-actions">
+                <button class="vs-btn-primary at-btn-in" (click)="clockInToShift(s)" [disabled]="busy">
+                  <mat-icon>login</mat-icon> Clock In
+                </button>
+                <button class="vs-btn-ghost at-btn-callout" (click)="openCallOut(s)" [disabled]="busy">
+                  <mat-icon>event_busy</mat-icon> Call Out
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="at-callout-form vs-glass" *ngIf="callOutTargetShift">
+            <div class="at-callout-form-title">
+              <mat-icon>event_busy</mat-icon>
+              Call Out — <span>{{ callOutTargetShift.title }}</span>
+            </div>
+            <p class="at-callout-help">This immediately removes you from the shift, puts it back on the marketplace, and notifies your admin.</p>
+            <label class="vs-field-label">Reason (optional)</label>
+            <input class="vs-input" [(ngModel)]="callOutReason" placeholder="Feeling sick, family emergency…" aria-label="Call-out reason">
+            <div class="at-callout-form-actions">
+              <button class="vs-btn-ghost" (click)="cancelCallOut()" [disabled]="callOutBusy">Cancel</button>
+              <button class="vs-btn-primary" (click)="submitCallOut()" [disabled]="callOutBusy">
+                {{ callOutBusy ? 'Calling out…' : 'Confirm Call Out' }}
               </button>
             </div>
           </div>
@@ -586,6 +608,14 @@ import { fmtShiftDate, fmtShiftTime, shiftHours } from '../../shared/utils/shift
     .at-schedule-info strong { font-size:14px; color:var(--text); }
     .at-loc { display:flex; align-items:center; gap:4px; }
     .at-loc mat-icon { font-size:14px !important; width:14px; height:14px; }
+    .at-schedule-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .at-btn-callout { color:var(--danger); border-color:rgba(239,68,68,0.4) !important; }
+    .at-callout-form { margin:12px 20px 4px; padding:16px; border:1px solid rgba(239,68,68,0.35); border-radius:var(--radius-md); background:rgba(239,68,68,0.06); }
+    .at-callout-form-title { display:flex; align-items:center; gap:8px; font-weight:700; color:var(--text-muted); font-size:13px; margin-bottom:8px; }
+    .at-callout-form-title mat-icon { font-size:16px !important; width:16px; height:16px; color:var(--danger); }
+    .at-callout-form-title span { color:var(--text); }
+    .at-callout-help { font-size:12px; color:var(--text-subtle); margin:0 0 12px; }
+    .at-callout-form-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
 
     .at-form { padding:20px; }
     .at-input { font-family:monospace; font-size:16px; letter-spacing:0.05em; }
@@ -697,6 +727,11 @@ export class AttendancePage implements OnDestroy {
   fixProposedIn = '';
   fixProposedOut = '';
 
+  // Call-out confirm form
+  callOutTargetShift: Shift | null = null;
+  callOutReason = '';
+  callOutBusy = false;
+
   get corrections(): TimeEntry[] {
     return this.entries().filter((e) => e.exceptionStatus && e.exceptionStatus !== 'none');
   }
@@ -715,6 +750,7 @@ export class AttendancePage implements OnDestroy {
     private cmd: AttendanceCommands,
     private repo: TimeEntriesRepo,
     private shiftsRepo: ShiftsRepo,
+    private shiftsCmd: ShiftsCommands,
     private toast: ToastService,
     private entitlements: PlanEntitlementsService,
     private router: Router
@@ -923,6 +959,31 @@ export class AttendancePage implements OnDestroy {
     this.shiftId = s.id;
     this.shiftSelection = this.toShiftOptionLabel(s);
     await this.checkIn();
+  }
+
+  openCallOut(s: Shift) {
+    this.callOutTargetShift = s;
+    this.callOutReason = '';
+  }
+
+  cancelCallOut() {
+    this.callOutTargetShift = null;
+    this.callOutReason = '';
+  }
+
+  async submitCallOut() {
+    const shift = this.callOutTargetShift;
+    if (!shift) return;
+    this.callOutBusy = true;
+    try {
+      await this.shiftsCmd.callOutShift(shift.id, this.callOutReason.trim() || undefined);
+      this.toast.success(`Called out of "${shift.title}". It's back on the marketplace.`);
+      this.cancelCallOut();
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Call out failed.');
+    } finally {
+      this.callOutBusy = false;
+    }
   }
 
   toShiftOptionLabel(s: Shift): string {

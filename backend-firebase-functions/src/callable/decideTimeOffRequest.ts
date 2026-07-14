@@ -4,6 +4,7 @@ import { initFirebase } from '../infra/firebase';
 import { resolveTenantWithFallback } from '../infra/tenancy';
 import { writeAudit } from '../infra/audit';
 import { toMillis, dayBoundsMs } from '../domain/dates';
+import { notifyShiftReopened } from '../infra/shift-reopen-notify';
 
 const INACTIVE_SHIFT_STATUSES = new Set(['cancelled', 'completed', 'expired', 'no_show']);
 
@@ -82,7 +83,7 @@ export const decideTimeOffRequest = onCall(async (req) => {
 
   let userId = '';
   let requestType = '';
-  let unassignedShifts: Array<{ id: string; title: string }> = [];
+  let unassignedShifts: Array<{ id: string; title: string; requiredJobRoles: unknown }> = [];
 
   await db.runTransaction(async (tx) => {
     // ---- reads (all reads must precede any writes in a Firestore transaction) ----
@@ -119,7 +120,7 @@ export const decideTimeOffRequest = onCall(async (req) => {
     // ---- compute ----
     const startMs = dayBoundsMs(startDate, false);
     const endMs = dayBoundsMs(endDate, true);
-    const shiftsToUnassign: Array<{ ref: FirebaseFirestore.DocumentReference; title: string }> = [];
+    const shiftsToUnassign: Array<{ ref: FirebaseFirestore.DocumentReference; title: string; requiredJobRoles: unknown }> = [];
     if (decision === 'approved' && startMs && endMs) {
       for (const doc of candidateShiftDocs) {
         const s = doc.data() as any;
@@ -128,7 +129,7 @@ export const decideTimeOffRequest = onCall(async (req) => {
         const sEnd = toMillis(s.endAt);
         if (!sStart || !sEnd) continue;
         const overlaps = sStart < endMs && startMs < sEnd;
-        if (overlaps) shiftsToUnassign.push({ ref: doc.ref, title: String(s.title || 'Shift') });
+        if (overlaps) shiftsToUnassign.push({ ref: doc.ref, title: String(s.title || 'Shift'), requiredJobRoles: s.requiredJobRoles ?? s.requiredJobRole ?? null });
       }
     }
 
@@ -210,7 +211,7 @@ export const decideTimeOffRequest = onCall(async (req) => {
       });
     }
 
-    unassignedShifts = shiftsToUnassign.map((s) => ({ id: s.ref.id, title: s.title }));
+    unassignedShifts = shiftsToUnassign.map((s) => ({ id: s.ref.id, title: s.title, requiredJobRoles: s.requiredJobRoles }));
   });
 
   await notifyUser(db, orgId, userId, {
@@ -223,6 +224,17 @@ export const decideTimeOffRequest = onCall(async (req) => {
     meta: { requestId },
   });
 
+  let vacatedUserName: string | null = null;
+  if (unassignedShifts.length > 0) {
+    const [orgUserSnap, rootUserSnap] = await Promise.all([
+      db.collection('orgs').doc(orgId).collection('users').doc(userId).get(),
+      db.collection('users').doc(userId).get(),
+    ]);
+    const orgUser = orgUserSnap.exists ? (orgUserSnap.data() as any) : null;
+    const rootUser = rootUserSnap.exists ? (rootUserSnap.data() as any) : null;
+    vacatedUserName = String(orgUser?.displayName ?? rootUser?.displayName ?? orgUser?.email ?? rootUser?.email ?? '').trim() || null;
+  }
+
   for (const shift of unassignedShifts) {
     await notifyUser(db, orgId, userId, {
       title: 'Shift removed from your schedule',
@@ -230,6 +242,16 @@ export const decideTimeOffRequest = onCall(async (req) => {
       createdBy: ctx.uid,
       type: 'shift_unassigned_pto',
       meta: { requestId, shiftId: shift.id },
+    });
+
+    await notifyShiftReopened(db, orgId, {
+      shiftId: shift.id,
+      shiftTitle: shift.title,
+      requiredJobRoles: shift.requiredJobRoles,
+      reason: 'time_off',
+      vacatedUserId: userId,
+      vacatedUserName,
+      actorUid: ctx.uid,
     });
   }
 
