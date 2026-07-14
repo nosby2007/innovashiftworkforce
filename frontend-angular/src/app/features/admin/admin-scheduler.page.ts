@@ -21,6 +21,7 @@ import { doc, getDoc, getFirestore } from 'firebase/firestore';
 import { FullCalendarModule } from '@fullcalendar/angular';
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
+import dayGridPlugin from '@fullcalendar/daygrid';
 
 import { MatIconModule } from '@angular/material/icon';
 
@@ -156,6 +157,7 @@ interface OrgSite {
         <ng-template #shiftActionsTpl let-s="shift">
           <div *ngIf="s" class="sch-modal-content">
             <div class="vs-form-row vs-form-row--2">
+              <button class="vs-btn-primary" (click)="openEditDrawer(s)" [disabled]="s.status === 'completed' || s.status === 'cancelled'"><mat-icon>edit</mat-icon> Edit</button>
               <button class="vs-btn-primary" (click)="publish(s,true)" *ngIf="s.status === 'draft' || s.status === 'open'">Publish to Marketplace</button>
               <button class="vs-btn-ghost" (click)="publish(s,false)" *ngIf="s.status === 'published'">Unpublish</button>
               <button class="vs-btn-primary" (click)="openStaffPicker(s)">Assign</button>
@@ -195,7 +197,7 @@ interface OrgSite {
 
       <app-drawer [open]="drawerOpen" [title]="drawerTitle" (close)="closeDrawer()">
         <div class="sch-drawer-body">
-          <div class="sch-preset-row">
+          <div class="sch-preset-row" *ngIf="!editingShiftId">
             <button class="vs-btn-ghost" type="button" (click)="applyWeekdayPreset()">
               <mat-icon>auto_fix_high</mat-icon>
               Standard Mon-Fri 8h
@@ -252,7 +254,7 @@ interface OrgSite {
             </div>
           </div>
 
-          <div class="vs-form-row vs-form-row--2">
+          <div class="vs-form-row vs-form-row--2" *ngIf="!editingShiftId">
             <div>
               <label class="vs-field-label">Assign to Employee (optional)</label>
               <select class="vs-select" [(ngModel)]="draft.assigneeUid">
@@ -272,7 +274,7 @@ interface OrgSite {
             </div>
           </div>
 
-          <div class="vs-form-row" *ngIf="draft.repeatWeekdays">
+          <div class="vs-form-row" *ngIf="!editingShiftId && draft.repeatWeekdays">
             <div>
               <label class="vs-field-label">Number of weeks</label>
               <input type="number" min="1" max="12" class="vs-input" [(ngModel)]="draft.repeatWeeks" placeholder="1">
@@ -281,8 +283,8 @@ interface OrgSite {
 
           <div class="sch-drawer-actions">
             <button class="vs-btn-ghost" (click)="closeDrawer()">Cancel</button>
-            <button class="vs-btn-primary" (click)="createFromDrawer()" [disabled]="!draft.title || !draft.locationName || !draft.startLocal || !draft.endLocal">
-              <mat-icon>add</mat-icon> Create Shift
+            <button class="vs-btn-primary" (click)="saveDrawer()" [disabled]="!draft.title || !draft.locationName || !draft.startLocal || !draft.endLocal">
+              <mat-icon>{{ editingShiftId ? 'save' : 'add' }}</mat-icon> {{ editingShiftId ? 'Save Changes' : 'Create Shift' }}
             </button>
           </div>
         </div>
@@ -700,6 +702,13 @@ interface OrgSite {
       line-height: 1.2;
       min-width: 0;
     }
+    ::ng-deep .vs-calendar .sch-ev-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      min-width: 0;
+    }
     ::ng-deep .vs-calendar .sch-ev-title {
       font-size: 12px;
       font-weight: 900;
@@ -707,6 +716,50 @@ interface OrgSite {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    ::ng-deep .vs-calendar .sch-ev-avatar {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.24);
+      border: 1px solid rgba(255,255,255,0.35);
+      font-size: 8.5px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+    ::ng-deep .vs-calendar .sch-ev-pill {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 1px 5px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    ::ng-deep .vs-calendar .sch-ev-dot {
+      flex: 0 0 auto;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    ::ng-deep .vs-calendar .sch-ev-pill-time {
+      flex: 0 0 auto;
+      opacity: 0.85;
+      font-size: 10px;
+    }
+    ::ng-deep .vs-calendar .sch-ev-pill-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
     }
     ::ng-deep .vs-calendar .sch-ev-meta {
       font-size: 10.5px;
@@ -867,13 +920,14 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   ];
   
   calendarOptions: any = {
-    plugins: [timeGridPlugin, interactionPlugin],
+    plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
     initialView: 'timeGridWeek',
     headerToolbar: {
       left: 'prev,next today',
       center: 'title',
-      right: 'timeGridDay,timeGridWeek',
+      right: 'dayGridMonth,timeGridWeek,timeGridDay',
     },
+    dayMaxEvents: true,
     nowIndicator: true,
     editable: true,
     selectable: true,
@@ -901,6 +955,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
 
   drawerOpen = false;
   drawerTitle = 'Create Shift';
+  editingShiftId: string | null = null;
   draft: any = {
     title: 'Shift',
     locationId: '',
@@ -1066,6 +1121,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
 
   openDrawerForNew() {
     this.drawerTitle = 'Create Shift';
+    this.editingShiftId = null;
     this.drawerOpen = true;
     this.draft = {
       title: '',
@@ -1083,7 +1139,75 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     };
   }
 
-  closeDrawer() { this.drawerOpen = false; }
+  private toLocalInput(d: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  openEditDrawer(s: Shift) {
+    this.modal.close();
+    const start = tsToDate(s.startAt);
+    const end = tsToDate(s.endAt);
+    this.drawerTitle = 'Edit Shift';
+    this.editingShiftId = s.id;
+    this.drawerOpen = true;
+    this.draft = {
+      title: s.title || '',
+      locationId: s.locationId || '',
+      locationName: s.locationName || '',
+      requiredJobRole: s.requiredJobRole || '',
+      payRate: s.payRate ?? null,
+      notes: s.notes || '',
+      startLocal: start ? this.toLocalInput(start) : '',
+      endLocal: end ? this.toLocalInput(end) : '',
+      assigneeUid: s.assignedUserId || '',
+      publishIfUnassigned: false,
+      repeatWeekdays: false,
+      repeatWeeks: 1,
+    };
+  }
+
+  closeDrawer() { this.drawerOpen = false; this.editingShiftId = null; }
+
+  async saveDrawer() {
+    if (this.editingShiftId) {
+      await this.updateFromDrawer(this.editingShiftId);
+    } else {
+      await this.createFromDrawer();
+    }
+  }
+
+  async updateFromDrawer(shiftId: string) {
+    try {
+      const startAtMs = this.draft.startLocal ? new Date(this.draft.startLocal).getTime() : 0;
+      const endAtMs = this.draft.endLocal ? new Date(this.draft.endLocal).getTime() : 0;
+
+      if (!startAtMs || !endAtMs) {
+        this.toast.error('Please provide valid Start and End times. [E_VALIDATION_TIME_RANGE]');
+        return;
+      }
+      if (endAtMs <= startAtMs) {
+        this.toast.error('End time cannot be before start time. [E_VALIDATION_TIME_ORDER]');
+        return;
+      }
+
+      await this.adminCmd.updateShift(shiftId, {
+        title: String(this.draft.title || 'Shift').trim(),
+        locationId: String(this.draft.locationId || '').trim() || null,
+        locationName: String(this.draft.locationName || '').trim(),
+        startAtMs,
+        endAtMs,
+        requiredJobRole: (String(this.draft.requiredJobRole || '').trim() || null),
+        payRate: this.draft.payRate != null ? Number(this.draft.payRate) : null,
+        notes: (String(this.draft.notes || '').trim() || null),
+      });
+
+      this.closeDrawer();
+      this.toast.success('Shift updated successfully.');
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Update shift failed.');
+    }
+  }
 
   async createFromDrawer() {
     try {
@@ -1094,7 +1218,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
         this.toast.error('Please provide valid Start and End times. [E_VALIDATION_TIME_RANGE]');
         return;
       }
-      
+
       if (endAtMs <= startAtMs) {
         this.toast.error('End time cannot be before start time. [E_VALIDATION_TIME_ORDER]');
         return;
@@ -1230,25 +1354,51 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     return ['sch-event-card', `sch-event--${status || 'draft'}`];
   }
 
+  private initials(label: string): string {
+    const parts = label.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
   eventContent(arg: any) {
     const shift: Shift | undefined = arg?.event?.extendedProps?.shift;
     const statusRaw = this.normalizeStatus(shift?.status);
     const status = statusRaw ? statusRaw.replace('_', ' ') : 'draft';
     const location = this.escapeHtml(String(shift?.locationName || '').trim());
-    const assignee = shift?.assignedUserId ? this.escapeHtml(this.userLabel(shift.assignedUserId)) : '';
+    const assigneeLabel = shift?.assignedUserId ? this.userLabel(shift.assignedUserId) : '';
+    const assignee = this.escapeHtml(assigneeLabel);
     const title = this.escapeHtml(String(arg.event.title || 'Shift'));
     const timeText = this.escapeHtml(String(arg.timeText || ''));
     const safeStatus = this.escapeHtml(status);
 
+    if (arg?.view?.type === 'dayGridMonth') {
+      return {
+        html: `
+          <div class="sch-ev-pill">
+            <span class="sch-ev-dot"></span>
+            <span class="sch-ev-pill-time">${timeText}</span>
+            <span class="sch-ev-pill-title">${title}</span>
+          </div>
+        `,
+      };
+    }
+
+    const assigneeBadge = assigneeLabel
+      ? `<span class="sch-ev-avatar" title="${assignee}">${this.escapeHtml(this.initials(assigneeLabel))}</span>`
+      : '';
+
     return {
       html: `
         <div class="sch-ev-card-inner">
-          <div class="sch-ev-title">${title}</div>
+          <div class="sch-ev-head">
+            <div class="sch-ev-title">${title}</div>
+            ${assigneeBadge}
+          </div>
           <div class="sch-ev-meta">${timeText}</div>
           <div class="sch-ev-chips">
             <span class="sch-ev-chip sch-ev-chip--status">${safeStatus}</span>
             ${location ? `<span class="sch-ev-chip">${location}</span>` : ''}
-            ${assignee ? `<span class="sch-ev-chip">${assignee}</span>` : ''}
           </div>
         </div>
       `,

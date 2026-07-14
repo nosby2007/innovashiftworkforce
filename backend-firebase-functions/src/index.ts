@@ -40,6 +40,7 @@ import { contactIntake } from './http/contactIntake';
 import { decideTimeOffRequest } from './callable/decideTimeOffRequest';
 import { accrueTimeOff } from './callable/accrueTimeOff';
 import { callOutShift } from './callable/callOutShift';
+import { updateShift } from './callable/updateShift';
 
 // ----------------------------------------------------------------------
 // Stripe Billing
@@ -93,4 +94,5 @@ export {
   decideTimeOffRequest,
   accrueTimeOff,
   callOutShift,
+  updateShift,
 };

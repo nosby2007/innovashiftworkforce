@@ -22,6 +22,19 @@ export class ShiftAdminCommands {
     return this.fn.call('rescheduleShift', { shiftId, startAtMs, endAtMs });
   }
 
+  updateShift(shiftId: string, patch: {
+    title?: string;
+    locationId?: string | null;
+    locationName?: string;
+    startAtMs?: number;
+    endAtMs?: number;
+    requiredJobRole?: string | null;
+    payRate?: number | null;
+    notes?: string | null;
+  }) {
+    return this.fn.call('updateShift', { shiftId, ...patch });
+  }
+
   externalNotify(channel: 'email'|'sms', to: string, message: string, subject?: string) {
     return this.fn.call('externalNotifyCallable', { channel, to, message, subject });
   }
