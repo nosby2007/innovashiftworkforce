@@ -1,9 +1,9 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { resolveTenantWithFallback } from '../infra/tenancy';
-import { externalNotify } from '../infra/external-notify';
+import { externalNotify, sendgridApiKey } from '../infra/external-notify';
 import { writeAudit } from '../infra/audit';
 
-export const externalNotifyCallable = onCall(async (req) => {
+export const externalNotifyCallable = onCall({ secrets: [sendgridApiKey] }, async (req) => {
   const ctx = await resolveTenantWithFallback(req);
   if (!ctx.isAdminLike) {
     throw new HttpsError('permission-denied', 'Admin/Scheduler privileges required.');

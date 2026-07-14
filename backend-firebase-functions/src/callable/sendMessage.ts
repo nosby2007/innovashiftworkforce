@@ -3,7 +3,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { initFirebase } from '../infra/firebase';
 import { resolveTenantWithFallback } from '../infra/tenancy';
 import { writeAudit } from '../infra/audit';
-import { externalNotify } from '../infra/external-notify';
+import { externalNotify, sendgridApiKey } from '../infra/external-notify';
 
 type TargetType = 'single' | 'multi' | 'orgAll' | 'platformAll';
 
@@ -13,7 +13,7 @@ type Recipient = {
   email?: string | null;
 };
 
-export const sendMessage = onCall(async (req) => {
+export const sendMessage = onCall({ secrets: [sendgridApiKey] }, async (req) => {
   const admin = initFirebase();
   const db = admin.firestore();
 

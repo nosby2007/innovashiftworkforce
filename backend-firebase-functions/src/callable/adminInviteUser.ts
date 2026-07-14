@@ -4,10 +4,10 @@ import { resolveTenantWithFallback } from '../infra/tenancy';
 import { writeAudit } from '../infra/audit';
 import { Timestamp } from 'firebase-admin/firestore';
 import { randomBytes } from 'crypto';
-import { externalNotify } from '../infra/external-notify';
+import { externalNotify, sendgridApiKey } from '../infra/external-notify';
 import { assertOrgCanAddActiveUser } from '../infra/plans';
 
-export const adminInviteUser = onCall(async (req) => {
+export const adminInviteUser = onCall({ secrets: [sendgridApiKey] }, async (req) => {
   const admin = initFirebase();
   const db = admin.firestore();
   const ctx = await resolveTenantWithFallback(req);
