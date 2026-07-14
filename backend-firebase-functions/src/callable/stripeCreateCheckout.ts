@@ -1,0 +1,74 @@
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import * as admin from 'firebase-admin';
+import Stripe from 'stripe';
+
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_mock_secret_key';
+const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2026-04-22.dahlia' as any });
+
+export const stripeCreateCheckout = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated to upgrade plan.');
+  }
+
+  const { orgId, planId, successUrl, cancelUrl } = request.data;
+  if (!orgId || !planId) {
+    throw new HttpsError('invalid-argument', 'Missing orgId or planId.');
+  }
+
+  // Verify user is an org admin
+  const db = admin.firestore();
+  const userRef = db.collection(`orgs/${orgId}/users`).doc(uid);
+  const userSnap = await userRef.get();
+  
+  if (!userSnap.exists) {
+    throw new HttpsError('permission-denied', 'User does not belong to this organization.');
+  }
+
+  const userRole = userSnap.data()?.accessRole;
+  if (userRole !== 'admin') {
+    throw new HttpsError('permission-denied', 'Only org admins can upgrade the subscription.');
+  }
+
+  // Fetch org data to see if customer exists
+  const orgRef = db.collection('orgs').doc(orgId);
+  const orgSnap = await orgRef.get();
+  const orgData = orgSnap.data();
+
+  if (!orgData) {
+    throw new HttpsError('not-found', 'Organization not found.');
+  }
+
+  let customerId = orgData.stripeCustomerId;
+
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: orgData.contactEmail || '',
+      name: orgData.name,
+      metadata: { orgId }
+    });
+    customerId = customer.id;
+    await orgRef.update({ stripeCustomerId: customerId });
+  }
+
+  // Create checkout session
+  try {
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      mode: 'subscription',
+      line_items: [{
+        price: planId, // Expecting a real Stripe Price ID here
+        quantity: 1,
+      }],
+      success_url: successUrl || 'http://localhost:4200/admin/settings?billing=success',
+      cancel_url: cancelUrl || 'http://localhost:4200/admin/settings?billing=cancel',
+      metadata: { orgId }
+    });
+
+    return { url: session.url };
+  } catch (error: any) {
+    console.error('Stripe error:', error);
+    throw new HttpsError('internal', error.message || 'Failed to create checkout session.');
+  }
+});

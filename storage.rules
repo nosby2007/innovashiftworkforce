@@ -1,0 +1,69 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function tokenOrgId() {
+      return signedIn() ? request.auth.token.orgId : null;
+    }
+
+    function accessRole() {
+      return signedIn() ? request.auth.token.accessRole : null;
+    }
+
+    function platformRole() {
+      return signedIn() ? request.auth.token.platformRole : null;
+    }
+
+    function isSuperAdmin() {
+      return signedIn() && platformRole() in ['superAdmin', 'super_admin', 'super-admin'];
+    }
+
+    function isOrgMember(orgId) {
+      return signedIn() && tokenOrgId() == orgId;
+    }
+
+    function isOrgAdminLike(orgId) {
+      return isSuperAdmin()
+        || (isOrgMember(orgId) && accessRole() in ['admin', 'manager', 'scheduler', 'hr']);
+    }
+
+    function isSafeUpload(maxBytes) {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= maxBytes
+        && request.resource.contentType.matches(
+          '(image/.*|application/pdf|text/plain|text/csv|application/vnd\\.ms-excel)'
+        );
+    }
+
+    match /orgs/{orgId}/users/{uid}/{fileName=**} {
+      allow read: if isSuperAdmin()
+        || isOrgAdminLike(orgId)
+        || (isOrgMember(orgId) && request.auth.uid == uid);
+
+      allow create, update: if (
+          isSuperAdmin()
+          || isOrgAdminLike(orgId)
+          || (isOrgMember(orgId) && request.auth.uid == uid)
+        )
+        && isSafeUpload(10 * 1024 * 1024);
+
+      allow delete: if isSuperAdmin()
+        || isOrgAdminLike(orgId)
+        || (isOrgMember(orgId) && request.auth.uid == uid);
+    }
+
+    match /orgs/{orgId}/shifts/{shiftId}/{fileName=**} {
+      allow read: if isSuperAdmin() || isOrgMember(orgId);
+      allow create, update: if isOrgAdminLike(orgId) && isSafeUpload(10 * 1024 * 1024);
+      allow delete: if isOrgAdminLike(orgId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

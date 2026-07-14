@@ -1,0 +1,30 @@
+node_modules/
+dist/
+.angular/
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+*.log
+.env
+.env.*
+.DS_Store
+Thumbs.db
+
+# Compiled/generated output
+backend-firebase-functions/lib/
+frontend-angular/test-results/
+frontend-angular/playwright-report/
+
+# Native mobile build artifacts (Capacitor)
+frontend-angular/android/.gradle/
+frontend-angular/android/build/
+frontend-angular/android/app/build/
+frontend-angular/android/local.properties
+frontend-angular/ios/App/Pods/
+frontend-angular/ios/App/build/
+frontend-angular/ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
+frontend-angular/ios/App/App.xcodeproj/xcuserdata/
+
+# Claude Code local/session state
+.claude/settings.local.json
+.claude/worktrees/

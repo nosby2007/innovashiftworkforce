@@ -1,0 +1,27 @@
+.vs-sidenav {
+  width: 320px;
+  background: rgba(255,255,255,0.04);
+  border-right: 1px solid var(--border);
+  backdrop-filter: blur(var(--blur));
+}
+
+.vs-nav-item {
+  justify-content: flex-start !important;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  color: var(--text) !important;
+  background: transparent;
+  border: 1px solid transparent;
+}
+.vs-nav-item.active {
+  background: rgba(255,255,255,0.08);
+  border-color: var(--border);
+}
+
+.vs-userbtn {
+  border-radius: 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+}

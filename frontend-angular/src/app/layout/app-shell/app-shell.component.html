@@ -1,0 +1,54 @@
+<mat-sidenav-container style="height:100vh;">
+  <mat-sidenav #snav mode="side" opened class="vs-sidenav">
+    <div style="padding:16px;">
+      <div class="vs-glass" style="padding:14px; display:flex; gap:12px; align-items:center;">
+        <div style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,0.10);display:grid;place-items:center;">
+          <span style="font-weight:900;">VS</span>
+        </div>
+        <div>
+          <div style="font-size:14px; opacity:0.7;">InovaEngage</div>
+          <img src="https://res.cloudinary.com/dtdpx59sc/image/upload/v1768967133/ChatGPT_Image_Jan_20_2026_10_44_44_PM_hfbesf.png" alt="InnovaShift Logo" style="height:24px; margin-top:4px;">
+        </div>
+      </div>
+
+      <div style="margin-top:14px; display:flex; flex-direction:column; gap:10px;">
+        <a mat-button class="vs-nav-item" routerLink="/app/schedule" routerLinkActive="active">
+          <mat-icon>event</mat-icon><span>Schedule</span>
+        </a>
+        <a mat-button class="vs-nav-item" routerLink="/app/settings" routerLinkActive="active">
+          <mat-icon>settings</mat-icon><span>Settings</span>
+        </a>
+      </div>
+    </div>
+  </mat-sidenav>
+
+  <mat-sidenav-content>
+    <mat-toolbar>
+      <button mat-icon-button (click)="snav.toggle()">
+        <mat-icon>menu</mat-icon>
+      </button>
+
+      <span style="flex:1;"></span>
+
+      <button mat-button [matMenuTriggerFor]="userMenu" class="vs-userbtn">
+        <mat-icon>account_circle</mat-icon>
+        <span style="font-weight:900;">{{ userDisplayName }}</span>
+      </button>
+
+      <mat-menu #userMenu="matMenu">
+        <button mat-menu-item routerLink="/app/settings">
+          <mat-icon>settings</mat-icon>
+          <span>Settings</span>
+        </button>
+        <button mat-menu-item (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          <span>Sign out</span>
+        </button>
+      </mat-menu>
+    </mat-toolbar>
+
+    <div class="vs-container" style="padding:18px 0;">
+      <router-outlet></router-outlet>
+    </div>
+  </mat-sidenav-content>
+</mat-sidenav-container>

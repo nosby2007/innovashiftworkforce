@@ -1,0 +1,47 @@
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import * as admin from 'firebase-admin';
+import Stripe from 'stripe';
+
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_mock_secret_key';
+const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2026-04-22.dahlia' as any });
+
+export const stripeCreatePortal = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const { orgId, returnUrl } = request.data;
+  if (!orgId) {
+    throw new HttpsError('invalid-argument', 'Missing orgId.');
+  }
+
+  // Verify user is an org admin
+  const db = admin.firestore();
+  const userRef = db.collection(`orgs/${orgId}/users`).doc(uid);
+  const userSnap = await userRef.get();
+  
+  if (!userSnap.exists || userSnap.data()?.accessRole !== 'admin') {
+    throw new HttpsError('permission-denied', 'Only org admins can manage billing.');
+  }
+
+  const orgRef = db.collection('orgs').doc(orgId);
+  const orgSnap = await orgRef.get();
+  const orgData = orgSnap.data();
+
+  if (!orgData?.stripeCustomerId) {
+    throw new HttpsError('failed-precondition', 'Organization has no active billing customer. Please upgrade first.');
+  }
+
+  try {
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: orgData.stripeCustomerId,
+      return_url: returnUrl || 'http://localhost:4200/admin/settings',
+    });
+
+    return { url: portalSession.url };
+  } catch (error: any) {
+    console.error('Stripe Portal error:', error);
+    throw new HttpsError('internal', error.message || 'Failed to create portal session.');
+  }
+});

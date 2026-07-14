@@ -1,0 +1,592 @@
+import { Component, NgZone, OnDestroy, signal } from '@angular/core';
+import { CommonModule, CurrencyPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { doc, getFirestore, onSnapshot, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
+import { MatIconModule } from '@angular/material/icon';
+import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { PrintLauncherService } from '../../core/ui/print-launcher.service';
+import { TimeEntriesRepo } from '../../core/repos/time-entries.repo';
+import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
+import { ShiftsRepo } from '../../core/repos/shifts.repo';
+import { TimeEntry } from '../../shared/models/time-entry.model';
+import { Shift } from '../../shared/models/shift.model';
+import { AccrualsRepo, TimeOffRequest } from '../../core/repos/accruals.repo';
+import { formatDateTime } from '../../shared/utils/date.util';
+import { currentPayrollPeriod, dateInputValue, payrollDeductions, payrollGross, payrollHours, payrollLeaveGross, payrollLeaveHours, payrollNet, payrollRate } from '../../shared/utils/payroll.util';
+import { PayFrequency } from '../../core/tenancy/org-finance.model';
+import { toCsv, downloadTextFile } from '../../shared/utils/csv.util';
+
+type PayrollRow = {
+  userId: string;
+  employee: string;
+  employeeNumber: string;
+  entries: number;
+  hours: number;
+  gross: number;
+  deductions: number;
+  net: number;
+  exceptions: number;
+};
+
+@Component({
+  standalone: true,
+  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule],
+  template: `
+    <div class="pay-admin">
+      <header class="pay-admin-hero">
+        <div>
+          <div class="pay-admin-kicker">Payroll Control Center</div>
+          <h1>Payroll</h1>
+          <p>Review staff hours, gross pay, exceptions, and export payroll-ready totals.</p>
+        </div>
+        <div class="pay-admin-period">
+          <label>Payroll period</label>
+          <div>
+            <input type="date" [(ngModel)]="fromDate" (change)="reloadEntries()">
+            <span>to</span>
+            <input type="date" [(ngModel)]="toDate" (change)="reloadEntries()">
+          </div>
+        </div>
+      </header>
+
+      <div *ngIf="!orgId" class="pay-admin-alert">
+        <mat-icon>warning_amber</mat-icon>
+        Missing organization context.
+      </div>
+
+      <section class="pay-admin-kpis" *ngIf="orgId">
+        <article><span>Employees</span><strong>{{ rows.length }}</strong></article>
+        <article><span>Total Hours</span><strong>{{ totalHours().toFixed(2) }}</strong></article>
+        <article><span>Gross Payroll</span><strong>{{ totalGross() | currency:moneyCurrency() }}</strong></article>
+        <article [class.is-warn]="totalExceptions() > 0"><span>Exceptions</span><strong>{{ totalExceptions() }}</strong></article>
+      </section>
+
+      <section class="pay-admin-grid" *ngIf="orgId">
+        <article class="pay-admin-card pay-run">
+          <div class="pay-admin-card-head">
+            <h2>Draft Payroll Run</h2>
+            <span>{{ payrollRunLabel() }}</span>
+          </div>
+          <div class="pay-run-lock" [class.is-final]="payrollFinalized">
+            <mat-icon>{{ payrollFinalized ? 'lock' : 'lock_open' }}</mat-icon>
+            <div>
+              <strong>{{ payrollFinalized ? 'Payroll finalized' : 'Payroll draft is editable' }}</strong>
+              <span>{{ payrollFinalized ? 'Finalized ' + finalizedAtLabel() : payrollStatus() }}</span>
+            </div>
+          </div>
+          <div class="pay-run-total">
+            <span>Estimated net payroll</span>
+            <strong>{{ totalNet() | currency:moneyCurrency() }}</strong>
+          </div>
+          <div class="pay-run-lines">
+            <div><span>Gross wages</span><strong>{{ totalGross() | currency:moneyCurrency() }}</strong></div>
+            <div><span>Estimated deductions</span><strong>-{{ totalDeductions() | currency:moneyCurrency() }}</strong></div>
+            <div><span>Timecard rows</span><strong>{{ entries().length }}</strong></div>
+          </div>
+          <button class="pay-primary" (click)="exportPayroll()" [disabled]="rows.length === 0">
+            <mat-icon>download</mat-icon>
+            Export Payroll CSV
+          </button>
+          <button class="pay-primary pay-primary-alt" type="button" (click)="printSelectedPayslips()" [disabled]="selectedUserIds().length === 0">
+            <mat-icon>print</mat-icon>
+            Print Selected PDF
+          </button>
+          <div class="pay-run-actions">
+            <button class="pay-secondary" type="button" (click)="finalizePayroll()" [disabled]="rows.length === 0 || totalExceptions() > 0 || payrollFinalized || payrollBusy">
+              <mat-icon>verified</mat-icon>
+              {{ payrollBusy ? 'Saving...' : 'Finalize Payroll' }}
+            </button>
+            <button class="pay-secondary" type="button" (click)="reopenPayroll()" [disabled]="!payrollFinalized || payrollBusy">
+              <mat-icon>edit</mat-icon>
+              Reopen
+            </button>
+          </div>
+        </article>
+
+        <article class="pay-admin-card pay-exceptions">
+          <div class="pay-admin-card-head">
+            <h2>Payroll Readiness</h2>
+            <mat-icon>fact_check</mat-icon>
+          </div>
+          <div class="pay-readiness" [class.is-ready]="totalExceptions() === 0">
+            <mat-icon>{{ totalExceptions() === 0 ? 'check_circle' : 'warning_amber' }}</mat-icon>
+            <div>
+              <strong>{{ totalExceptions() === 0 ? 'Ready for export' : 'Needs review' }}</strong>
+              <span>{{ totalExceptions() === 0 ? 'No pending payroll exceptions in this period.' : totalExceptions() + ' row(s) have pending or rejected corrections.' }}</span>
+            </div>
+          </div>
+          <div class="pay-run-lines">
+            <div><span>Pending review</span><strong>{{ exceptionStatusCount('pending') }}</strong></div>
+            <div><span>Rejected</span><strong>{{ exceptionStatusCount('rejected') }}</strong></div>
+            <div><span>Open punches</span><strong>{{ openPunchCount() }}</strong></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="pay-admin-card pay-table-card" *ngIf="orgId">
+        <div class="pay-admin-card-head">
+          <h2>Employee Payroll Summary</h2>
+          <input [(ngModel)]="query" placeholder="Search employee">
+        </div>
+        <div class="pay-table-shell">
+          <table>
+            <thead>
+              <tr>
+                <th class="pay-check-col">
+                  <input type="checkbox" [checked]="allFilteredSelected()" (change)="toggleSelectAll($any($event.target).checked)">
+                </th>
+                <th>Employee</th>
+                <th>Entries</th>
+                <th>Hours</th>
+                <th>Gross</th>
+                <th>Deductions</th>
+                <th>Net</th>
+                <th>Exceptions</th>
+                <th>Status</th>
+                <th>Print</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngIf="filteredRows().length === 0">
+                <td colspan="10">No payroll rows found for this period.</td>
+              </tr>
+              <tr *ngFor="let r of filteredRows()">
+                <td class="pay-check-col">
+                  <input type="checkbox" [checked]="isSelected(r.userId)" (change)="toggleUserSelection(r.userId, $any($event.target).checked)">
+                </td>
+                <td><strong>{{ r.employee }}</strong><span>{{ r.employeeNumber || 'Employee record' }}</span></td>
+                <td>{{ r.entries }}</td>
+                <td>{{ r.hours.toFixed(2) }}</td>
+                <td>{{ r.gross | currency:moneyCurrency() }}</td>
+                <td>{{ r.deductions | currency:moneyCurrency() }}</td>
+                <td>{{ r.net | currency:moneyCurrency() }}</td>
+                <td>{{ r.exceptions }}</td>
+                <td><em [class.is-warn]="r.exceptions > 0">{{ r.exceptions > 0 ? 'Review' : 'Ready' }}</em></td>
+                <td>
+                  <button class="pay-row-btn" (click)="printPayslip(r.userId)">
+                    <mat-icon>picture_as_pdf</mat-icon>
+                    PDF
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="pay-admin-card pay-table-card" *ngIf="orgId">
+        <div class="pay-admin-card-head">
+          <h2>Payroll Detail Rows</h2>
+          <span>{{ entries().length }} time entries</span>
+        </div>
+        <div class="pay-table-shell">
+          <table>
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Date</th>
+                <th>Shift</th>
+                <th>Check In</th>
+                <th>Check Out</th>
+                <th>Hours</th>
+                <th>Rate</th>
+                <th>Gross</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let e of detailRows()">
+                <td>{{ e.employee }}</td>
+                <td>{{ e.date }}</td>
+                <td>{{ e.shiftTitle }}</td>
+                <td>{{ e.checkIn }}</td>
+                <td>{{ e.checkOut }}</td>
+                <td>{{ e.hours.toFixed(2) }}</td>
+                <td>{{ e.rate | currency:moneyCurrency() }}</td>
+                <td>{{ e.gross | currency:moneyCurrency() }}</td>
+                <td><em [class.is-warn]="e.status !== 'none'">{{ e.status }}</em></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  `,
+  styles: [`
+    .pay-admin { color:#1f2937; }
+    .pay-admin-hero { min-height:150px; margin:-24px -22px 22px; padding:28px; display:flex; align-items:end; justify-content:space-between; gap:20px; background:#07533f; color:#fff; }
+    .pay-admin-kicker { color:rgba(255,255,255,.72); font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; }
+    .pay-admin-hero h1 { margin:0; font-size:34px; font-weight:800; }
+    .pay-admin-hero p { margin:8px 0 0; color:rgba(255,255,255,.82); }
+    .pay-admin-period { display:grid; gap:6px; min-width:330px; }
+    .pay-admin-period label { color:rgba(255,255,255,.75); font-size:12px; font-weight:800; }
+    .pay-admin-period div { display:flex; align-items:center; gap:8px; }
+    .pay-admin-period input { height:38px; border:1px solid rgba(255,255,255,.34); border-radius:6px; background:#fff; color:#111827; padding:0 9px; }
+    .pay-admin-alert { display:flex; gap:10px; padding:14px 16px; color:#92400e; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; font-weight:800; }
+    .pay-admin-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:16px; }
+    .pay-admin-kpis article, .pay-admin-card { border:1px solid rgba(15,23,42,.12); border-radius:8px; background:rgba(255,255,255,.94); box-shadow:0 12px 28px rgba(15,23,42,.07); }
+    .pay-admin-kpis article { padding:16px; }
+    .pay-admin-kpis span { color:#64748b; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+    .pay-admin-kpis strong { display:block; margin-top:8px; color:#0f172a; font-size:28px; }
+    .pay-admin-kpis .is-warn strong { color:#b45309; }
+    .pay-admin-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+    .pay-admin-card { overflow:hidden; margin-bottom:16px; }
+    .pay-admin-card-head { min-height:50px; padding:0 16px; display:flex; justify-content:space-between; align-items:center; gap:12px; border-bottom:1px solid #e5e7eb; }
+    .pay-admin-card-head h2 { margin:0; font-size:16px; font-weight:800; }
+    .pay-admin-card-head span { color:#64748b; font-size:12px; }
+    .pay-admin-card-head input { height:34px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; color:#111827; background:#fff; }
+    .pay-run-total { padding:18px 16px; background:#ecfdf5; display:flex; justify-content:space-between; align-items:center; }
+    .pay-run-lock { display:flex; align-items:center; gap:10px; padding:14px 16px; background:#f8fafc; border-bottom:1px solid #e5e7eb; color:#475569; }
+    .pay-run-lock.is-final { background:#eff6ff; color:#1d4ed8; }
+    .pay-run-lock mat-icon { font-size:21px; width:21px; height:21px; }
+    .pay-run-lock strong, .pay-run-lock span { display:block; }
+    .pay-run-lock strong { color:#0f172a; }
+    .pay-run-lock span { margin-top:3px; font-size:12px; color:#64748b; }
+    .pay-run-total span { color:#047857; font-weight:800; }
+    .pay-run-total strong { font-size:26px; color:#064e3b; }
+    .pay-run-lines { display:grid; gap:0; }
+    .pay-run-lines div { display:flex; justify-content:space-between; padding:12px 16px; border-top:1px solid #e5e7eb; color:#475569; }
+    .pay-run-lines strong { color:#0f172a; }
+    .pay-primary { margin:16px; height:42px; border:0; border-radius:6px; background:#047857; color:#fff; display:inline-flex; align-items:center; justify-content:center; gap:8px; font-weight:800; padding:0 16px; cursor:pointer; }
+    .pay-primary-alt { margin-top:0; background:#0f766e; }
+    .pay-primary:disabled { opacity:.55; cursor:not-allowed; }
+    .pay-run-actions { display:flex; gap:8px; padding:0 16px 16px; flex-wrap:wrap; }
+    .pay-secondary { height:38px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#07533f; display:inline-flex; align-items:center; justify-content:center; gap:7px; font-weight:800; padding:0 12px; cursor:pointer; }
+    .pay-secondary:disabled { opacity:.5; cursor:not-allowed; }
+    .pay-row-btn { height:30px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#07533f; display:inline-flex; align-items:center; gap:5px; padding:0 9px; font-weight:800; cursor:pointer; }
+    .pay-row-btn mat-icon { font-size:16px; width:16px; height:16px; }
+    .pay-readiness { display:flex; gap:12px; padding:18px 16px; background:#fff7ed; color:#92400e; border-bottom:1px solid #fed7aa; }
+    .pay-readiness.is-ready { background:#ecfdf5; color:#047857; border-bottom-color:#a7f3d0; }
+    .pay-readiness strong, .pay-readiness span { display:block; }
+    .pay-readiness span { margin-top:4px; font-size:13px; color:#475569; }
+    .pay-table-shell { overflow:auto; }
+    table { width:100%; min-width:980px; border-collapse:collapse; }
+    th { background:#eef3ef; color:#334155; font-size:11px; text-align:left; text-transform:uppercase; letter-spacing:.06em; padding:10px; border-bottom:1px solid #d1d5db; }
+    td { padding:11px 10px; border-bottom:1px solid #e5e7eb; color:#1f2937; white-space:nowrap; }
+    tr:nth-child(even) td { background:#f8fafc; }
+    td strong { display:block; color:#0f172a; }
+    td span { color:#64748b; font-size:11px; }
+    td em { border-radius:999px; background:#ecfdf5; color:#047857; padding:4px 8px; font-style:normal; font-size:11px; font-weight:800; }
+    td em.is-warn { background:#fff7ed; color:#b45309; }
+    .pay-check-col { width:34px; text-align:center; }
+    .pay-check-col input { width:16px; height:16px; }
+    @media (max-width:980px) { .pay-admin-hero { align-items:flex-start; flex-direction:column; margin:-14px -12px 18px; padding:22px 16px; } .pay-admin-period { min-width:0; width:100%; } .pay-admin-kpis, .pay-admin-grid { grid-template-columns:1fr; } }
+  `]
+})
+export class AdminPayrollPage implements OnDestroy {
+  orgId: string | null = null;
+  fromDate = '';
+  toDate = '';
+  query = '';
+  users = signal<OrgUser[]>([]);
+  entries = signal<TimeEntry[]>([]);
+  leaveRequests = signal<TimeOffRequest[]>([]);
+  shiftMap: Record<string, Shift> = {};
+  rows: PayrollRow[] = [];
+  selected = new Set<string>();
+  payrollFinalized = false;
+  payrollFinalizedAt: any = null;
+  payrollBusy = false;
+  private unsubUsers: (() => void) | null = null;
+  private unsubEntries: (() => void) | null = null;
+  private unsubLeave: (() => void) | null = null;
+  private unsubRun: (() => void) | null = null;
+
+  constructor(
+    private zone: NgZone,
+    private ctx: OrgContextService,
+    private timeRepo: TimeEntriesRepo,
+    private usersRepo: UsersRepo,
+    private shiftsRepo: ShiftsRepo,
+    private accruals: AccrualsRepo,
+    private printLauncher: PrintLauncherService,
+  ) {
+    const period = currentPayrollPeriod((this.ctx.payFrequency() as PayFrequency) || 'biweekly');
+    this.fromDate = dateInputValue(period.start);
+    this.toDate = dateInputValue(period.end);
+    this.bind();
+    setTimeout(() => this.bind(), 800);
+  }
+
+  private bind() {
+    const orgId = this.ctx.orgId();
+    this.orgId = orgId;
+    if (!orgId) return;
+    this.bindPayrollRun();
+    if (!this.unsubUsers) {
+      this.unsubUsers = this.usersRepo.watchOrgUsers(orgId, (items) => {
+        this.users.set(items);
+        this.recomputeRows();
+      });
+    }
+    this.reloadEntries();
+  }
+
+  reloadEntries() {
+    if (!this.orgId || !this.fromDate || !this.toDate) return;
+    this.bindPayrollRun();
+    this.unsubEntries?.();
+    const start = Timestamp.fromDate(new Date(`${this.fromDate}T00:00:00`));
+    const end = Timestamp.fromDate(new Date(`${this.toDate}T23:59:59`));
+    this.unsubEntries = this.timeRepo.watchOrgEntriesRange(this.orgId, start, end, async (items) => {
+      this.entries.set(items);
+      const shiftIds = Array.from(new Set(items.map((e) => e.shiftId))).filter(Boolean);
+      this.shiftMap = shiftIds.length ? await this.shiftsRepo.getManyByIds(this.orgId!, shiftIds) : {};
+      this.recomputeRows();
+    });
+    if (!this.unsubLeave) {
+      this.unsubLeave = this.accruals.watchOrgRequests(this.orgId, (items) => {
+        this.leaveRequests.set(items);
+        this.recomputeRows();
+      });
+    }
+  }
+
+  private recomputeRows() {
+    const grouped = new Map<string, PayrollRow>();
+    for (const entry of this.entries()) {
+      const uid = entry.userId || 'unknown';
+      const existing = grouped.get(uid) || {
+        userId: uid,
+        employee: this.userLabel(uid),
+        employeeNumber: this.employeeNumber(uid),
+        entries: 0,
+        hours: 0,
+        gross: 0,
+        deductions: 0,
+        net: 0,
+        exceptions: 0,
+      };
+      const gross = payrollGross(entry, this.shiftMap[entry.shiftId]);
+      existing.entries += 1;
+      existing.hours += payrollHours(entry);
+      existing.gross += gross;
+      existing.deductions += payrollDeductions(gross);
+      existing.net += payrollNet(gross);
+      if ((entry.exceptionStatus || 'none') !== 'none' || !entry.checkOutAt) existing.exceptions += 1;
+      grouped.set(uid, existing);
+    }
+    for (const request of this.leaveRequests().filter((r) => this.isPayrollLeave(r))) {
+      const uid = request.userId || 'unknown';
+      const existing = grouped.get(uid) || {
+        userId: uid,
+        employee: this.userLabel(uid),
+        employeeNumber: this.employeeNumber(uid),
+        entries: 0,
+        hours: 0,
+        gross: 0,
+        deductions: 0,
+        net: 0,
+        exceptions: 0,
+      };
+      const hours = payrollLeaveHours(request, this.fromDate, this.toDate);
+      const gross = payrollLeaveGross(request, this.fromDate, this.toDate);
+      existing.entries += 1;
+      existing.hours += hours;
+      existing.gross += gross;
+      existing.deductions += payrollDeductions(gross);
+      existing.net += payrollNet(gross);
+      grouped.set(uid, existing);
+    }
+    this.rows = Array.from(grouped.values()).map((r) => ({
+      ...r,
+      hours: Math.round(r.hours * 100) / 100,
+      gross: Math.round(r.gross * 100) / 100,
+      deductions: Math.round(r.deductions * 100) / 100,
+      net: Math.round(r.net * 100) / 100,
+    })).sort((a, b) => a.employee.localeCompare(b.employee));
+  }
+
+  userLabel(uid: string): string {
+    const user = this.users().find((u) => u.uid === uid);
+    return user?.displayName || user?.email || 'Staff member';
+  }
+
+  employeeNumber(uid: string): string {
+    const user: any = this.users().find((u) => u.uid === uid);
+    return user?.employeeNumber || user?.profile?.employeeNumber || '';
+  }
+
+  filteredRows(): PayrollRow[] {
+    const q = this.query.toLowerCase().trim();
+    if (!q) return this.rows;
+    return this.rows.filter((r) => r.employee.toLowerCase().includes(q) || r.employeeNumber.toLowerCase().includes(q));
+  }
+
+  isSelected(uid: string) {
+    return this.selected.has(uid);
+  }
+
+  selectedUserIds() {
+    return Array.from(this.selected);
+  }
+
+  toggleUserSelection(uid: string, checked: boolean) {
+    if (checked) this.selected.add(uid);
+    else this.selected.delete(uid);
+  }
+
+  toggleSelectAll(checked: boolean) {
+    if (!checked) {
+      this.selected.clear();
+      return;
+    }
+    for (const row of this.filteredRows()) this.selected.add(row.userId);
+  }
+
+  allFilteredSelected() {
+    const rows = this.filteredRows();
+    return rows.length > 0 && rows.every((row) => this.selected.has(row.userId));
+  }
+
+  detailRows() {
+    const worked = this.entries().map((entry) => {
+      const shift = this.shiftMap[entry.shiftId];
+      const rate = payrollRate(entry, shift);
+      return {
+        employee: this.userLabel(entry.userId),
+        date: formatDateTime(entry.checkInAt).split(',')[0] || '-',
+        shiftTitle: shift?.title || 'Assigned shift',
+        checkIn: formatDateTime(entry.checkInAt),
+        checkOut: entry.checkOutAt ? formatDateTime(entry.checkOutAt) : 'Open',
+        hours: payrollHours(entry),
+        rate,
+        gross: payrollGross(entry, shift),
+        status: entry.exceptionStatus || 'none',
+      };
+    });
+    const leave = this.leaveRequests()
+      .filter((request) => this.isPayrollLeave(request))
+      .map((request) => {
+        const hours = payrollLeaveHours(request, this.fromDate, this.toDate);
+        const rate = Number(request.payRate || 0);
+        return {
+          employee: this.userLabel(request.userId),
+          date: request.startDate || '-',
+          shiftTitle: `${request.requestType.toUpperCase()} approved leave`,
+          checkIn: request.startDate,
+          checkOut: request.endDate,
+          hours,
+          rate,
+          gross: payrollLeaveGross(request, this.fromDate, this.toDate),
+          status: 'approved leave',
+        };
+      });
+    return [...worked, ...leave];
+  }
+
+  private isPayrollLeave(request: TimeOffRequest): boolean {
+    if (request.status !== 'approved') return false;
+    if (request.requestType === 'unpaid') return false;
+    if (request.paid === false) return false;
+    return payrollLeaveHours(request, this.fromDate, this.toDate) > 0;
+  }
+
+  totalHours() { return this.rows.reduce((sum, r) => sum + r.hours, 0); }
+  totalGross() { return Math.round(this.rows.reduce((sum, r) => sum + r.gross, 0) * 100) / 100; }
+  totalDeductions() { return Math.round(this.rows.reduce((sum, r) => sum + r.deductions, 0) * 100) / 100; }
+  totalNet() { return Math.round(this.rows.reduce((sum, r) => sum + r.net, 0) * 100) / 100; }
+  totalExceptions() { return this.rows.reduce((sum, r) => sum + r.exceptions, 0); }
+  exceptionStatusCount(status: string) { return this.entries().filter((e) => e.exceptionStatus === status).length; }
+  openPunchCount() { return this.entries().filter((e) => !e.checkOutAt).length; }
+  payrollStatus() { return this.totalExceptions() ? 'Review required' : 'Ready'; }
+  payrollRunLabel() { return this.payrollFinalized ? 'Finalized' : this.payrollStatus(); }
+  moneyCurrency() { return this.ctx.currencyCode() || 'USD'; }
+
+  exportPayroll() {
+    const csv = toCsv(this.rows, ['userId', 'employee', 'entries', 'hours', 'gross', 'deductions', 'net', 'exceptions']);
+    downloadTextFile(`payroll_${this.fromDate}_to_${this.toDate}.csv`, csv, 'text/csv');
+  }
+
+  printPayslip(uid: string) {
+    this.printLauncher.open('/print/payslip', {
+      uid,
+      from: this.fromDate,
+      to: this.toDate,
+    }, 'admin-payslip');
+  }
+
+  printSelectedPayslips() {
+    const uids = this.selectedUserIds();
+    if (!uids.length) return;
+    this.printLauncher.open('/print/payroll-batch', {
+      uids: uids.join(','),
+      from: this.fromDate,
+      to: this.toDate,
+    }, 'batch-payslips');
+  }
+
+  private payrollRunId() {
+    return `${this.fromDate}_to_${this.toDate}`.replace(/[^0-9A-Za-z_-]/g, '_');
+  }
+
+  private bindPayrollRun() {
+    if (!this.orgId || !this.fromDate || !this.toDate) return;
+    this.unsubRun?.();
+    const ref = doc(getFirestore(), `orgs/${this.orgId}/payrollRuns/${this.payrollRunId()}`);
+    this.unsubRun = onSnapshot(ref, (snap) => {
+      const data: any = snap.exists() ? snap.data() : {};
+      this.zone.run(() => {
+        this.payrollFinalized = data.status === 'finalized';
+        this.payrollFinalizedAt = data.finalizedAt || data.updatedAt || null;
+      });
+    }, () => {
+      this.zone.run(() => {
+        this.payrollFinalized = false;
+        this.payrollFinalizedAt = null;
+      });
+    });
+  }
+
+  async finalizePayroll() {
+    if (!this.orgId || this.payrollFinalized || this.totalExceptions() > 0 || this.rows.length === 0) return;
+    this.payrollBusy = true;
+    try {
+      await setDoc(doc(getFirestore(), `orgs/${this.orgId}/payrollRuns/${this.payrollRunId()}`), {
+        orgId: this.orgId,
+        periodStart: this.fromDate,
+        periodEnd: this.toDate,
+        status: 'finalized',
+        currencyCode: this.moneyCurrency(),
+        employees: this.rows.length,
+        totalHours: this.totalHours(),
+        gross: this.totalGross(),
+        deductions: this.totalDeductions(),
+        net: this.totalNet(),
+        exceptions: this.totalExceptions(),
+        finalizedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } finally {
+      this.payrollBusy = false;
+    }
+  }
+
+  async reopenPayroll() {
+    if (!this.orgId || !this.payrollFinalized) return;
+    this.payrollBusy = true;
+    try {
+      await setDoc(doc(getFirestore(), `orgs/${this.orgId}/payrollRuns/${this.payrollRunId()}`), {
+        status: 'draft',
+        reopenedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } finally {
+      this.payrollBusy = false;
+    }
+  }
+
+  finalizedAtLabel() {
+    if (!this.payrollFinalizedAt) return 'recently';
+    const value: any = this.payrollFinalizedAt;
+    const date = typeof value.toDate === 'function' ? value.toDate() : new Date(value);
+    return Number.isNaN(date.getTime()) ? 'recently' : date.toLocaleString();
+  }
+
+  ngOnDestroy() {
+    this.unsubUsers?.();
+    this.unsubEntries?.();
+    this.unsubLeave?.();
+    this.unsubRun?.();
+  }
+}

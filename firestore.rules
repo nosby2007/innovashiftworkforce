@@ -1,0 +1,335 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ──────────────────────────────────────────────
+    // Helper functions
+    // ──────────────────────────────────────────────
+    function signedIn()      { return request.auth != null; }
+    function uid()           { return request.auth.uid; }
+    function tokenOrgId()    { return request.auth.token.get('orgId', ''); }
+    function rootUserExists(){ return exists(/databases/$(database)/documents/users/$(uid())); }
+    function rootOrgId()     { return rootUserExists() ? get(/databases/$(database)/documents/users/$(uid())).data.orgId : ''; }
+    function rootAccessRole(){ return rootUserExists() ? get(/databases/$(database)/documents/users/$(uid())).data.accessRole : ''; }
+    function rootPlatformRole(){ return rootUserExists() ? get(/databases/$(database)/documents/users/$(uid())).data.platformRole : ''; }
+    function accessRole()    { return request.auth.token.get('accessRole', '') != '' ? request.auth.token.get('accessRole', '') : rootAccessRole(); }
+    function platformRole()  { return request.auth.token.get('platformRole', '') != '' ? request.auth.token.get('platformRole', '') : rootPlatformRole(); }
+
+    function isBootstrapSuperAdmin() {
+      return signedIn() && (
+        get(/databases/$(database)/documents/users/$(uid())).data.platformRole == 'superAdmin' ||
+        get(/databases/$(database)/documents/platformUsers/$(uid())).data.platformRole == 'superAdmin' ||
+        get(/databases/$(database)/documents/users/$(uid())).data.accessRole == 'admin'
+      );
+    }
+
+    function isSuperAdmin()  { return signedIn() && (platformRole() == 'superAdmin' || isBootstrapSuperAdmin()); }
+    function isOrgMember(o)  { return signedIn() && (tokenOrgId() == o || rootOrgId() == o); }
+
+    function isAdmin()       { return signedIn() && accessRole() == 'admin'; }
+    function isManager()     { return signedIn() && accessRole() == 'manager'; }
+    function isScheduler()   { return signedIn() && accessRole() == 'scheduler'; }
+    function isHR()          { return signedIn() && accessRole() == 'hr'; }
+
+    // Any elevated org role
+    function isOrgAdminLike() {
+      return isAdmin() || isManager() || isScheduler() || isHR();
+    }
+
+    // Caller belongs to this org AND is an admin-like role
+    function isOrgAdmin(o)   { return isOrgMember(o) && isOrgAdminLike(); }
+
+    function isSafeSelfUserProfileUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'displayName',
+        'phone',
+        'title',
+        'department',
+        'locationName',
+        'profile',
+        'address',
+        'emergencyContact',
+        'taxWithholding',
+        'w2',
+        'dependents',
+        'preferences',
+        'profileUpdatedAt',
+        'updatedAt'
+      ]) &&
+      request.resource.data.uid == resource.data.uid &&
+      request.resource.data.orgId == resource.data.orgId &&
+      request.resource.data.accessRole == resource.data.accessRole &&
+      request.resource.data.jobRole == resource.data.jobRole &&
+      request.resource.data.active == resource.data.active;
+    }
+
+    // Plan is active (not canceled/past_due) — used for feature gating
+    function hasPlan(o) {
+      return get(/databases/$(database)/documents/orgs/$(o)).data.planStatus in ['active','trialing'];
+    }
+
+    // ──────────────────────────────────────────────
+    // PLATFORM LEVEL
+    // ──────────────────────────────────────────────
+
+    // Root user registry used during bootstrap / account resolution.
+    match /users/{targetUid} {
+      allow read:  if signedIn() && (uid() == targetUid || isSuperAdmin());
+      allow write: if isSuperAdmin();
+    }
+
+    // Platform user registry
+    match /platformUsers/{targetUid} {
+      allow read:  if signedIn() && (uid() == targetUid || isSuperAdmin());
+      allow write: if isSuperAdmin();
+    }
+
+    // Org directory (platform listing of all orgs)
+    match /orgDirectory/{orgId} {
+      allow read:  if signedIn() && (isSuperAdmin() || isOrgMember(orgId));
+      allow write: if isSuperAdmin();
+    }
+
+    // ──────────────────────────────────────────────
+    // ORG ROOT
+    // ──────────────────────────────────────────────
+
+    match /orgs/{orgId} {
+      // Org metadata (name, plan, planStatus, etc.)
+      allow read:  if signedIn() && (isSuperAdmin() || isOrgMember(orgId));
+      // Only admins within that org or super-admin may update org settings
+      allow update: if signedIn() && (isSuperAdmin() || isOrgAdmin(orgId));
+      allow create: if isSuperAdmin();
+      allow delete: if isSuperAdmin();
+
+      // ── Users (org member profiles) ─────────────
+      match /users/{targetUid} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (uid() == targetUid || isOrgAdminLike()))
+        );
+        allow create: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isOrgAdminLike())
+        );
+        allow update: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (
+            isOrgAdminLike() ||
+            (uid() == targetUid && isSafeSelfUserProfileUpdate())
+          ))
+        );
+        allow delete: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isAdmin())
+        );
+      }
+
+      // ── Shifts ───────────────────────────────────
+      match /shifts/{shiftId} {
+        allow read:   if signedIn() && (isSuperAdmin() || isOrgMember(orgId));
+        // Shift lifecycle writes must go through Cloud Functions so overlap,
+        // role, plan, audit, and marketplace rules are consistently enforced.
+        allow create, update, delete: if false;
+
+        // Shift live chat between assigned staff and management
+        match /chatMessages/{messageId} {
+          allow read: if signedIn() && (
+            isSuperAdmin() ||
+            (isOrgMember(orgId) && (
+              isOrgAdminLike() ||
+              uid() == get(/databases/$(database)/documents/orgs/$(orgId)/shifts/$(shiftId)).data.assignedUserId
+            ))
+          );
+
+          allow create: if signedIn() && (
+            isSuperAdmin() ||
+            (isOrgMember(orgId) && (
+              isOrgAdminLike() ||
+              uid() == get(/databases/$(database)/documents/orgs/$(orgId)/shifts/$(shiftId)).data.assignedUserId
+            ))
+          ) &&
+          request.resource.data.orgId == orgId &&
+          request.resource.data.shiftId == shiftId &&
+          request.resource.data.senderUid == uid() &&
+          request.resource.data.message is string &&
+          request.resource.data.message.size() > 0 &&
+          request.resource.data.message.size() <= 2000;
+
+          allow update, delete: if false;
+        }
+      }
+
+      // ── Time Entries ─────────────────────────────
+      match /timeEntries/{entryId} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
+        );
+        allow create: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && hasPlan(orgId) && uid() == request.resource.data.userId)
+        );
+        allow update: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isOrgAdminLike())
+        );
+        allow delete: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isAdmin())
+        );
+      }
+
+      // ── Leave / Time-off Requests ────────────────
+      match /requests/{requestId} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
+        );
+        allow create: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && uid() == request.resource.data.userId)
+        );
+        // Approve/reject go through decideTimeOffRequest so shift unassignment,
+        // balance/ledger updates, and notifications stay consistent.
+        allow update: if false;
+        allow delete: if false;
+      }
+
+      // ── Accrual Balances (Cloud Function writes only, staff readable) ────
+      match /accrualBalances/{targetUid} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == targetUid))
+        );
+        // Written only by decideTimeOffRequest (approval) and accrueTimeOff (grants).
+        allow create, update, delete: if false;
+      }
+
+      // ── Accrual Ledger (Cloud Function writes only, staff readable) ──────
+      match /accrualLedger/{entryId} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
+        );
+        allow create, update, delete: if false;
+      }
+
+      // ── Employee Documents (staff upload, admin verified) ──────────────
+      match /employeeDocuments/{documentId} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
+        );
+        allow create: if signedIn() && (
+          isSuperAdmin() ||
+          (
+            isOrgMember(orgId) &&
+            request.resource.data.orgId == orgId &&
+            request.resource.data.userId == uid() &&
+            request.resource.data.status == 'pending'
+          )
+        );
+        allow update: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isOrgAdminLike())
+        );
+        allow delete: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isAdmin())
+        );
+      }
+
+      // ── User request pointers for fast profile/activity views ───────────
+      match /userRequests/{requestId} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
+        );
+        allow create: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && uid() == request.resource.data.userId)
+        );
+        allow update: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isOrgAdminLike())
+        );
+        allow delete: if false;
+      }
+
+      // ── Shift Switch / Cover Requests ────────────
+      match /shiftSwapRequests/{requestId} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (
+            isOrgAdminLike() ||
+            uid() == resource.data.requesterUid ||
+            uid() == resource.data.targetUid
+          ))
+        );
+        // Requests are created, decided, and applied through Cloud Functions
+        // to enforce role matching, overlap checks, notifications, and audit.
+        allow create, update, delete: if false;
+      }
+
+      // ── Messages (org-wide announcements) ────────
+      match /messages/{messageId} {
+        allow read: if signedIn() && (isSuperAdmin() || isOrgMember(orgId));
+        allow create, update, delete: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (isAdmin() || isHR() || isManager()))
+        );
+      }
+
+      // ── Message reads (user-owned receipts) ──────
+      match /messageReads/{docId} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
+        );
+        allow create: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && uid() == request.resource.data.userId)
+        );
+        allow update, delete: if false;
+      }
+
+      // ── Audit Logs (read-only for admins) ────────
+      match /auditLogs/{logId} {
+        allow read:  if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isOrgAdminLike())
+        );
+        allow write: if false; // Cloud Functions only
+      }
+
+      // ── Org Metrics (Cloud Function writes) ──────
+      match /metrics/{docId} {
+        allow read:  if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isOrgAdminLike())
+        );
+        allow write: if false;
+      }
+
+      // ── Payroll Runs (org admin managed period locks) ──────
+      match /payrollRuns/{runId} {
+        allow read, create, update: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isOrgAdminLike())
+        );
+        allow delete: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isAdmin())
+        );
+      }
+
+      // ── User Notifications (per-user inbox) ──────
+      match /userNotifications/{targetUid}/items/{notifId} {
+        allow read:          if signedIn() && uid() == targetUid;
+        allow create:        if false;       // Cloud Functions only
+        allow update, delete: if signedIn() && uid() == targetUid;
+      }
+    }
+  }
+}

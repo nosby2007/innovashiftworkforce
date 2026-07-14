@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": [] },
+  "files": ["src/main.ts"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts"],
+  "exclude": [
+    "src/app/app.config.ts",
+    "src/app/core/dev/seed-shifts.ts",
+    "src/app/features/admin/admin-shell.page.ts",
+    "src/app/features/schedule/post-shift.dialog.ts"
+  ]
+}

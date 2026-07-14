@@ -1,0 +1,22 @@
+@use '@angular/material' as mat;
+
+// Valid Shift uses Angular Material M3 with custom color overrides via CSS variables.
+// mat.$indigo-palette is M2-only; M3 theming uses system tokens instead.
+html {
+  height: 100%;
+  @include mat.theme((
+    color: (
+      primary: mat.$blue-palette,
+      tertiary: mat.$cyan-palette,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
+}
+
+body {
+  // Enterprise-light by default; actual background/color come from styles.scss CSS vars
+  color-scheme: light;
+  margin: 0;
+  height: 100%;
+}
