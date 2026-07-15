@@ -13,10 +13,12 @@ import { AccrualsRepo, TimeOffRequest } from '../../core/repos/accruals.repo';
 import { formatDateTime } from '../../shared/utils/date.util';
 import { currentPayrollPeriod, dateInputValue, payrollDeductions, payrollGross, payrollHours, payrollLeaveGross, payrollLeaveHours, payrollNet, payrollRate } from '../../shared/utils/payroll.util';
 import { PayFrequency } from '../../core/tenancy/org-finance.model';
+import { TableListController } from '../../shared/ui/table-list/table-list.controller';
+import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule],
+  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule, TablePaginatorComponent],
   template: `
     <div class="pay-page">
       <header class="pay-hero">
@@ -111,21 +113,21 @@ import { PayFrequency } from '../../core/tenancy/org-finance.model';
           <table>
             <thead>
               <tr>
-                <th>Date</th>
+                <th class="pay-th-sort" (click)="rowsCtrl.toggleSort('date')">Date {{ rowsCtrl.sortIndicator('date') }}</th>
                 <th>Shift</th>
                 <th>Clock In</th>
                 <th>Clock Out</th>
-                <th>Hours</th>
+                <th class="pay-th-sort" (click)="rowsCtrl.toggleSort('hours')">Hours {{ rowsCtrl.sortIndicator('hours') }}</th>
                 <th>Rate</th>
-                <th>Gross</th>
-                <th>Status</th>
+                <th class="pay-th-sort" (click)="rowsCtrl.toggleSort('gross')">Gross {{ rowsCtrl.sortIndicator('gross') }}</th>
+                <th class="pay-th-sort" (click)="rowsCtrl.toggleSort('status')">Status {{ rowsCtrl.sortIndicator('status') }}</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngIf="rows.length === 0">
+              <tr *ngIf="rowsCtrl.pageRows().length === 0">
                 <td colspan="8">No payroll time entries in this period.</td>
               </tr>
-              <tr *ngFor="let r of rows">
+              <tr *ngFor="let r of rowsCtrl.pageRows()">
                 <td>{{ r.date }}</td>
                 <td>{{ r.shiftTitle }}</td>
                 <td>{{ r.checkIn }}</td>
@@ -138,6 +140,7 @@ import { PayFrequency } from '../../core/tenancy/org-finance.model';
             </tbody>
           </table>
         </div>
+        <app-table-paginator *ngIf="rows.length > 0" [controller]="rowsCtrl"></app-table-paginator>
       </section>
     </div>
   `,
@@ -171,6 +174,8 @@ import { PayFrequency } from '../../core/tenancy/org-finance.model';
     .pay-table-shell { overflow:auto; }
     table { width:100%; min-width:920px; border-collapse:collapse; }
     th { background:#eef3ef; color:#334155; font-size:11px; text-transform:uppercase; letter-spacing:.06em; text-align:left; padding:10px; border-bottom:1px solid #d1d5db; }
+    .pay-th-sort { cursor:pointer; user-select:none; }
+    .pay-th-sort:hover { color:#07533f; }
     td { padding:11px 10px; border-bottom:1px solid #e5e7eb; color:#1f2937; white-space:nowrap; }
     tr:nth-child(even) td { background:#f8fafc; }
     td span { border-radius:999px; background:#ecfdf5; color:#047857; padding:4px 8px; font-size:11px; font-weight:800; }
@@ -187,6 +192,17 @@ export class StaffPayrollPage implements OnDestroy {
   leaveRequests = signal<TimeOffRequest[]>([]);
   shiftMap = signal<Record<string, Shift>>({});
   rows: Array<{ date: string; shiftTitle: string; checkIn: string; checkOut: string; hours: number; rate: number; gross: number; status: string }> = [];
+  private rowsView = signal<typeof this.rows>([]);
+  rowsCtrl = new TableListController<(typeof this.rows)[number]>(this.rowsView, {
+    pageSize: 15,
+    sortAccessor: (r, key) => {
+      if (key === 'date') return r.date;
+      if (key === 'hours') return r.hours;
+      if (key === 'gross') return r.gross;
+      if (key === 'status') return r.status;
+      return null;
+    },
+  });
   private unsub: (() => void) | null = null;
   private unsubLeave: (() => void) | null = null;
   private ctxEffect: EffectRef;
@@ -212,6 +228,7 @@ export class StaffPayrollPage implements OnDestroy {
     this.unsub?.();
     this.unsubLeave?.();
     this.rows = [];
+    this.rowsView.set([]);
     if (!this.orgId || !this.uid || !this.fromDate || !this.toDate) return;
     const start = Timestamp.fromDate(new Date(`${this.fromDate}T00:00:00`));
     const end = Timestamp.fromDate(new Date(`${this.toDate}T23:59:59`));
@@ -233,6 +250,7 @@ export class StaffPayrollPage implements OnDestroy {
       .filter((request) => this.isPayrollLeave(request))
       .map((request) => this.leaveToRow(request));
     this.rows = [...workedRows, ...leaveRows].sort((a, b) => a.date.localeCompare(b.date));
+    this.rowsView.set(this.rows);
   }
 
   private toRow(entry: TimeEntry) {

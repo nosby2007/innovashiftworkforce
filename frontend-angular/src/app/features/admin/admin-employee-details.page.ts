@@ -17,6 +17,8 @@ import { EmployeeDocumentRecord, EmployeeDocumentsRepo } from '../../core/repos/
 import { Shift } from '../../shared/models/shift.model';
 import { TimeEntry } from '../../shared/models/time-entry.model';
 import { tsToDate, formatDateTime } from '../../shared/utils/date.util';
+import { TableListController } from '../../shared/ui/table-list/table-list.controller';
+import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
 
 interface TsRow {
   entry: TimeEntry;
@@ -52,7 +54,7 @@ type EmployeeProfileDraft = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, DatePipe, MatIconModule],
+  imports: [CommonModule, FormsModule, RouterLink, DatePipe, MatIconModule, TablePaginatorComponent],
   template: `
     <div class="vs-page-pad empd-page">
 
@@ -310,8 +312,8 @@ type EmployeeProfileDraft = {
             <table class="vs-table empd-table">
               <thead>
                 <tr>
-                  <th>Title</th>
-                  <th>Date</th>
+                  <th class="empd-th-sort" (click)="shiftsCtrl.toggleSort('title')">Title {{ shiftsCtrl.sortIndicator('title') }}</th>
+                  <th class="empd-th-sort" (click)="shiftsCtrl.toggleSort('start')">Date {{ shiftsCtrl.sortIndicator('start') }}</th>
                   <th>Time</th>
                   <th>Status</th>
                   <th>Location</th>
@@ -319,10 +321,10 @@ type EmployeeProfileDraft = {
                 </tr>
               </thead>
               <tbody>
-                <tr *ngIf="shifts().length === 0" class="vs-empty">
+                <tr *ngIf="shiftsCtrl.pageRows().length === 0" class="vs-empty">
                   <td colspan="6">No shifts found for this employee.</td>
                 </tr>
-                <tr *ngFor="let shift of shifts()" class="vs-row">
+                <tr *ngFor="let shift of shiftsCtrl.pageRows()" class="vs-row">
                   <td><strong>{{ shift.title }}</strong></td>
                   <td>{{ toDate(shift.startAt) | date:'EEE MMM d, y' }}</td>
                   <td class="empd-mono">{{ toDate(shift.startAt) | date:'shortTime' }} – {{ toDate(shift.endAt) | date:'shortTime' }}</td>
@@ -345,6 +347,7 @@ type EmployeeProfileDraft = {
               </tbody>
             </table>
           </div>
+          <app-table-paginator *ngIf="shifts().length > 0" [controller]="shiftsCtrl"></app-table-paginator>
         </section>
 
         <!-- ── Individual Timesheet ── -->
@@ -415,9 +418,9 @@ type EmployeeProfileDraft = {
               <thead>
                 <tr>
                   <th>Shift</th>
-                  <th>Check In</th>
-                  <th>Check Out</th>
-                  <th>Hours</th>
+                  <th class="empd-th-sort" (click)="tsRowsCtrl.toggleSort('checkIn')">Check In {{ tsRowsCtrl.sortIndicator('checkIn') }}</th>
+                  <th class="empd-th-sort" (click)="tsRowsCtrl.toggleSort('checkOut')">Check Out {{ tsRowsCtrl.sortIndicator('checkOut') }}</th>
+                  <th class="empd-th-sort" (click)="tsRowsCtrl.toggleSort('hours')">Hours {{ tsRowsCtrl.sortIndicator('hours') }}</th>
                   <th>Status</th>
                   <th>Reason</th>
                   <th>Resolved At</th>
@@ -425,10 +428,10 @@ type EmployeeProfileDraft = {
                 </tr>
               </thead>
               <tbody>
-                <tr class="vs-empty" *ngIf="tsRows().length === 0">
+                <tr class="vs-empty" *ngIf="tsRowsCtrl.pageRows().length === 0">
                   <td colspan="8">No time entries in this range. Select a date range above.</td>
                 </tr>
-                <tr *ngFor="let r of tsRows()" class="vs-row"
+                <tr *ngFor="let r of tsRowsCtrl.pageRows()" class="vs-row"
                     [class.empd-row--pending]="r.entry.exceptionStatus === 'pending'"
                     [class.empd-row--approved]="r.entry.exceptionStatus === 'approved'"
                     [class.empd-row--rejected]="r.entry.exceptionStatus === 'rejected'">
@@ -464,6 +467,7 @@ type EmployeeProfileDraft = {
               </tfoot>
             </table>
           </div>
+          <app-table-paginator *ngIf="tsRows().length > 0" [controller]="tsRowsCtrl"></app-table-paginator>
         </section>
 
       </ng-container>
@@ -522,6 +526,8 @@ type EmployeeProfileDraft = {
     .empd-table th { background: rgba(15,23,42,0.44); }
     .empd-table tbody tr:nth-child(even):not(.vs-empty) td { background: rgba(148,163,184,0.05); }
     .empd-right { text-align:right; white-space:nowrap; }
+    .empd-th-sort { cursor:pointer; user-select:none; }
+    .empd-th-sort:hover { color: var(--primary, #07533f); }
     .empd-row-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
     .empd-btn { display:inline-flex; align-items:center; gap:6px; padding:6px 10px !important; font-size:12px !important; }
     .empd-btn--danger { color:#fecaca !important; border-color:rgba(239,68,68,0.35) !important; }
@@ -582,6 +588,14 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
   userId = '';
   user = signal<OrgUser | null>(null);
   shifts = signal<Shift[]>([]);
+  shiftsCtrl = new TableListController<Shift>(this.shifts, {
+    pageSize: 10,
+    sortAccessor: (s, key) => {
+      if (key === 'title') return String(s.title || '').toLowerCase();
+      if (key === 'start') return s.startAt?.toMillis ? s.startAt.toMillis() : Number(s.startAt || 0);
+      return null;
+    },
+  });
   messageTitle = '';
   messageBody = '';
   messageBusy = false;
@@ -606,6 +620,15 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
   tsFrom = '';
   tsTo = '';
   tsRows = signal<TsRow[]>([]);
+  tsRowsCtrl = new TableListController<TsRow>(this.tsRows, {
+    pageSize: 15,
+    sortAccessor: (r, key) => {
+      if (key === 'checkIn') return tsToDate(r.entry.checkInAt)?.getTime() ?? 0;
+      if (key === 'checkOut') return tsToDate(r.entry.checkOutAt)?.getTime() ?? 0;
+      if (key === 'hours') return parseFloat(r.hours) || 0;
+      return null;
+    },
+  });
   shiftMap: Record<string, Shift> = {};
   fixEntryId: string | null = null;
   fixCheckIn = '';

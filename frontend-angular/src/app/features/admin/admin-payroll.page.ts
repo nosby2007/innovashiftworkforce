@@ -15,6 +15,8 @@ import { formatDateTime } from '../../shared/utils/date.util';
 import { currentPayrollPeriod, dateInputValue, payrollDeductions, payrollGross, payrollHours, payrollLeaveGross, payrollLeaveHours, payrollNet, payrollRate } from '../../shared/utils/payroll.util';
 import { PayFrequency } from '../../core/tenancy/org-finance.model';
 import { toCsv, downloadTextFile } from '../../shared/utils/csv.util';
+import { TableListController } from '../../shared/ui/table-list/table-list.controller';
+import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
 
 type PayrollRow = {
   userId: string;
@@ -30,7 +32,7 @@ type PayrollRow = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule],
+  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule, TablePaginatorComponent],
   template: `
     <div class="pay-admin">
       <header class="pay-admin-hero">
@@ -126,7 +128,7 @@ type PayrollRow = {
       <section class="pay-admin-card pay-table-card" *ngIf="orgId">
         <div class="pay-admin-card-head">
           <h2>Employee Payroll Summary</h2>
-          <input [(ngModel)]="query" placeholder="Search employee">
+          <input [ngModel]="query" (ngModelChange)="onQueryChange($event)" placeholder="Search employee">
         </div>
         <div class="pay-table-shell">
           <table>
@@ -135,22 +137,22 @@ type PayrollRow = {
                 <th class="pay-check-col">
                   <input type="checkbox" [checked]="allFilteredSelected()" (change)="toggleSelectAll($any($event.target).checked)">
                 </th>
-                <th>Employee</th>
-                <th>Entries</th>
-                <th>Hours</th>
-                <th>Gross</th>
-                <th>Deductions</th>
-                <th>Net</th>
-                <th>Exceptions</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('employee')">Employee {{ payrollCtrl.sortIndicator('employee') }}</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('entries')">Entries {{ payrollCtrl.sortIndicator('entries') }}</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('hours')">Hours {{ payrollCtrl.sortIndicator('hours') }}</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('gross')">Gross {{ payrollCtrl.sortIndicator('gross') }}</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('deductions')">Deductions {{ payrollCtrl.sortIndicator('deductions') }}</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('net')">Net {{ payrollCtrl.sortIndicator('net') }}</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('exceptions')">Exceptions {{ payrollCtrl.sortIndicator('exceptions') }}</th>
                 <th>Status</th>
                 <th>Print</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngIf="filteredRows().length === 0">
+              <tr *ngIf="payrollCtrl.pageRows().length === 0">
                 <td colspan="10">No payroll rows found for this period.</td>
               </tr>
-              <tr *ngFor="let r of filteredRows()">
+              <tr *ngFor="let r of payrollCtrl.pageRows()">
                 <td class="pay-check-col">
                   <input type="checkbox" [checked]="isSelected(r.userId)" (change)="toggleUserSelection(r.userId, $any($event.target).checked)">
                 </td>
@@ -172,6 +174,7 @@ type PayrollRow = {
             </tbody>
           </table>
         </div>
+        <app-table-paginator *ngIf="filteredRows().length > 0" [controller]="payrollCtrl"></app-table-paginator>
       </section>
 
       <section class="pay-admin-card pay-table-card" *ngIf="orgId">
@@ -183,19 +186,19 @@ type PayrollRow = {
           <table>
             <thead>
               <tr>
-                <th>Employee</th>
-                <th>Date</th>
+                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('employee')">Employee {{ detailCtrl.sortIndicator('employee') }}</th>
+                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('date')">Date {{ detailCtrl.sortIndicator('date') }}</th>
                 <th>Shift</th>
                 <th>Check In</th>
                 <th>Check Out</th>
-                <th>Hours</th>
+                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('hours')">Hours {{ detailCtrl.sortIndicator('hours') }}</th>
                 <th>Rate</th>
-                <th>Gross</th>
-                <th>Status</th>
+                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('gross')">Gross {{ detailCtrl.sortIndicator('gross') }}</th>
+                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('status')">Status {{ detailCtrl.sortIndicator('status') }}</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let e of detailRows()">
+              <tr *ngFor="let e of detailCtrl.pageRows()">
                 <td>{{ e.employee }}</td>
                 <td>{{ e.date }}</td>
                 <td>{{ e.shiftTitle }}</td>
@@ -209,6 +212,7 @@ type PayrollRow = {
             </tbody>
           </table>
         </div>
+        <app-table-paginator *ngIf="entries().length > 0" [controller]="detailCtrl"></app-table-paginator>
       </section>
     </div>
   `,
@@ -262,6 +266,8 @@ type PayrollRow = {
     .pay-table-shell { overflow:auto; }
     table { width:100%; min-width:980px; border-collapse:collapse; }
     th { background:#eef3ef; color:#334155; font-size:11px; text-align:left; text-transform:uppercase; letter-spacing:.06em; padding:10px; border-bottom:1px solid #d1d5db; }
+    .pay-th-sort { cursor:pointer; user-select:none; }
+    .pay-th-sort:hover { color:#07533f; }
     td { padding:11px 10px; border-bottom:1px solid #e5e7eb; color:#1f2937; white-space:nowrap; }
     tr:nth-child(even) td { background:#f8fafc; }
     td strong { display:block; color:#0f172a; }
@@ -284,6 +290,37 @@ export class AdminPayrollPage implements OnDestroy {
   shiftMap: Record<string, Shift> = {};
   rows: PayrollRow[] = [];
   selected = new Set<string>();
+
+  // Plain fields (rows/query) don't trigger computed() re-evaluation, so
+  // these views are refreshed manually wherever rows/query change — see
+  // recomputeRows() and onQueryChange().
+  private payrollRowsView = signal<PayrollRow[]>([]);
+  payrollCtrl = new TableListController<PayrollRow>(this.payrollRowsView, {
+    pageSize: 25,
+    sortAccessor: (r, key) => {
+      if (key === 'employee') return r.employee.toLowerCase();
+      if (key === 'entries') return r.entries;
+      if (key === 'hours') return r.hours;
+      if (key === 'gross') return r.gross;
+      if (key === 'deductions') return r.deductions;
+      if (key === 'net') return r.net;
+      if (key === 'exceptions') return r.exceptions;
+      return null;
+    },
+  });
+
+  private detailRowsView = signal<Array<any>>([]);
+  detailCtrl = new TableListController<any>(this.detailRowsView, {
+    pageSize: 25,
+    sortAccessor: (r, key) => {
+      if (key === 'employee') return String(r.employee || '').toLowerCase();
+      if (key === 'date') return String(r.date || '');
+      if (key === 'hours') return r.hours;
+      if (key === 'gross') return r.gross;
+      if (key === 'status') return String(r.status || '');
+      return null;
+    },
+  });
   payrollFinalized = false;
   payrollFinalizedAt: any = null;
   payrollBusy = false;
@@ -395,6 +432,13 @@ export class AdminPayrollPage implements OnDestroy {
       deductions: Math.round(r.deductions * 100) / 100,
       net: Math.round(r.net * 100) / 100,
     })).sort((a, b) => a.employee.localeCompare(b.employee));
+    this.payrollRowsView.set(this.filteredRows());
+    this.detailRowsView.set(this.detailRows());
+  }
+
+  onQueryChange(value: string) {
+    this.query = value;
+    this.payrollRowsView.set(this.filteredRows());
   }
 
   userLabel(uid: string): string {
