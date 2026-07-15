@@ -16,10 +16,11 @@ import { mapAttendancePolicyError } from '../../shared/utils/attendance-policy-e
 import { PlanEntitlementsService } from '../../core/tenancy/plan-entitlements.service';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
 import { fmtShiftDate, fmtShiftTime, shiftHours } from '../../shared/utils/shift-lifecycle.utils';
+import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map/geofence-map.component';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule],
+  imports: [CommonModule, FormsModule, MatIconModule, GeofenceMapComponent],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
@@ -151,6 +152,8 @@ import { fmtShiftDate, fmtShiftTime, shiftHours } from '../../shared/utils/shift
               <span *ngIf="onBreak()" class="vs-badge vs-badge--warning">On Break</span>
             </div>
           </div>
+          <app-geofence-map *ngIf="punchMethod === 'gps' && canUseGps()" [site]="activeSiteForMap()"></app-geofence-map>
+
           <div class="at-actions at-actions-current">
             <button class="vs-btn-ghost at-btn-break" (click)="breakOut()" [disabled]="busy || !entryId() || onBreak()">
               <mat-icon>pause_circle</mat-icon> Break Out
@@ -229,6 +232,8 @@ import { fmtShiftDate, fmtShiftTime, shiftHours } from '../../shared/utils/shift
                 <button class="vs-btn-ghost" [class.at-mode-active]="punchMethod==='gps'" (click)="setPunchMethod('gps')" [disabled]="busy || !canUseGps()">GPS Verified</button>
               </div>
             </div>
+
+            <app-geofence-map *ngIf="punchMethod === 'gps' && canUseGps()" [site]="activeSiteForMap()"></app-geofence-map>
 
             <div class="at-upgrade-card" *ngIf="!canUseGps() && !gpsRequired()">
               <mat-icon>workspace_premium</mat-icon>
@@ -708,7 +713,7 @@ export class AttendancePage implements OnDestroy {
   onBreak = signal(false);
   busy = false;
   punchMethod: 'manual' | 'gps' = 'manual';
-  orgSettings: { gpsAttendanceEnabled?: boolean } | null = null;
+  orgSettings: { gpsAttendanceEnabled?: boolean; sites?: any[] } | null = null;
   timecardMenu: 'select' | 'actions' | 'view' | null = null;
   selectedEntryIds = new Set<string>();
   showRoundedTime = false;
@@ -1122,6 +1127,42 @@ export class AttendancePage implements OnDestroy {
 
   gpsRequired(): boolean {
     return this.orgSettings?.gpsAttendanceEnabled === true;
+  }
+
+  private resolveTargetShift(): Shift | null {
+    const current = this.currentShift();
+    if (current && (current.id === this.shiftId || !this.shiftId)) return current;
+    return this.shiftMap()[this.shiftId] || this.mySchedule().find((s) => s.id === this.shiftId) || current;
+  }
+
+  /**
+   * Best-guess site for the geofence preview map. Mirrors the backend's
+   * locationId → locationName → any-active-site fallback in
+   * verifyGpsAgainstOrg — purely a visual aid, the server remains the
+   * source of truth for which site actually satisfies the geofence.
+   */
+  activeSiteForMap(): GeofenceSite | null {
+    const rawSites = Array.isArray(this.orgSettings?.sites) ? this.orgSettings!.sites! : [];
+    const activeSites = rawSites.filter((s) => s?.active !== false && Number.isFinite(Number(s?.latitude)) && Number.isFinite(Number(s?.longitude)));
+    if (!activeSites.length) return null;
+
+    const shift = this.resolveTargetShift();
+    let candidates = activeSites;
+    if (shift?.locationId) {
+      const byId = activeSites.filter((s) => String(s.id || '').trim() === String(shift.locationId).trim());
+      if (byId.length) candidates = byId;
+    } else if (shift?.locationName) {
+      const byName = activeSites.filter((s) => String(s.name || '').trim().toLowerCase() === String(shift.locationName).trim().toLowerCase());
+      if (byName.length) candidates = byName;
+    }
+
+    const site = candidates[0] || activeSites[0];
+    return {
+      name: String(site.name || 'Site'),
+      latitude: Number(site.latitude),
+      longitude: Number(site.longitude),
+      radiusM: Math.max(25, Number(site.radiusM || 150)),
+    };
   }
 
   setPunchMethod(method: 'manual' | 'gps') {
