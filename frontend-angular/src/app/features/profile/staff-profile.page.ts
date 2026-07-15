@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { doc, getFirestore, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getAuth, updateProfile } from 'firebase/auth';
+import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { ToastService } from '../../core/ui/toast.service';
@@ -30,7 +31,17 @@ const EMPTY_DEPENDENT: DependentDraft = {
     <div class="vs-page-pad prof-page">
       <div class="prof-header">
         <div class="prof-hero">
-          <div class="prof-avatar">{{ initials() }}</div>
+          <div class="prof-avatar-wrap">
+            <div class="prof-avatar" [class.prof-avatar--photo]="draft.photoURL">
+              <img *ngIf="draft.photoURL" [src]="draft.photoURL" alt="Profile photo">
+              <span *ngIf="!draft.photoURL">{{ initials() }}</span>
+            </div>
+            <button class="prof-avatar-edit" type="button" (click)="avatarInput.click()"
+                    [disabled]="uploadingPhoto" aria-label="Change profile photo">
+              <mat-icon>{{ uploadingPhoto ? 'hourglass_empty' : 'photo_camera' }}</mat-icon>
+            </button>
+            <input #avatarInput type="file" accept="image/*" hidden (change)="onAvatarSelected($event)">
+          </div>
           <div class="prof-identity">
             <span>My Profile</span>
             <h1>{{ draft.displayName || draft.email || 'Staff member' }}</h1>
@@ -310,7 +321,20 @@ const EMPTY_DEPENDENT: DependentDraft = {
     .prof-page { background: var(--bg); }
     .prof-header { max-width: 1120px; margin: 0 auto 20px; display:flex; justify-content:space-between; gap:16px; align-items:flex-start; }
     .prof-hero { flex:1; display:flex; align-items:center; gap:22px; padding:28px; border:1px solid var(--border); border-radius:8px; background:var(--surface); box-shadow:var(--shadow-sm); }
-    .prof-avatar { width:112px; height:112px; border-radius:999px; border:2px solid var(--border-strong); display:flex; align-items:center; justify-content:center; color:var(--primary); font-size:34px; font-weight:900; background:var(--panel); }
+    .prof-avatar-wrap { position:relative; flex-shrink:0; }
+    .prof-avatar { width:112px; height:112px; border-radius:999px; border:2px solid var(--border-strong); display:flex; align-items:center; justify-content:center; color:var(--primary); font-size:34px; font-weight:900; background:var(--panel); overflow:hidden; }
+    .prof-avatar--photo { border-color:var(--border); }
+    .prof-avatar img { width:100%; height:100%; object-fit:cover; }
+    .prof-avatar-edit {
+      position:absolute; bottom:2px; right:2px;
+      width:32px; height:32px; border-radius:999px;
+      display:flex; align-items:center; justify-content:center;
+      background:var(--primary); color:#fff; border:2px solid var(--surface);
+      cursor:pointer;
+    }
+    .prof-avatar-edit:hover { filter:brightness(1.08); }
+    .prof-avatar-edit:disabled { opacity:0.6; cursor:default; }
+    .prof-avatar-edit mat-icon { font-size:16px !important; width:16px; height:16px; }
     .prof-identity span { display:block; color:var(--text-muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; font-weight:900; margin-bottom:8px; }
     .prof-identity h1 { margin:0; color:var(--text); font-size:30px; line-height:1.1; }
     .prof-identity p { margin:10px 0 0; color:var(--text-muted); font-size:15px; }
@@ -371,6 +395,7 @@ export class StaffProfilePage implements OnDestroy {
   orgId: string | null = null;
   uid: string | null = null;
   saving = false;
+  uploadingPhoto = false;
   private unsub: (() => void) | null = null;
   private source: any = {};
 
@@ -439,6 +464,7 @@ export class StaffProfilePage implements OnDestroy {
         platformRole: this.ctx.platformRole(),
         displayName: payload.displayName || this.ctx.displayName(),
         email: this.ctx.email(),
+        photoURL: this.ctx.photoURL(),
         jobRole: this.ctx.jobRole(),
         plan: this.ctx.plan(),
         planStatus: this.ctx.planStatus(),
@@ -452,6 +478,57 @@ export class StaffProfilePage implements OnDestroy {
       this.toast.errorFrom(e, 'Failed to save profile.');
     } finally {
       this.saving = false;
+    }
+  }
+
+  async onAvatarSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] || null;
+    input.value = '';
+    if (!file || !this.orgId || !this.uid) return;
+
+    if (!file.type.startsWith('image/')) {
+      this.toast.error('Please choose an image file.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      this.toast.error('Image must be 5MB or smaller.');
+      return;
+    }
+
+    this.uploadingPhoto = true;
+    try {
+      const storageRef = ref(getStorage(), `orgs/${this.orgId}/users/${this.uid}/avatar`);
+      await uploadBytes(storageRef, file, { contentType: file.type });
+      const photoURL = await getDownloadURL(storageRef);
+
+      await setDoc(doc(getFirestore(), `orgs/${this.orgId}/users/${this.uid}`), {
+        photoURL,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      this.draft = { ...this.draft, photoURL };
+      this.ctx.setContext({
+        orgId: this.ctx.orgId(),
+        uid: this.ctx.uid(),
+        accessRole: this.ctx.accessRole(),
+        platformRole: this.ctx.platformRole(),
+        displayName: this.ctx.displayName(),
+        email: this.ctx.email(),
+        photoURL,
+        jobRole: this.ctx.jobRole(),
+        plan: this.ctx.plan(),
+        planStatus: this.ctx.planStatus(),
+        countryCode: this.ctx.countryCode(),
+        currencyCode: this.ctx.currencyCode(),
+        payFrequency: this.ctx.payFrequency(),
+        taxProfile: this.ctx.taxProfile(),
+      });
+      this.toast.success('Profile photo updated.');
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Failed to upload photo.');
+    } finally {
+      this.uploadingPhoto = false;
     }
   }
 
@@ -480,6 +557,7 @@ export class StaffProfilePage implements OnDestroy {
       ...this.emptyDraft(),
       displayName: data?.displayName || '',
       email: data?.email || this.ctx.email() || '',
+      photoURL: data?.photoURL || this.ctx.photoURL() || '',
       jobRole: data?.jobRole || this.ctx.jobRole() || '',
       employeeNumber: data?.employeeNumber || profile?.employeeNumber || '',
       title: profile?.title || data?.title || '',
@@ -524,6 +602,7 @@ export class StaffProfilePage implements OnDestroy {
     return {
       displayName: '',
       email: '',
+      photoURL: '',
       jobRole: '',
       employeeNumber: '',
       title: '',

@@ -77,12 +77,13 @@ export class AuthService {
     };
   }
 
-  /** Fetch display name & email from Firebase Auth profile + org user doc */
-  async getUserProfile(uid: string, orgId: string | null): Promise<{ displayName?: string; email?: string }> {
+  /** Fetch display name, email & photo from Firebase Auth profile + org user doc */
+  async getUserProfile(uid: string, orgId: string | null): Promise<{ displayName?: string; email?: string; photoURL?: string }> {
     const user = this.auth.currentUser;
-    let profile: { displayName?: string; email?: string } = {
+    let profile: { displayName?: string; email?: string; photoURL?: string } = {
       displayName: user?.displayName ?? undefined,
       email:       user?.email ?? undefined,
+      photoURL:    user?.photoURL ?? undefined,
     };
 
     if (orgId) {
@@ -93,6 +94,7 @@ export class AuthService {
           const d = snap.data();
           if (d['displayName']) profile.displayName = d['displayName'];
           if (d['email'])       profile.email       = d['email'];
+          if (d['photoURL'])    profile.photoURL    = d['photoURL'];
         }
       } catch { /* non-critical */ }
     }

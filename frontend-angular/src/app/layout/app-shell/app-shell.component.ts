@@ -168,7 +168,8 @@ const ROUTE_TITLES: Record<string, string> = {
         <!-- Sidebar Footer -->
         <div class="l-sidenav-footer">
           <div class="l-foot-avatar">
-            <mat-icon>account_circle</mat-icon>
+            <img *ngIf="avatarUrl()" [src]="avatarUrl()" alt="">
+            <mat-icon *ngIf="!avatarUrl()">account_circle</mat-icon>
           </div>
           <div class="l-foot-info">
             <div class="l-foot-strong">{{ userDisplayName() }}</div>
@@ -228,7 +229,10 @@ const ROUTE_TITLES: Record<string, string> = {
 
           <!-- User menu -->
           <button mat-button class="l-userbtn" [matMenuTriggerFor]="userMenu" id="user-menu-trigger">
-            <div class="l-avatar-sm">{{ avatarInitials() }}</div>
+            <div class="l-avatar-sm" [class.l-avatar-sm--photo]="avatarUrl()">
+              <img *ngIf="avatarUrl()" [src]="avatarUrl()" alt="">
+              <span *ngIf="!avatarUrl()">{{ avatarInitials() }}</span>
+            </div>
             <span class="l-user-name">{{ userDisplayName() }}</span>
             <mat-icon class="l-chevron">expand_more</mat-icon>
           </button>
@@ -430,8 +434,10 @@ const ROUTE_TITLES: Record<string, string> = {
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
       color: var(--text-muted);
+      overflow: hidden;
     }
     .l-foot-avatar mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    .l-foot-avatar img { width: 100%; height: 100%; object-fit: cover; }
     .l-foot-info { flex: 1; min-width: 0; }
     .l-foot-strong {
       font-size: 13px; font-weight: 800; color: var(--text);
@@ -525,7 +531,10 @@ const ROUTE_TITLES: Record<string, string> = {
       display: flex; align-items: center; justify-content: center;
       font-size: 11px; font-weight: 900; color: #fff;
       flex-shrink: 0;
+      overflow: hidden;
     }
+    .l-avatar-sm--photo { background: var(--panel-2); }
+    .l-avatar-sm img { width: 100%; height: 100%; object-fit: cover; }
     .l-user-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .l-chevron { font-size: 18px !important; width: 18px !important; opacity: 0.7; }
 
@@ -667,6 +676,8 @@ export class AppLayoutComponent implements OnDestroy {
     if (!uid) return 'Guest';
     return this.ctx.displayName?.() || this.ctx.email?.() || 'User';
   });
+
+  avatarUrl = computed(() => this.ctx.photoURL());
 
   avatarInitials = computed(() => {
     const name = this.userDisplayName();

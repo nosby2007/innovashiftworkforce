@@ -7,6 +7,7 @@ export interface OrgContext {
   platformRole?: string | null;
   displayName?: string | null;
   email?: string | null;
+  photoURL?: string | null;
   jobRole?: string | null;
   plan?: string | null;        // SaaS plan: 'free' | 'starter' | 'pro' | 'enterprise'
   planStatus?: string | null;  // 'active' | 'trialing' | 'past_due' | 'canceled'
@@ -24,6 +25,7 @@ export class OrgContextService {
   readonly platformRole= signal<string | null>(null);
   readonly displayName = signal<string | null>(null);
   readonly email       = signal<string | null>(null);
+  readonly photoURL    = signal<string | null>(null);
   readonly jobRole     = signal<string | null>(null);
   readonly plan        = signal<string | null>(null);
   readonly planStatus  = signal<string | null>(null);
@@ -39,6 +41,7 @@ export class OrgContextService {
     this.platformRole.set(ctx.platformRole ?? null);
     this.displayName.set(ctx.displayName ?? null);
     this.email.set(ctx.email ?? null);
+    this.photoURL.set(ctx.photoURL ?? null);
     this.jobRole.set(ctx.jobRole ?? null);
     this.plan.set(ctx.plan ?? null);
     this.planStatus.set(ctx.planStatus ?? null);
@@ -51,7 +54,7 @@ export class OrgContextService {
   clear() {
     this.setContext({
       orgId: null, uid: null, accessRole: null, platformRole: null,
-      displayName: null, email: null, jobRole: null, plan: null, planStatus: null,
+      displayName: null, email: null, photoURL: null, jobRole: null, plan: null, planStatus: null,
       countryCode: null, currencyCode: null, payFrequency: null, taxProfile: null,
     });
   }

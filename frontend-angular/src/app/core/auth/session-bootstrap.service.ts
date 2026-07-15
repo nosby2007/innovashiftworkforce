@@ -50,6 +50,7 @@ export class SessionBootstrapService {
             jobRole:     claims.jobRole     ?? fallback.jobRole     ?? null,
             displayName: profile.displayName ?? user.displayName ?? null,
             email:       profile.email       ?? user.email       ?? null,
+            photoURL:    profile.photoURL    ?? user.photoURL    ?? null,
             plan:        fallback.plan        ?? null,
             planStatus:  fallback.planStatus  ?? null,
             countryCode: fallback.countryCode ?? null,
