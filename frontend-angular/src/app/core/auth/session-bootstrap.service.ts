@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { OrgContextService } from '../tenancy/org-context.service';
 import { AuthService } from './auth.service';
+import { AppLockService } from '../app-lock/app-lock.service';
 
 /**
  * Single source of truth for populating OrgContextService on boot and on
@@ -11,7 +12,7 @@ import { AuthService } from './auth.service';
 export class SessionBootstrapService {
   private readyPromise: Promise<void> | null = null;
 
-  constructor(private auth: AuthService, private ctx: OrgContextService) {}
+  constructor(private auth: AuthService, private ctx: OrgContextService, private appLock: AppLockService) {}
 
   /** Idempotent: safe to call more than once, always returns the same first-resolution promise. */
   start(): Promise<void> {
@@ -20,10 +21,20 @@ export class SessionBootstrapService {
     this.readyPromise = new Promise<void>((resolveFirstRun) => {
       let first = true;
       this.auth.onUserChanged(async (user) => {
+        // Captured before any await: true only for a session restored from
+        // persistence on cold boot, false for an interactive sign-in that
+        // happens later in this page's lifetime — we only want to arm the
+        // lock in the former case, never right after typing a password.
+        const isColdBootRestore = first;
         try {
           if (!user) {
             this.ctx.clear();
+            this.appLock.reset();
             return;
+          }
+
+          if (isColdBootRestore) {
+            void this.appLock.armIfEnabled(user.uid);
           }
 
           // Already populated for this user (e.g. by a guard) — avoid a redundant refetch.

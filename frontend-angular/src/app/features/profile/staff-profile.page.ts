@@ -9,6 +9,7 @@ import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { ToastService } from '../../core/ui/toast.service';
+import { AppLockService } from '../../core/app-lock/app-lock.service';
 
 type DependentDraft = {
   name: string;
@@ -314,6 +315,22 @@ const EMPTY_DEPENDENT: DependentDraft = {
             </label>
           </div>
         </section>
+
+        <section class="vs-glass-strong prof-card" *ngIf="lockSupported">
+          <div class="prof-card-head">
+            <div>
+              <h2>Security</h2>
+              <p>Protect this app on this device with Face ID / Fingerprint.</p>
+            </div>
+            <mat-icon>fingerprint</mat-icon>
+          </div>
+          <div class="prof-pref-grid">
+            <label class="prof-switch">
+              <input type="checkbox" [checked]="lockEnabled" (change)="onToggleAppLock($event)" [disabled]="lockBusy">
+              <span>{{ lockEnabled ? 'Face ID / Fingerprint unlock enabled' : 'Enable Face ID / Fingerprint unlock' }}</span>
+            </label>
+          </div>
+        </section>
       </ng-container>
     </div>
   `,
@@ -396,6 +413,9 @@ export class StaffProfilePage implements OnDestroy {
   uid: string | null = null;
   saving = false;
   uploadingPhoto = false;
+  lockSupported = false;
+  lockEnabled = false;
+  lockBusy = false;
   private unsub: (() => void) | null = null;
   private source: any = {};
 
@@ -415,10 +435,47 @@ export class StaffProfilePage implements OnDestroy {
   draft: any = this.emptyDraft();
   dependents: DependentDraft[] = [];
 
-  constructor(private zone: NgZone, private ctx: OrgContextService, private toast: ToastService) {
+  constructor(private zone: NgZone, private ctx: OrgContextService, private toast: ToastService, private appLock: AppLockService) {
     this.orgId = this.ctx.orgId();
     this.uid = this.ctx.uid();
     this.bind();
+    void this.loadAppLockState();
+  }
+
+  private async loadAppLockState() {
+    this.lockSupported = await this.appLock.isAvailable();
+    if (this.uid) {
+      this.lockEnabled = await this.appLock.isEnabled(this.uid);
+    }
+  }
+
+  async onToggleAppLock(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const wantEnabled = input.checked;
+    if (!this.uid || this.lockBusy) {
+      input.checked = this.lockEnabled;
+      return;
+    }
+    this.lockBusy = true;
+    try {
+      if (wantEnabled) {
+        const label = this.draft.displayName || this.draft.email || 'InnovaShift user';
+        const ok = await this.appLock.enable(this.uid, label);
+        this.lockEnabled = ok;
+        input.checked = ok;
+        if (ok) {
+          this.toast.success('Face ID / Fingerprint unlock enabled for this device.');
+        } else {
+          this.toast.error('Could not enable biometric unlock. Check that biometrics are set up on this device.');
+        }
+      } else {
+        await this.appLock.disable(this.uid);
+        this.lockEnabled = false;
+        this.toast.success('Biometric unlock disabled for this device.');
+      }
+    } finally {
+      this.lockBusy = false;
+    }
   }
 
   ngOnDestroy() {
