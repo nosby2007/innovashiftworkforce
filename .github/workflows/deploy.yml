@@ -1,0 +1,53 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & Deploy to Firebase
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install & build frontend
+        working-directory: frontend-angular
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install & build functions
+        working-directory: backend-firebase-functions
+        run: |
+          npm ci
+          npm run build
+
+      - name: Check deploy credentials are configured
+        id: creds
+        run: |
+          if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::FIREBASE_SERVICE_ACCOUNT secret is not set — skipping deploy. See docs/DEPLOY.md for setup."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write service account key
+        if: steps.creds.outputs.configured == 'true'
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "${{ runner.temp }}/gcp-key.json"
+
+      - name: Deploy to Firebase
+        if: steps.creds.outputs.configured == 'true'
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/gcp-key.json
+        run: npx firebase-tools@13 deploy --project atlanta-e04aa --non-interactive
