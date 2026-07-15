@@ -5,6 +5,7 @@ import { resolveTenantWithFallback } from '../infra/tenancy';
 import { writeAudit } from '../infra/audit';
 import { toMillis, dayBoundsMs } from '../domain/dates';
 import { notifyShiftReopened } from '../infra/shift-reopen-notify';
+import { actionTokenSecret } from '../infra/action-token';
 
 const INACTIVE_SHIFT_STATUSES = new Set(['cancelled', 'completed', 'expired', 'no_show']);
 
@@ -57,7 +58,7 @@ async function notifyUser(db: FirebaseFirestore.Firestore, orgId: string, uid: s
  * to unassign+republish shifts, and orgs/{orgId}/shifts is Cloud-Function-only
  * per firestore.rules — a client transaction cannot write to it.
  */
-export const decideTimeOffRequest = onCall(async (req) => {
+export const decideTimeOffRequest = onCall({ secrets: [actionTokenSecret] }, async (req) => {
   const ctx = await resolveTenantWithFallback(req);
   if (!ctx.isAdminLike) {
     throw new HttpsError('permission-denied', 'Admin/Scheduler privileges required.');
@@ -252,6 +253,7 @@ export const decideTimeOffRequest = onCall(async (req) => {
       vacatedUserId: userId,
       vacatedUserName,
       actorUid: ctx.uid,
+      actionTokenSecretValue: actionTokenSecret.value(),
     });
   }
 

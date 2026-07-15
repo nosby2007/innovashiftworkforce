@@ -41,6 +41,9 @@ import { decideTimeOffRequest } from './callable/decideTimeOffRequest';
 import { accrueTimeOff } from './callable/accrueTimeOff';
 import { callOutShift } from './callable/callOutShift';
 import { updateShift } from './callable/updateShift';
+import { registerPushToken } from './callable/registerPushToken';
+import { unregisterPushToken } from './callable/unregisterPushToken';
+import { shiftActionFromNotification } from './http/shiftActionFromNotification';
 
 // ----------------------------------------------------------------------
 // Stripe Billing
@@ -95,4 +98,7 @@ export {
   accrueTimeOff,
   callOutShift,
   updateShift,
+  registerPushToken,
+  unregisterPushToken,
+  shiftActionFromNotification,
 };
