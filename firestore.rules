@@ -56,11 +56,16 @@ service cloud.firestore {
         'profileUpdatedAt',
         'updatedAt'
       ]) &&
-      request.resource.data.uid == resource.data.uid &&
-      request.resource.data.orgId == resource.data.orgId &&
-      request.resource.data.accessRole == resource.data.accessRole &&
-      request.resource.data.jobRole == resource.data.jobRole &&
-      request.resource.data.active == resource.data.active;
+      // .get(key, default) tolerates docs written before all bookkeeping
+      // fields were consistently set (e.g. older invites) — a plain
+      // `.uid` accessor throws on a missing key, which Firestore rules
+      // treat as a denial, surfacing as a false "permission denied" for
+      // an otherwise-legitimate self profile edit.
+      request.resource.data.get('uid', null) == resource.data.get('uid', null) &&
+      request.resource.data.get('orgId', null) == resource.data.get('orgId', null) &&
+      request.resource.data.get('accessRole', null) == resource.data.get('accessRole', null) &&
+      request.resource.data.get('jobRole', null) == resource.data.get('jobRole', null) &&
+      request.resource.data.get('active', null) == resource.data.get('active', null);
     }
 
     // Plan is active (not canceled/past_due) — used for feature gating
