@@ -15,6 +15,8 @@ import { ToastService } from '../../core/ui/toast.service';
 import { PrintLauncherService } from '../../core/ui/print-launcher.service';
 import { Shift } from '../../shared/models/shift.model';
 import { tsToDate, formatDateTime } from '../../shared/utils/date.util';
+import { TableListController } from '../../shared/ui/table-list/table-list.controller';
+import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
 
 const ALL_STATUSES = ['open','published','assigned','claimed','in_progress','completed','expired','cancelled','no_show'] as const;
 type ShiftStatus = typeof ALL_STATUSES[number];
@@ -32,7 +34,7 @@ const TABS: StatusTab[] = [
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, MatIconModule],
+  imports: [CommonModule, FormsModule, DatePipe, MatIconModule, TablePaginatorComponent],
   template: `
     <div class="vs-page-pad sd-page">
 
@@ -86,28 +88,38 @@ const TABS: StatusTab[] = [
           <div class="vs-panel-head">
             <div>
               <div class="vs-panel-title">Shifts — {{ activeTab }}</div>
-              <div class="vs-panel-subtitle">{{ displayShifts.length }} shift(s) found</div>
+              <div class="vs-panel-subtitle">{{ displayShifts().length }} shift(s) found</div>
             </div>
+          </div>
+
+          <div *ngIf="displayShifts().length > 0" class="sd-table-toolbar no-print">
+            <input
+              type="search"
+              class="vs-input"
+              style="max-width:320px;"
+              placeholder="Search title, location, status, or assignee…"
+              [value]="shiftsCtrl.filterText()"
+              (input)="shiftsCtrl.setFilter($any($event.target).value)">
           </div>
 
           <div class="vs-table-shell sd-table-shell">
             <table class="vs-table sd-table">
               <thead>
                 <tr>
-                  <th>Title</th>
-                  <th>Date</th>
+                  <th class="sd-th-sort" (click)="shiftsCtrl.toggleSort('title')">Title {{ shiftsCtrl.sortIndicator('title') }}</th>
+                  <th class="sd-th-sort" (click)="shiftsCtrl.toggleSort('date')">Date {{ shiftsCtrl.sortIndicator('date') }}</th>
                   <th>Time</th>
-                  <th>Status</th>
-                  <th>Location</th>
-                  <th>Assigned To</th>
+                  <th class="sd-th-sort" (click)="shiftsCtrl.toggleSort('status')">Status {{ shiftsCtrl.sortIndicator('status') }}</th>
+                  <th class="sd-th-sort" (click)="shiftsCtrl.toggleSort('location')">Location {{ shiftsCtrl.sortIndicator('location') }}</th>
+                  <th class="sd-th-sort" (click)="shiftsCtrl.toggleSort('assigned')">Assigned To {{ shiftsCtrl.sortIndicator('assigned') }}</th>
                   <th class="sd-right no-print">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                <tr class="vs-empty" *ngIf="displayShifts.length === 0">
+                <tr class="vs-empty" *ngIf="shiftsCtrl.pageRows().length === 0">
                   <td colspan="7">No shifts match the selected filters.</td>
                 </tr>
-                <tr *ngFor="let s of displayShifts" class="vs-row sd-shift-row">
+                <tr *ngFor="let s of shiftsCtrl.pageRows()" class="vs-row sd-shift-row">
                   <td><strong>{{ s.title }}</strong></td>
                   <td>{{ toDate(s.startAt) | date:'EEE MMM d, y' }}</td>
                   <td class="sd-mono">{{ toDate(s.startAt) | date:'shortTime' }} – {{ toDate(s.endAt) | date:'shortTime' }}</td>
@@ -170,6 +182,7 @@ const TABS: StatusTab[] = [
               </tbody>
             </table>
           </div>
+          <app-table-paginator *ngIf="displayShifts().length > 0" [controller]="shiftsCtrl"></app-table-paginator>
         </section>
 
         <!-- Audit log section -->
@@ -180,22 +193,33 @@ const TABS: StatusTab[] = [
               <div class="vs-panel-subtitle">Recent schedule actions</div>
             </div>
           </div>
+
+          <div *ngIf="auditItems().length > 0" class="sd-table-toolbar no-print">
+            <input
+              type="search"
+              class="vs-input"
+              style="max-width:320px;"
+              placeholder="Search action, actor, or target…"
+              [value]="auditCtrl.filterText()"
+              (input)="auditCtrl.setFilter($any($event.target).value)">
+          </div>
+
           <div class="vs-table-shell sd-table-shell">
             <table class="vs-table sd-table">
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Action</th>
-                  <th>By</th>
-                  <th>Target</th>
+                  <th class="sd-th-sort" (click)="auditCtrl.toggleSort('date')">Date {{ auditCtrl.sortIndicator('date') }}</th>
+                  <th class="sd-th-sort" (click)="auditCtrl.toggleSort('action')">Action {{ auditCtrl.sortIndicator('action') }}</th>
+                  <th class="sd-th-sort" (click)="auditCtrl.toggleSort('by')">By {{ auditCtrl.sortIndicator('by') }}</th>
+                  <th class="sd-th-sort" (click)="auditCtrl.toggleSort('target')">Target {{ auditCtrl.sortIndicator('target') }}</th>
                   <th>Details</th>
                 </tr>
               </thead>
               <tbody>
-                <tr class="vs-empty" *ngIf="auditItems().length === 0">
+                <tr class="vs-empty" *ngIf="auditCtrl.pageRows().length === 0">
                   <td colspan="5">No audit entries yet.</td>
                 </tr>
-                <tr *ngFor="let a of auditItems() | slice:0:50" class="vs-row">
+                <tr *ngFor="let a of auditCtrl.pageRows()" class="vs-row">
                   <td class="sd-mono sd-nowrap">{{ fmtDate(a.createdAt) }}</td>
                   <td><strong>{{ a.action }}</strong></td>
                   <td class="sd-mono">{{ auditActor(a) }}</td>
@@ -205,6 +229,7 @@ const TABS: StatusTab[] = [
               </tbody>
             </table>
           </div>
+          <app-table-paginator *ngIf="auditItems().length > 0" [controller]="auditCtrl"></app-table-paginator>
         </section>
 
         <!-- Print footer -->
@@ -241,6 +266,10 @@ const TABS: StatusTab[] = [
     .sd-tab-count { font-size:10px; background:rgba(255,255,255,0.2); border-radius:9px; padding:1px 6px; font-weight:700; }
 
     .sd-section { margin-bottom: 20px; border: 1px solid var(--border); }
+
+    .sd-table-toolbar { padding: 16px 20px 0; }
+    .sd-th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+    .sd-th-sort:hover { color: var(--primary); }
 
     .sd-table-shell {
       border: none;
@@ -304,12 +333,39 @@ export class AdminScheduleDetailsPage implements OnDestroy {
   activeStatuses: ShiftStatus[] | null = null;
 
   allShifts = signal<Shift[]>([]);
-  displayShifts: Shift[] = [];
+  displayShifts = signal<Shift[]>([]);
+
+  shiftsCtrl = new TableListController<Shift>(this.displayShifts, {
+    pageSize: 25,
+    initialSort: { key: 'date', dir: 'desc' },
+    filterPredicate: (s, q) => this.shiftSearchText(s).includes(q),
+    sortAccessor: (s, key) => {
+      if (key === 'title') return (s.title || '').toLowerCase();
+      if (key === 'date') return this.toDate(s.startAt).getTime();
+      if (key === 'status') return s.status;
+      if (key === 'location') return (s.locationName || '').toLowerCase();
+      if (key === 'assigned') return s.assignedUserId ? this.userLabel(s.assignedUserId).toLowerCase() : '';
+      return null;
+    },
+  });
 
   users = signal<OrgUser[]>([]);
 
   auditItems = signal<AuditLog[]>([]);
   auditShiftId: string | null = null;
+
+  auditCtrl = new TableListController<AuditLog>(this.auditItems, {
+    pageSize: 25,
+    initialSort: { key: 'date', dir: 'desc' },
+    filterPredicate: (a, q) => this.auditSearchText(a).includes(q),
+    sortAccessor: (a, key) => {
+      if (key === 'date') return tsToDate(a.createdAt)?.getTime() ?? 0;
+      if (key === 'action') return (a.action || '').toLowerCase();
+      if (key === 'by') return this.auditActor(a).toLowerCase();
+      if (key === 'target') return this.auditTarget(a).toLowerCase();
+      return null;
+    },
+  });
 
   private unsubShifts: (() => void) | null = null;
   private unsubUsers: (() => void) | null = null;
@@ -380,11 +436,20 @@ export class AdminScheduleDetailsPage implements OnDestroy {
 
   applyTabFilter() {
     if (!this.activeStatuses) {
-      this.displayShifts = [...this.allShifts()];
+      this.displayShifts.set([...this.allShifts()]);
     } else {
       const allowed = new Set(this.activeStatuses as string[]);
-      this.displayShifts = this.allShifts().filter((s) => allowed.has(s.status));
+      this.displayShifts.set(this.allShifts().filter((s) => allowed.has(s.status)));
     }
+  }
+
+  private shiftSearchText(s: Shift): string {
+    const assigned = s.assignedUserId ? this.userLabel(s.assignedUserId) : '';
+    return `${s.title || ''} ${s.locationName || ''} ${s.status || ''} ${assigned}`.toLowerCase();
+  }
+
+  private auditSearchText(a: AuditLog): string {
+    return `${a.action || ''} ${this.auditActor(a)} ${this.auditTarget(a)}`.toLowerCase();
   }
 
   tabCount(tab: StatusTab): number {
