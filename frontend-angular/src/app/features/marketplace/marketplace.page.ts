@@ -1,7 +1,7 @@
 import { Component, EffectRef, OnDestroy, effect, signal } from '@angular/core';
 import { CommonModule, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { Timestamp } from 'firebase/firestore';
@@ -1167,8 +1167,10 @@ export class MarketplacePage implements OnDestroy {
     private cmd: ShiftsCommands,
     private notifications: NotificationsRepo,
     private router: Router,
+    private route: ActivatedRoute,
     private toast: ToastService
   ) {
+    this.handlePushActionRedirect();
     this.ctxEffect = effect(() => {
       const orgId = this.ctx.orgId();
       this.uid = this.ctx.uid();
@@ -1200,6 +1202,26 @@ export class MarketplacePage implements OnDestroy {
       }
       this.unsubActivity = this.notifications.watchMy(orgId, this.uid, (items) => this.activityItems.set(items), 8);
     });
+  }
+
+  private handlePushActionRedirect() {
+    const params = this.route.snapshot.queryParamMap;
+    const pushAction = params.get('pushAction');
+    if (!pushAction) return;
+
+    if (pushAction === 'claimed') {
+      this.toast.success('Shift claimed from your notification.');
+    } else if (pushAction === 'error') {
+      const reason = params.get('reason') || '';
+      const message = reason === 'already_used'
+        ? 'That notification link was already used.'
+        : reason.includes('claimed by another')
+          ? reason
+          : 'Unable to claim that shift from the notification — it may no longer be available.';
+      this.toast.error(message);
+    }
+
+    this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
   }
 
   private loadWeek() {

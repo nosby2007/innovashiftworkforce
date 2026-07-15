@@ -4,11 +4,13 @@ import { resolveTenantWithFallback } from '../infra/tenancy';
 import { writeAudit } from '../infra/audit';
 import { Timestamp } from 'firebase-admin/firestore';
 import { resolveRequiredRoles } from '../domain/job-roles';
+import { resolveCompatibleAndAdminUids, notifyCompatibleStaffShiftAvailable } from '../infra/shift-available-notify';
+import { actionTokenSecret } from '../infra/action-token';
 
 const ALLOWED_CREATE_STATUSES = new Set(['draft', 'open', 'published']);
 const MAX_SHIFT_DURATION_HOURS = 24;
 
-export const createShift = onCall(async (req) => {
+export const createShift = onCall({ secrets: [actionTokenSecret] }, async (req) => {
   const admin = initFirebase();
   const db = admin.firestore();
 
@@ -92,6 +94,18 @@ export const createShift = onCall(async (req) => {
     target: { shiftId: ref.id },
     details: { title, locationId, locationName, startAtMs, endAtMs, status, requiredJobRole, requiredJobRoles, payRate },
   });
+
+  if (status !== 'draft') {
+    const { compatibleUids } = await resolveCompatibleAndAdminUids(db, orgId, { requiredJobRoles, excludeUid: ctx.uid });
+    await notifyCompatibleStaffShiftAvailable(db, orgId, {
+      shiftId: ref.id,
+      shiftTitle: title,
+      body: `"${title}" at ${locationName} is available and matches your role.`,
+      compatibleUids,
+      actorUid: ctx.uid,
+      actionTokenSecretValue: actionTokenSecret.value(),
+    });
+  }
 
   return { ok: true, shiftId: ref.id };
 });

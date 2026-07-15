@@ -5,6 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { NotificationsRepo, UserNotification } from '../../core/repos/notifications.repo';
 import { ToastService } from '../../core/ui/toast.service';
+import { PushNotificationsService } from '../../core/push/push-notifications.service';
 import { formatDateTime } from '../../shared/utils/date.util';
 
 @Component({
@@ -15,6 +16,9 @@ import { formatDateTime } from '../../shared/utils/date.util';
       <header class="ntf-top">
         <h1>Control Center</h1>
         <div class="ntf-top-actions">
+          <button *ngIf="pushSupported && !pushEnabled" type="button" (click)="enablePush()" [disabled]="pushBusy">
+            <mat-icon>notifications_active</mat-icon><span>{{ pushBusy ? 'Enabling…' : 'Enable Push' }}</span>
+          </button>
           <button type="button" (click)="markFilteredRead()" [disabled]="busy || unreadFilteredIds().length === 0">
             <mat-icon>done_all</mat-icon><span>Mark Read</span>
           </button>
@@ -155,9 +159,20 @@ export class NotificationsPage implements OnDestroy {
   activeCategory = 'all';
   selectedIndex = 0;
   busy = false;
+  pushBusy = false;
+  pushSupported = false;
+  pushEnabled = false;
   private unsub: (() => void) | null = null;
 
-  constructor(private ctx: OrgContextService, private repo: NotificationsRepo, private toast: ToastService) {
+  constructor(
+    private ctx: OrgContextService,
+    private repo: NotificationsRepo,
+    private toast: ToastService,
+    private push: PushNotificationsService
+  ) {
+    this.pushSupported = this.push.isSupportedPlatform();
+    this.pushEnabled = this.push.isEnabled();
+
     const bind = () => {
       const orgId = this.ctx.orgId();
       const uid = this.ctx.uid();
@@ -170,6 +185,24 @@ export class NotificationsPage implements OnDestroy {
     bind();
     setTimeout(bind, 700);
     setTimeout(bind, 2000);
+  }
+
+  async enablePush() {
+    if (this.pushBusy) return;
+    this.pushBusy = true;
+    try {
+      const ok = await this.push.enable();
+      this.pushEnabled = ok;
+      if (ok) {
+        this.toast.success('Push notifications enabled — you\'ll be alerted when a matching shift opens up.');
+      } else {
+        this.toast.error('Could not enable push notifications. Check that notification permission is allowed for this app.');
+      }
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Unable to enable push notifications.');
+    } finally {
+      this.pushBusy = false;
+    }
   }
 
   fmt(ts: any) { return formatDateTime(ts); }

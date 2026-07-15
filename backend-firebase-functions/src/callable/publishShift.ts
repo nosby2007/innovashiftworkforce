@@ -3,8 +3,10 @@ import { initFirebase } from '../infra/firebase';
 import { resolveTenantWithFallback } from '../infra/tenancy';
 import { writeAudit } from '../infra/audit';
 import { Timestamp } from 'firebase-admin/firestore';
+import { resolveCompatibleAndAdminUids, notifyCompatibleStaffShiftAvailable } from '../infra/shift-available-notify';
+import { actionTokenSecret } from '../infra/action-token';
 
-export const publishShift = onCall(async (req) => {
+export const publishShift = onCall({ secrets: [actionTokenSecret] }, async (req) => {
   const ctx = await resolveTenantWithFallback(req);
   if (!ctx.isAdminLike) {
     throw new HttpsError('permission-denied', 'Admin/Scheduler privileges required.');
@@ -18,6 +20,9 @@ export const publishShift = onCall(async (req) => {
   if (!shiftId) throw new HttpsError('invalid-argument', 'shiftId is required.');
 
   const ref = db.collection('orgs').doc(ctx.orgId).collection('shifts').doc(shiftId);
+  let shiftTitle = '';
+  let requiredJobRoles: unknown = null;
+  let locationName = '';
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'Shift not found.');
@@ -31,6 +36,9 @@ export const publishShift = onCall(async (req) => {
     if (!['draft', 'open', 'published'].includes(String(s.status || '').trim())) {
       throw new HttpsError('failed-precondition', 'Shift status is not publishable.');
     }
+    shiftTitle = String(s.title || 'Shift');
+    requiredJobRoles = s.requiredJobRoles ?? s.requiredJobRole ?? null;
+    locationName = String(s.locationName || '');
     const newStatus = publish ? 'published' : 'open';
     tx.update(ref, {
       status: newStatus,
@@ -41,6 +49,18 @@ export const publishShift = onCall(async (req) => {
   });
 
   await writeAudit(ctx.orgId, { action: 'shift.publish', actorUid: ctx.uid, target: { shiftId }, details: { publish } });
+
+  if (publish) {
+    const { compatibleUids } = await resolveCompatibleAndAdminUids(db, ctx.orgId, { requiredJobRoles, excludeUid: ctx.uid });
+    await notifyCompatibleStaffShiftAvailable(db, ctx.orgId, {
+      shiftId,
+      shiftTitle,
+      body: locationName ? `"${shiftTitle}" at ${locationName} is available and matches your role.` : `"${shiftTitle}" is available and matches your role.`,
+      compatibleUids,
+      actorUid: ctx.uid,
+      actionTokenSecretValue: actionTokenSecret.value(),
+    });
+  }
 
   return { ok: true, shiftId, publish };
 });

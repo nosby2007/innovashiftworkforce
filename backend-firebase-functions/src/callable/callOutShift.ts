@@ -4,6 +4,7 @@ import { initFirebase } from '../infra/firebase';
 import { resolveTenantWithFallback } from '../infra/tenancy';
 import { writeAudit } from '../infra/audit';
 import { notifyShiftReopened } from '../infra/shift-reopen-notify';
+import { actionTokenSecret } from '../infra/action-token';
 
 const BLOCKED_STATUSES = new Set(['in_progress', 'completed', 'cancelled', 'expired', 'no_show']);
 
@@ -13,7 +14,7 @@ const BLOCKED_STATUSES = new Set(['in_progress', 'completed', 'cancelled', 'expi
  * role-compatible staff + admins are notified. Unlike unassignShift.ts,
  * this is not admin-gated — the caller may only act on their own shift.
  */
-export const callOutShift = onCall(async (req) => {
+export const callOutShift = onCall({ secrets: [actionTokenSecret] }, async (req) => {
   const ctx = await resolveTenantWithFallback(req);
   const admin = initFirebase();
   const db = admin.firestore();
@@ -80,6 +81,7 @@ export const callOutShift = onCall(async (req) => {
     vacatedUserId: ctx.uid,
     vacatedUserName,
     actorUid: ctx.uid,
+    actionTokenSecretValue: actionTokenSecret.value(),
   });
 
   await writeAudit(orgId, {
