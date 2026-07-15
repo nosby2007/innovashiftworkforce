@@ -6,6 +6,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { OrgDirectoryRepo, OrgDirectoryItem } from '../../core/repos/org-directory.repo';
 import { SuperAdminService } from './super-admin.service';
 import { ToastService } from '../../core/ui/toast.service';
+import { TableListController } from '../../shared/ui/table-list/table-list.controller';
+import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
 import {
   CURRENCY_OPTIONS,
   PAY_FREQUENCY_OPTIONS,
@@ -74,7 +76,7 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, TablePaginatorComponent],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
@@ -454,30 +456,44 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
             No organizations yet. Create one above.
           </div>
 
-          <div *ngIf="orgs().length > 0" class="vs-table-shell">
-            <table class="vs-table">
-              <thead>
-                <tr>
-                  <th>Org ID</th>
-                  <th>Name</th>
-                  <th>Plan</th>
-                  <th>Status</th>
-                  <th>Industry</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let o of orgs()" class="vs-row" (click)="selectOrg(o.orgId)" style="cursor:pointer;">
-                  <td><span class="vs-strong sa-orgid">{{ o.orgId }}</span></td>
-                  <td>{{ o.name }}</td>
-                  <td><span class="vs-badge {{ planBadge(o.plan) }}">{{ (o.plan || 'free') | titlecase }}</span></td>
-                  <td>
-                    <span class="vs-dot" [class.vs-dot--green]="o.active !== false" [class.vs-dot--red]="o.active === false"></span>
-                    {{ (o.active !== false) ? 'Active' : 'Inactive' }}
-                  </td>
-                  <td>{{ o.industry || 'Unknown' }}</td>
-                </tr>
-              </tbody>
-            </table>
+          <div *ngIf="orgs().length > 0">
+            <div class="sa-table-toolbar">
+              <input
+                class="vs-input sa-table-search"
+                type="search"
+                placeholder="Search org ID, name, plan, or industry…"
+                [value]="orgsTableCtrl.filterText()"
+                (input)="orgsTableCtrl.setFilter($any($event.target).value)">
+            </div>
+            <div class="vs-table-shell">
+              <table class="vs-table">
+                <thead>
+                  <tr>
+                    <th class="sa-th-sort" (click)="orgsTableCtrl.toggleSort('orgId')">Org ID {{ orgsTableCtrl.sortIndicator('orgId') }}</th>
+                    <th class="sa-th-sort" (click)="orgsTableCtrl.toggleSort('name')">Name {{ orgsTableCtrl.sortIndicator('name') }}</th>
+                    <th class="sa-th-sort" (click)="orgsTableCtrl.toggleSort('plan')">Plan {{ orgsTableCtrl.sortIndicator('plan') }}</th>
+                    <th>Status</th>
+                    <th class="sa-th-sort" (click)="orgsTableCtrl.toggleSort('industry')">Industry {{ orgsTableCtrl.sortIndicator('industry') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngIf="orgsTableCtrl.pageRows().length === 0" class="vs-empty">
+                    <td colspan="5">No organizations match your search.</td>
+                  </tr>
+                  <tr *ngFor="let o of orgsTableCtrl.pageRows()" class="vs-row" (click)="selectOrg(o.orgId)" style="cursor:pointer;">
+                    <td><span class="vs-strong sa-orgid">{{ o.orgId }}</span></td>
+                    <td>{{ o.name }}</td>
+                    <td><span class="vs-badge {{ planBadge(o.plan) }}">{{ (o.plan || 'free') | titlecase }}</span></td>
+                    <td>
+                      <span class="vs-dot" [class.vs-dot--green]="o.active !== false" [class.vs-dot--red]="o.active === false"></span>
+                      {{ (o.active !== false) ? 'Active' : 'Inactive' }}
+                    </td>
+                    <td>{{ o.industry || 'Unknown' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <app-table-paginator [controller]="orgsTableCtrl"></app-table-paginator>
           </div>
         </section>
       </div>
@@ -675,9 +691,9 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
             <table class="vs-table">
               <thead>
                 <tr>
-                  <th>Organization</th>
-                  <th>Health</th>
-                  <th>Plan</th>
+                  <th class="sa-th-sort" (click)="governanceOrgsCtrl.toggleSort('name')">Organization {{ governanceOrgsCtrl.sortIndicator('name') }}</th>
+                  <th class="sa-th-sort" (click)="governanceOrgsCtrl.toggleSort('health')">Health {{ governanceOrgsCtrl.sortIndicator('health') }}</th>
+                  <th class="sa-th-sort" (click)="governanceOrgsCtrl.toggleSort('plan')">Plan {{ governanceOrgsCtrl.sortIndicator('plan') }}</th>
                   <th>Finance</th>
                   <th>Actions</th>
                 </tr>
@@ -686,7 +702,7 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
                 <tr class="vs-empty" *ngIf="orgs().length === 0">
                   <td colspan="5">No organizations available for health review.</td>
                 </tr>
-                <tr *ngFor="let org of orgs()" class="vs-row">
+                <tr *ngFor="let org of governanceOrgsCtrl.pageRows()" class="vs-row">
                   <td>
                     <strong>{{ org.name || org.orgId }}</strong>
                     <div class="vs-muted">{{ org.orgId }}</div>
@@ -710,6 +726,7 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
               </tbody>
             </table>
           </div>
+          <app-table-paginator *ngIf="orgs().length > 0" [controller]="governanceOrgsCtrl"></app-table-paginator>
         </section>
 
         <div class="vs-grid-2">
@@ -815,7 +832,7 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
               <div class="vs-form-row vs-form-row--2">
                 <div>
                   <label class="vs-field-label">Search logs</label>
-                  <input class="vs-input" [(ngModel)]="auditSearch" placeholder="shift, invite, claim, permission...">
+                  <input class="vs-input" [ngModel]="auditSearch()" (ngModelChange)="auditSearch.set($event)" placeholder="shift, invite, claim, permission...">
                 </div>
                 <div style="display:flex;align-items:flex-end;gap:8px;">
                   <button class="vs-btn-ghost" type="button" (click)="loadAuditLogs()" [disabled]="busyAudit()">
@@ -886,15 +903,18 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
             <table class="vs-table">
               <thead>
                 <tr>
-                  <th>Time</th>
+                  <th class="sa-th-sort" (click)="auditCtrl.toggleSort('time')">Time {{ auditCtrl.sortIndicator('time') }}</th>
                   <th>Org</th>
-                  <th>Action</th>
+                  <th class="sa-th-sort" (click)="auditCtrl.toggleSort('action')">Action {{ auditCtrl.sortIndicator('action') }}</th>
                   <th>Actor</th>
                   <th>Details</th>
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let log of filteredAuditLogs()" class="vs-row sa-log-row">
+                <tr *ngIf="auditCtrl.pageRows().length === 0" class="vs-empty">
+                  <td colspan="5">No audit logs match your search.</td>
+                </tr>
+                <tr *ngFor="let log of auditCtrl.pageRows()" class="vs-row sa-log-row">
                   <td class="vs-muted" style="white-space:nowrap;">{{ fmtDate(log.createdAt) }}</td>
                   <td><span class="vs-strong sa-orgid">{{ lookupOrgLabel(log.orgId) }}</span></td>
                   <td><span class="vs-badge vs-badge--neutral">{{ log.action }}</span></td>
@@ -904,6 +924,7 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
               </tbody>
             </table>
           </div>
+          <app-table-paginator *ngIf="auditLogs().length > 0" [controller]="auditCtrl"></app-table-paginator>
         </section>
       </div>
     </div>
@@ -989,6 +1010,10 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
 
     .sa-empty { display: flex; align-items: center; gap: 10px; padding: 20px 24px; color: var(--text-muted); }
     .sa-orgid { font-family: monospace; font-size: 13px; }
+    .sa-th-sort { cursor: pointer; user-select: none; }
+    .sa-th-sort:hover { color: var(--primary, #07533f); }
+    .sa-table-toolbar { padding: 12px 16px 0; }
+    .sa-table-search { width: 100%; max-width: 320px; }
 
     .sa-user-result { display: flex; align-items: center; gap: 14px; padding: 16px 18px; margin-bottom: 16px; border-radius: var(--radius-md) !important; }
     .sa-user-avatar { width: 44px; height: 44px; border-radius: 14px; background: linear-gradient(135deg, var(--primary), var(--accent)); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900; color: #fff; flex-shrink: 0; }
@@ -1030,6 +1055,26 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
 })
 export class SuperAdminDashboardPage implements OnInit, OnDestroy {
   orgs = signal<OrgDirectoryItem[]>([]);
+  orgsTableCtrl = new TableListController<OrgDirectoryItem>(this.orgs, {
+    pageSize: 25,
+    filterPredicate: (o, q) => `${o.orgId} ${o.name} ${o.plan || ''} ${o.industry || ''}`.toLowerCase().includes(q),
+    sortAccessor: (o, key) => {
+      if (key === 'orgId') return o.orgId.toLowerCase();
+      if (key === 'name') return String(o.name || '').toLowerCase();
+      if (key === 'plan') return String(o.plan || '').toLowerCase();
+      if (key === 'industry') return String(o.industry || '').toLowerCase();
+      return null;
+    },
+  });
+  governanceOrgsCtrl = new TableListController<OrgDirectoryItem>(this.orgs, {
+    pageSize: 25,
+    sortAccessor: (o, key) => {
+      if (key === 'name') return String(o.name || o.orgId || '').toLowerCase();
+      if (key === 'health') return this.tenantHealthScore(o);
+      if (key === 'plan') return String(o.plan || '').toLowerCase();
+      return null;
+    },
+  });
   private unsub: (() => void) | null = null;
   orgLoading = signal(false);
   orgLoadError = signal(false);
@@ -1037,7 +1082,7 @@ export class SuperAdminDashboardPage implements OnInit, OnDestroy {
   activeTab = signal<'overview' | 'organization' | 'user' | 'security' | 'governance' | 'troubleshooting' | 'audit'>('overview');
   selectedOrgId = signal<string | null>(null);
   orgSearch = '';
-  auditSearch = '';
+  auditSearch = signal('');
   orgDraft: OrgDraft = { ...DEFAULT_ORG_DRAFT };
 
   newOrgId = '';
@@ -1097,9 +1142,18 @@ export class SuperAdminDashboardPage implements OnInit, OnDestroy {
   });
 
   filteredAuditLogs = computed(() => {
-    const q = this.auditSearch.trim().toLowerCase();
+    const q = this.auditSearch().trim().toLowerCase();
     if (!q) return this.auditLogs();
     return this.auditLogs().filter((log) => JSON.stringify(log).toLowerCase().includes(q));
+  });
+
+  auditCtrl = new TableListController<any>(this.filteredAuditLogs, {
+    pageSize: 25,
+    sortAccessor: (log, key) => {
+      if (key === 'time') return log.createdAt?.toMillis ? log.createdAt.toMillis() : Number(log.createdAt || 0);
+      if (key === 'action') return String(log.action || '').toLowerCase();
+      return null;
+    },
   });
 
   selectedOrg = computed(() => this.orgs().find((o) => o.orgId === this.selectedOrgId()) || null);

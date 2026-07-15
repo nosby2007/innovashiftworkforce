@@ -17,10 +17,12 @@ import { PlanEntitlementsService } from '../../core/tenancy/plan-entitlements.se
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
 import { fmtShiftDate, fmtShiftTime, shiftHours } from '../../shared/utils/shift-lifecycle.utils';
 import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map/geofence-map.component';
+import { TableListController } from '../../shared/ui/table-list/table-list.controller';
+import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, GeofenceMapComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, GeofenceMapComponent, TablePaginatorComponent],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
@@ -75,18 +77,27 @@ import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map
               <button type="button" (click)="showEmployeeDefaults()">Employee defaults</button>
             </ng-container>
           </div>
+          <div class="at-table-toolbar" *ngIf="entries().length > 0">
+            <input
+              class="at-table-search"
+              type="search"
+              placeholder="Search timecard rows…"
+              [value]="timecardCtrl.filterText()"
+              (input)="timecardCtrl.setFilter($any($event.target).value)"
+              aria-label="Search timecard rows">
+          </div>
           <div class="at-timecard-table-shell">
             <table class="at-timecard-table">
               <thead>
                 <tr>
                   <th>Select</th>
-                  <th>Actual In Date</th>
+                  <th class="at-th-sort" (click)="timecardCtrl.toggleSort('checkInAt')">Actual In Date <span>{{ timecardCtrl.sortIndicator('checkInAt') }}</span></th>
                   <th>Actual In Time</th>
                   <th>Actual Out Time</th>
-                  <th>Punch Hours</th>
+                  <th class="at-th-sort" (click)="timecardCtrl.toggleSort('punchHours')">Punch Hours <span>{{ timecardCtrl.sortIndicator('punchHours') }}</span></th>
                   <th>Pay Code</th>
                   <th>Shift Hours</th>
-                  <th>Scheduled Hours</th>
+                  <th class="at-th-sort" (click)="timecardCtrl.toggleSort('scheduledHours')">Scheduled Hours <span>{{ timecardCtrl.sortIndicator('scheduledHours') }}</span></th>
                   <th>Approval Level</th>
                   <th>Shift Code</th>
                   <th>Labor Levels</th>
@@ -94,10 +105,10 @@ import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map
                 </tr>
               </thead>
               <tbody>
-                <tr *ngIf="entries().length===0">
+                <tr *ngIf="timecardCtrl.pageRows().length===0">
                   <td colspan="12">No timecard rows for this period.</td>
                 </tr>
-                <tr *ngFor="let e of entries(); let i = index; trackBy: trackByEntry" [class.at-row-selected]="isEntrySelected(e.id)">
+                <tr *ngFor="let e of timecardCtrl.pageRows(); let i = index; trackBy: trackByEntry" [class.at-row-selected]="isEntrySelected(e.id)">
                   <td>
                     <input type="checkbox" [checked]="isEntrySelected(e.id)" (change)="toggleEntrySelection(e.id, $any($event.target).checked)" aria-label="Select timecard row">
                   </td>
@@ -111,7 +122,7 @@ import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map
                   <td>{{ e.exceptionStatus === 'approved' ? 6 : 0 }}</td>
                   <td>A</td>
                   <td>{{ laborLevel(e) }}</td>
-                  <td>{{ entryAnomalies(e, i).length ? 'AC' : 'C' }}</td>
+                  <td>{{ entryAnomalies(e).length ? 'AC' : 'C' }}</td>
                 </tr>
                 <tr *ngIf="showComments && entries().length > 0">
                   <td colspan="12" class="at-comments-row">
@@ -121,6 +132,7 @@ import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map
               </tbody>
             </table>
           </div>
+          <app-table-paginator *ngIf="entries().length > 0" [controller]="timecardCtrl"></app-table-paginator>
           <div class="at-timecard-footer">
             <strong>Pay Code Hours Breakdown</strong>
             <span>EDU {{ totalHours().toFixed(2) }}</span>
@@ -293,26 +305,35 @@ import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map
               <div class="vs-panel-subtitle">Your time entries for this week</div>
             </div>
           </div>
+          <div class="at-table-toolbar" *ngIf="entries().length > 0">
+            <input
+              class="at-table-search"
+              type="search"
+              placeholder="Search recent punches…"
+              [value]="punchesCtrl.filterText()"
+              (input)="punchesCtrl.setFilter($any($event.target).value)"
+              aria-label="Search recent punches">
+          </div>
           <div class="vs-table-shell at-table-shell">
             <table class="vs-table at-table">
               <caption class="sr-only">Recent punches with calculated hours, estimated pay, status and anomaly warnings.</caption>
               <thead>
                 <tr>
-                  <th>Shift</th>
-                  <th>Clock In</th>
-                  <th>Clock Out</th>
-                  <th>Hours</th>
-                  <th>Est. Pay</th>
-                  <th>Status</th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('shift')">Shift <span>{{ punchesCtrl.sortIndicator('shift') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('checkInAt')">Clock In <span>{{ punchesCtrl.sortIndicator('checkInAt') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('checkOutAt')">Clock Out <span>{{ punchesCtrl.sortIndicator('checkOutAt') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('hours')">Hours <span>{{ punchesCtrl.sortIndicator('hours') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('pay')">Est. Pay <span>{{ punchesCtrl.sortIndicator('pay') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('status')">Status <span>{{ punchesCtrl.sortIndicator('status') }}</span></th>
                   <th>Anomalies</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                <tr class="vs-empty" *ngIf="entries().length===0">
+                <tr class="vs-empty" *ngIf="punchesCtrl.pageRows().length===0">
                   <td colspan="8">No recent time entries.</td>
                 </tr>
-                <tr *ngFor="let e of entries(); let i = index; trackBy: trackByEntry" class="vs-row"
+                <tr *ngFor="let e of punchesCtrl.pageRows(); let i = index; trackBy: trackByEntry" class="vs-row"
                     [class.at-row--pending]="e.exceptionStatus==='pending'"
                     [class.at-row--approved]="e.exceptionStatus==='approved'"
                     [class.at-row--rejected]="e.exceptionStatus==='rejected'">
@@ -331,8 +352,8 @@ import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map
                     </span>
                   </td>
                   <td>
-                    <div class="at-anom-list" *ngIf="entryAnomalies(e, i).length > 0; else noAnomaly">
-                      <span class="at-anom-chip" *ngFor="let a of entryAnomalies(e, i)">{{ a }}</span>
+                    <div class="at-anom-list" *ngIf="entryAnomalies(e).length > 0; else noAnomaly">
+                      <span class="at-anom-chip" *ngFor="let a of entryAnomalies(e)">{{ a }}</span>
                     </div>
                     <ng-template #noAnomaly>—</ng-template>
                   </td>
@@ -351,6 +372,7 @@ import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map
               </tbody>
             </table>
           </div>
+          <app-table-paginator *ngIf="entries().length > 0" [controller]="punchesCtrl"></app-table-paginator>
         </section>
 
         <!-- ── My Corrections ── -->
@@ -649,6 +671,16 @@ import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map
       overflow: auto;
     }
 
+    .at-table-toolbar { padding: 0 0 10px; }
+    .at-table-search {
+      width: 100%; max-width: 320px; height: 36px; padding: 0 12px;
+      border: 1px solid var(--border); border-radius: var(--radius-sm, 6px);
+      background: var(--panel, #fff); color: var(--text, #0f172a); font-size: 13px;
+    }
+    .at-th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+    .at-th-sort:hover { color: var(--primary, #07533f); }
+    .at-th-sort span { display: inline-block; width: 10px; font-size: 10px; }
+
     .at-table {
       width: 100%;
       min-width: 980px;
@@ -721,6 +753,36 @@ export class AttendancePage implements OnDestroy {
   timecardApproved = false;
 
   entries = signal<TimeEntry[]>([]);
+
+  timecardCtrl = new TableListController<TimeEntry>(this.entries, {
+    pageSize: 10,
+    filterPredicate: (e, q) => this.timecardSearchText(e).includes(q),
+    sortAccessor: (e, key) => {
+      if (key === 'checkInAt') return tsToDate(e.checkInAt)?.getTime() ?? 0;
+      if (key === 'punchHours') return this.workedHours(e);
+      if (key === 'scheduledHours') return this.scheduledHours(e);
+      return null;
+    },
+  });
+
+  punchesCtrl = new TableListController<TimeEntry>(this.entries, {
+    pageSize: 10,
+    filterPredicate: (e, q) => this.timecardSearchText(e).includes(q),
+    sortAccessor: (e, key) => {
+      if (key === 'shift') return this.shiftLabel(e.shiftId).toLowerCase();
+      if (key === 'checkInAt') return tsToDate(e.checkInAt)?.getTime() ?? 0;
+      if (key === 'checkOutAt') return tsToDate(e.checkOutAt)?.getTime() ?? 0;
+      if (key === 'hours') return this.workedHours(e);
+      if (key === 'pay') return this.estimatedPay(e);
+      if (key === 'status') return e.exceptionStatus ?? '';
+      return null;
+    },
+  });
+
+  private timecardSearchText(e: TimeEntry): string {
+    return `${this.shiftLabel(e.shiftId)} ${e.exceptionStatus ?? ''} ${this.laborLevel(e)}`.toLowerCase();
+  }
+
   shiftMap = signal<Record<string, Shift>>({});
   currentShift = signal<Shift | null>(null);
   mySchedule = signal<Shift[]>([]);
@@ -935,7 +997,7 @@ export class AttendancePage implements OnDestroy {
 
   emailTimecard() {
     const rows = this.selectedEntries()
-      .map((e) => `${this.fmtShortDate(e.checkInAt)} | ${this.fmtDisplayTime(e.checkInAt)}-${this.fmtDisplayTime(e.checkOutAt)} | ${this.workedHours(e).toFixed(2)} hrs | ${this.entryAnomalies(e, 0).join(', ') || 'OK'}`)
+      .map((e) => `${this.fmtShortDate(e.checkInAt)} | ${this.fmtDisplayTime(e.checkInAt)}-${this.fmtDisplayTime(e.checkOutAt)} | ${this.workedHours(e).toFixed(2)} hrs | ${this.entryAnomalies(e).join(', ') || 'OK'}`)
       .join('\n');
     const subject = `Timecard ${this.timePeriodLabel()} - ${this.staffName()}`;
     const body = [
@@ -1081,10 +1143,12 @@ export class AttendancePage implements OnDestroy {
   }
 
   anomalyCount(): number {
-    return this.entries().filter((e, i) => this.entryAnomalies(e, i).length > 0).length;
+    return this.entries().filter((e) => this.entryAnomalies(e).length > 0).length;
   }
 
-  entryAnomalies(e: TimeEntry, index: number): string[] {
+  // Identified by entry id rather than array position so results stay
+  // correct when called against a sorted/paginated subset of entries().
+  entryAnomalies(e: TimeEntry): string[] {
     const issues: string[] = [];
     const inD = tsToDate(e.checkInAt);
     const outD = tsToDate(e.checkOutAt);
@@ -1101,19 +1165,17 @@ export class AttendancePage implements OnDestroy {
       if (scheduled > 0 && Math.abs(worked - scheduled) >= 1) issues.push('Hours mismatch');
     }
 
-    if (this.hasOverlap(index)) issues.push('Overlap');
+    if (this.hasOverlap(e)) issues.push('Overlap');
     return issues;
   }
 
-  private hasOverlap(index: number): boolean {
-    const curr = this.entries()[index];
-    if (!curr) return false;
+  private hasOverlap(curr: TimeEntry): boolean {
     const currIn = tsToDate(curr.checkInAt)?.getTime() || 0;
     const currOut = tsToDate(curr.checkOutAt)?.getTime() || 0;
     if (!currIn || !currOut) return false;
 
-    return this.entries().some((other, i) => {
-      if (i === index) return false;
+    return this.entries().some((other) => {
+      if (other.id === curr.id) return false;
       const inMs = tsToDate(other.checkInAt)?.getTime() || 0;
       const outMs = tsToDate(other.checkOutAt)?.getTime() || 0;
       if (!inMs || !outMs) return false;

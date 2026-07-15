@@ -16,16 +16,18 @@ import { ShiftsCommands } from '../../core/commands/shifts.commands';
 import { AccrualsRepo, TimeOffRequest } from '../../core/repos/accruals.repo';
 import { TimeEntry } from '../../shared/models/time-entry.model';
 import { Shift, ShiftStatus } from '../../shared/models/shift.model';
-import { formatDateTime } from '../../shared/utils/date.util';
+import { formatDateTime, tsToDate } from '../../shared/utils/date.util';
 import { ToastService } from '../../core/ui/toast.service';
 import { PlanEntitlementsService } from '../../core/tenancy/plan-entitlements.service';
 import { fmtShiftDate, fmtShiftTime, getCurrentWeekRange } from '../../shared/utils/shift-lifecycle.utils';
 import { Timestamp } from 'firebase/firestore';
 import { profileCompletion } from '../../shared/utils/profile-completion.util';
+import { TableListController } from '../../shared/ui/table-list/table-list.controller';
+import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, TablePaginatorComponent],
   template: `
     <div class="vs-page-pad admin-brand-page">
 
@@ -177,7 +179,7 @@ import { profileCompletion } from '../../shared/utils/profile-completion.util';
             <h2>Review employee requests</h2>
             <p>{{ actionQueueCount() }} item(s) need admin action across shift switches and timecard corrections.</p>
             <div class="ad-command-pills">
-              <span>{{ swapRequests.length }} shift switch</span>
+              <span>{{ swapRequests().length }} shift switch</span>
               <span>{{ pending().length }} timecard</span>
             </div>
           </div>
@@ -213,12 +215,20 @@ import { profileCompletion } from '../../shared/utils/profile-completion.util';
             <span class="ad-lc-count" *ngIf="lifecycleTab === tab.key">{{ lifecycleShifts().length }}</span>
           </button>
         </div>
+        <div class="ad-table-toolbar" *ngIf="lifecycleShifts().length > 0">
+          <input
+            type="search"
+            class="ad-table-search"
+            placeholder="Search title, location, or assignee…"
+            [value]="lifecycleCtrl.filterText()"
+            (input)="lifecycleCtrl.setFilter($any($event.target).value)">
+        </div>
         <div class="vs-table-shell">
           <table class="vs-table ad-table">
             <thead>
               <tr>
-                <th>Title</th>
-                <th>Date</th>
+                <th class="ad-th-sort" (click)="lifecycleCtrl.toggleSort('title')">Title {{ lifecycleCtrl.sortIndicator('title') }}</th>
+                <th class="ad-th-sort" (click)="lifecycleCtrl.toggleSort('start')">Date {{ lifecycleCtrl.sortIndicator('start') }}</th>
                 <th>Time</th>
                 <th>Location</th>
                 <th>Assigned To</th>
@@ -226,10 +236,10 @@ import { profileCompletion } from '../../shared/utils/profile-completion.util';
               </tr>
             </thead>
             <tbody>
-              <tr class="vs-empty" *ngIf="lifecycleShifts().length === 0">
+              <tr class="vs-empty" *ngIf="lifecycleCtrl.pageRows().length === 0">
                 <td colspan="6">No shifts with status "{{ lifecycleTab }}" this week.</td>
               </tr>
-              <tr *ngFor="let s of lifecycleShifts()" class="vs-row">
+              <tr *ngFor="let s of lifecycleCtrl.pageRows()" class="vs-row">
                 <td><strong>{{ s.title }}</strong></td>
                 <td>{{ fmtDate(s.startAt) }}</td>
                 <td>{{ fmtTime(s.startAt) }} – {{ fmtTime(s.endAt) }}</td>
@@ -248,6 +258,7 @@ import { profileCompletion } from '../../shared/utils/profile-completion.util';
             </tbody>
           </table>
         </div>
+        <app-table-paginator *ngIf="lifecycleShifts().length > 0" [controller]="lifecycleCtrl"></app-table-paginator>
       </section>
 
       <!-- Shift Switch Requests -->
@@ -258,8 +269,8 @@ import { profileCompletion } from '../../shared/utils/profile-completion.util';
             <div class="vs-panel-subtitle">Manager review for shift covers and trades</div>
           </div>
           <div class="ad-actions-cell">
-            <span class="vs-badge" [class.vs-badge--warning]="swapRequests.length > 0" [class.vs-badge--neutral]="swapRequests.length === 0">
-              {{ swapRequests.length }} pending
+            <span class="vs-badge" [class.vs-badge--warning]="swapRequests().length > 0" [class.vs-badge--neutral]="swapRequests().length === 0">
+              {{ swapRequests().length }} pending
             </span>
             <button class="vs-btn-ghost ad-action-btn" (click)="refreshSwapRequests()" [disabled]="swapListBusy">
               <mat-icon>sync</mat-icon> {{ swapListBusy ? 'Loading' : 'Refresh' }}
@@ -267,25 +278,25 @@ import { profileCompletion } from '../../shared/utils/profile-completion.util';
           </div>
         </div>
 
-        <div *ngIf="swapRequests.length === 0" class="ad-empty">
+        <div *ngIf="swapRequests().length === 0" class="ad-empty">
           <mat-icon>check_circle</mat-icon>
           <span>No pending shift switch requests.</span>
         </div>
 
-        <div *ngIf="swapRequests.length > 0" class="vs-table-shell">
+        <div *ngIf="swapRequests().length > 0" class="vs-table-shell">
           <table class="vs-table ad-table">
             <thead>
               <tr>
                 <th>Type</th>
-                <th>Source Shift</th>
+                <th class="ad-th-sort" (click)="swapCtrl.toggleSort('shift')">Source Shift {{ swapCtrl.sortIndicator('shift') }}</th>
                 <th>Requester</th>
                 <th>Target</th>
-                <th>Requested</th>
+                <th class="ad-th-sort" (click)="swapCtrl.toggleSort('requested')">Requested {{ swapCtrl.sortIndicator('requested') }}</th>
                 <th style="text-align:right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let r of swapRequests" class="vs-row">
+              <tr *ngFor="let r of swapCtrl.pageRows()" class="vs-row">
                 <td>
                   <span class="vs-badge" [class.vs-badge--primary]="r.kind === 'swap'" [class.vs-badge--warning]="r.kind !== 'swap'">
                     {{ swapKindLabel(r) }}
@@ -324,6 +335,7 @@ import { profileCompletion } from '../../shared/utils/profile-completion.util';
             </tbody>
           </table>
         </div>
+        <app-table-paginator *ngIf="swapRequests().length > 0" [controller]="swapCtrl"></app-table-paginator>
       </section>
 
       <!-- Pending Time Corrections -->
@@ -349,13 +361,13 @@ import { profileCompletion } from '../../shared/utils/profile-completion.util';
               <tr>
                 <th>Employee</th>
                 <th>Shift</th>
-                <th>Check In</th>
-                <th>Check Out</th>
+                <th class="ad-th-sort" (click)="pendingCtrl.toggleSort('checkIn')">Check In {{ pendingCtrl.sortIndicator('checkIn') }}</th>
+                <th class="ad-th-sort" (click)="pendingCtrl.toggleSort('checkOut')">Check Out {{ pendingCtrl.sortIndicator('checkOut') }}</th>
                 <th style="text-align:right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let e of pending()" class="vs-row">
+              <tr *ngFor="let e of pendingCtrl.pageRows()" class="vs-row">
                 <td>
                   <span class="vs-strong">{{ pendingUserLabel(e) }}</span>
                 </td>
@@ -380,6 +392,7 @@ import { profileCompletion } from '../../shared/utils/profile-completion.util';
             </tbody>
           </table>
         </div>
+        <app-table-paginator *ngIf="pending().length > 0" [controller]="pendingCtrl"></app-table-paginator>
       </section>
 
       <section *ngIf="orgId" id="ad-communication-center" class="vs-glass-strong ad-section ad-comm-section">
@@ -764,6 +777,15 @@ import { profileCompletion } from '../../shared/utils/profile-completion.util';
       background: rgba(148,163,184,0.08);
     }
 
+    .ad-table-toolbar { padding: 12px 16px 0; }
+    .ad-table-search {
+      width: 100%; max-width: 320px; height: 36px; padding: 0 12px;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--panel, #fff); color: var(--text, #0f172a); font-size: 13px;
+    }
+    .ad-th-sort { cursor: pointer; user-select: none; }
+    .ad-th-sort:hover { color: var(--primary, #07533f); }
+
     .ad-empty {
       display: flex; align-items: center; gap: 10px;
       padding: 20px 24px;
@@ -848,8 +870,24 @@ export class AdminDashboardPage implements OnDestroy {
   orgId: string | null = null;
   metrics = signal<OrgMetricsSummary | null>(null);
   pending = signal<TimeEntry[]>([]);
+  pendingCtrl = new TableListController<TimeEntry>(this.pending, {
+    pageSize: 10,
+    sortAccessor: (e, key) => {
+      if (key === 'checkIn') return tsToDate(e.checkInAt)?.getTime() ?? 0;
+      if (key === 'checkOut') return tsToDate(e.checkOutAt)?.getTime() ?? 0;
+      return null;
+    },
+  });
   busyId: string | null = null;
-  swapRequests: any[] = [];
+  swapRequests = signal<any[]>([]);
+  swapCtrl = new TableListController<any>(this.swapRequests, {
+    pageSize: 10,
+    sortAccessor: (r, key) => {
+      if (key === 'requested') return Number(r.createdAtMs) || 0;
+      if (key === 'shift') return String(r.shiftTitle || '').toLowerCase();
+      return null;
+    },
+  });
   ptoRequests = signal<TimeOffRequest[]>([]);
   swapBusyId: string | null = null;
   swapListBusy = false;
@@ -857,6 +895,15 @@ export class AdminDashboardPage implements OnDestroy {
   // Lifecycle tabs
   lifecycleTab: ShiftStatus = 'open';
   lifecycleShifts = signal<Shift[]>([]);
+  lifecycleCtrl = new TableListController<Shift>(this.lifecycleShifts, {
+    pageSize: 10,
+    filterPredicate: (s, q) => `${s.title} ${s.locationName || ''} ${this.assignedUserLabel(s)}`.toLowerCase().includes(q),
+    sortAccessor: (s, key) => {
+      if (key === 'title') return String(s.title || '').toLowerCase();
+      if (key === 'start') return s.startAt?.toMillis ? s.startAt.toMillis() : Number(s.startAt || 0);
+      return null;
+    },
+  });
   weekLabel = '';
   lifecycleTabs = [
     { key: 'open' as ShiftStatus,       label: 'Open',        icon: 'event_available' },
@@ -900,7 +947,7 @@ export class AdminDashboardPage implements OnDestroy {
       const orgId = this.ctx.orgId();
       this.orgId = orgId;
       this.cleanupWatchers();
-      if (!orgId) { this.pending.set([]); this.metrics.set(null); this.swapRequests = []; this.ptoRequests.set([]); return; }
+      if (!orgId) { this.pending.set([]); this.metrics.set(null); this.swapRequests.set([]); this.ptoRequests.set([]); return; }
       this.unsub.push(this.timeRepo.watchPendingApprovals(orgId, (items) => this.pending.set(items)));
       this.unsub.push(this.metricsRepo.watchSummary(orgId, (m) => this.metrics.set(m)));
       this.unsub.push(this.accruals.watchOrgRequests(orgId, (items) => {
@@ -960,14 +1007,14 @@ export class AdminDashboardPage implements OnDestroy {
 
   async refreshSwapRequests() {
     if (!this.orgId) {
-      this.swapRequests = [];
+      this.swapRequests.set([]);
       return;
     }
 
     this.swapListBusy = true;
     try {
       const res: any = await this.shiftCommands.listShiftSwapRequests('pending', 50);
-      this.swapRequests = Array.isArray(res?.items) ? res.items : [];
+      this.swapRequests.set(Array.isArray(res?.items) ? res.items : []);
     } catch (e: any) {
       this.toast.errorFrom(e, 'Failed to load shift switch requests.');
     } finally {
@@ -1120,7 +1167,7 @@ export class AdminDashboardPage implements OnDestroy {
   }
 
   actionQueueCount() {
-    return this.swapRequests.length + this.pending().length;
+    return this.swapRequests().length + this.pending().length;
   }
 
   coverageRate() {
@@ -1161,7 +1208,7 @@ export class AdminDashboardPage implements OnDestroy {
   }
 
   totalExceptionsForCenter() {
-    return this.pending().length + this.swapRequests.length + Number(this.metrics()?.upcoming7dOpenCount || 0);
+    return this.pending().length + this.swapRequests().length + Number(this.metrics()?.upcoming7dOpenCount || 0);
   }
 
   assignedUserLabel(s: Shift) {

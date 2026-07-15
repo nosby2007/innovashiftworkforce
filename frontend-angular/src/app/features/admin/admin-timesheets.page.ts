@@ -14,12 +14,14 @@ import { payrollHours } from '../../shared/utils/payroll.util';
 import { toCsv, downloadTextFile } from '../../shared/utils/csv.util';
 import { ToastService } from '../../core/ui/toast.service';
 import { PrintLauncherService } from '../../core/ui/print-launcher.service';
+import { TableListController } from '../../shared/ui/table-list/table-list.controller';
+import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
 
 import { MatIconModule } from '@angular/material/icon';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule],
+  imports: [CommonModule, FormsModule, MatIconModule, TablePaginatorComponent],
   template: `
     <div class="vs-page-pad">
       <!-- Header -->
@@ -116,28 +118,37 @@ import { MatIconModule } from '@angular/material/icon';
         </div>
 
         <!-- Table -->
+        <div *ngIf="rows().length > 0" class="ts-table-toolbar">
+          <input
+            type="search"
+            class="vs-input"
+            style="max-width:320px;"
+            placeholder="Search shift title or status…"
+            [value]="rowsCtrl.filterText()"
+            (input)="rowsCtrl.setFilter($any($event.target).value)">
+        </div>
         <div *ngIf="rows().length > 0" class="vs-table-shell ts-table-shell">
           <table class="vs-table ts-table">
             <thead>
               <tr>
-                <th>Shift Title</th>
-                <th>Check In</th>
-                <th>Check Out</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('shiftTitle')">Shift Title {{ rowsCtrl.sortIndicator('shiftTitle') }}</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('checkIn')">Check In {{ rowsCtrl.sortIndicator('checkIn') }}</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('checkOut')">Check Out {{ rowsCtrl.sortIndicator('checkOut') }}</th>
                 <th>Break</th>
-                <th>Hours</th>
-                <th>Status</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('hours')">Hours {{ rowsCtrl.sortIndicator('hours') }}</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('status')">Status {{ rowsCtrl.sortIndicator('status') }}</th>
                 <th class="ts-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let r of rows()" class="vs-row">
+              <tr *ngFor="let r of rowsCtrl.pageRows()" class="vs-row">
                 <td><span class="vs-strong">{{ r.shiftTitle }}</span></td>
                 <td>{{ r.checkIn }}</td>
                 <td>{{ r.checkOut }}</td>
                 <td>{{ r.breakLabel }}</td>
                 <td><strong>{{ r.hours }}</strong></td>
                 <td>
-                  <span class="vs-badge" 
+                  <span class="vs-badge"
                         [class.vs-badge--success]="!r.exceptionStatus || r.exceptionStatus==='none'"
                         [class.vs-badge--warning]="r.exceptionStatus && r.exceptionStatus!=='none'">
                     {{ (r.exceptionStatus || 'none') | titlecase }}
@@ -150,7 +161,8 @@ import { MatIconModule } from '@angular/material/icon';
             </tbody>
           </table>
         </div>
-        
+        <app-table-paginator *ngIf="rows().length > 0" [controller]="rowsCtrl"></app-table-paginator>
+
         <div *ngIf="rows().length === 0 && selectedUid" class="ts-empty vs-glass">
           <mat-icon>search_off</mat-icon>
           <div>
@@ -229,6 +241,10 @@ import { MatIconModule } from '@angular/material/icon';
       white-space: nowrap;
     }
 
+    .ts-table-toolbar { margin-bottom: 10px; }
+    .ts-th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+    .ts-th-sort:hover { color: var(--primary, #07533f); }
+
     .ts-empty { display:flex; align-items:flex-start; gap:16px; padding:28px 24px; color:var(--text-muted); }
     .ts-empty mat-icon { font-size:32px; color:var(--text-subtle); flex-shrink:0; margin-top:2px; }
     .ts-empty strong { color:var(--text); display:block; font-size:15px; }
@@ -252,6 +268,18 @@ export class AdminTimesheetsPage implements OnDestroy {
   shiftMap = signal<Record<string, any>>({});
 
   rows = signal<Array<any>>([]);
+  rowsCtrl = new TableListController<any>(this.rows, {
+    pageSize: 25,
+    filterPredicate: (r, q) => `${r.shiftTitle} ${r.exceptionStatus || ''}`.toLowerCase().includes(q),
+    sortAccessor: (r, key) => {
+      if (key === 'checkIn') return r.checkInMs;
+      if (key === 'checkOut') return r.checkOutMs;
+      if (key === 'hours') return parseFloat(r.hours) || 0;
+      if (key === 'shiftTitle') return String(r.shiftTitle || '').toLowerCase();
+      if (key === 'status') return r.exceptionStatus || '';
+      return null;
+    },
+  });
   pendingEntries = signal<TimeEntry[]>([]);
   fixEntryId: string | null = null;
   fixUserId: string | null = null;
@@ -330,7 +358,9 @@ export class AdminTimesheetsPage implements OnDestroy {
         return {
           shiftTitle: s?.title || e.shiftId,
           checkIn: formatDateTime(e.checkInAt),
+          checkInMs: inD?.getTime() ?? 0,
           checkOut: formatDateTime(e.checkOutAt),
+          checkOutMs: outD?.getTime() ?? 0,
           breakLabel,
           breakMinutes: Math.round(breakMs / 60000),
           hours,
@@ -338,6 +368,7 @@ export class AdminTimesheetsPage implements OnDestroy {
           entryId: e.id,
         };
       }));
+      this.rowsCtrl.pageIndex.set(0);
     });
   }
 
