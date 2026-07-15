@@ -21,8 +21,19 @@ service firebase.storage {
       return signedIn() && platformRole() in ['superAdmin', 'super_admin', 'super-admin'];
     }
 
+    // Custom claims (orgId in the ID token) are only refreshed on next login or
+    // natural token expiry — a user invited/reassigned mid-session can have a
+    // stale token that still passes the app's own Firestore-backed fallback
+    // context but fails a token-only check here. Fall back to the authoritative
+    // Firestore org-membership doc so uploads don't silently break for anyone
+    // whose token just hasn't refreshed yet.
+    function isFirestoreOrgMember(orgId) {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/orgs/$(orgId)/users/$(request.auth.uid));
+    }
+
     function isOrgMember(orgId) {
-      return signedIn() && tokenOrgId() == orgId;
+      return signedIn() && (tokenOrgId() == orgId || isFirestoreOrgMember(orgId));
     }
 
     function isOrgAdminLike(orgId) {

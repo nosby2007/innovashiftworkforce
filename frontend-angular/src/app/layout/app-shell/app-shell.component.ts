@@ -205,7 +205,7 @@ const ROUTE_TITLES: Record<string, string> = {
                   *ngIf="shellMode() === 'staff' && isAdminLike()"
                   matTooltip="Go to Admin Dashboard">
             <mat-icon>admin_panel_settings</mat-icon>
-            <span>Admin</span>
+            <span class="l-bridge-label">Admin</span>
           </button>
 
           <button mat-button class="l-staff-bridge-top"
@@ -213,7 +213,7 @@ const ROUTE_TITLES: Record<string, string> = {
                   *ngIf="shellMode() === 'admin'"
                   matTooltip="Go to my staff schedule">
             <mat-icon>badge</mat-icon>
-            <span>My Schedule</span>
+            <span class="l-bridge-label">My Schedule</span>
           </button>
 
           <!-- Notifications -->
@@ -455,14 +455,17 @@ const ROUTE_TITLES: Record<string, string> = {
       border-bottom: 1px solid var(--border) !important;
       padding: 0 20px !important;
       gap: 8px;
+      overflow: hidden;
+      display: flex !important;
+      flex-wrap: nowrap !important;
     }
     .l-burger { color: var(--text) !important; flex-shrink: 0; }
-    .l-toolbar-left { display: flex; flex-direction: column; justify-content: center; }
-    .l-toolbar-title { font-size: 16px; font-weight: 900; letter-spacing: -0.01em; color: var(--text); }
-    .l-toolbar-sub { font-size: 11px; color: var(--text-muted); line-height: 1; }
-    .l-spacer { flex: 1; }
+    .l-toolbar-left { display: flex; flex-direction: column; justify-content: center; min-width: 0; overflow: hidden; }
+    .l-toolbar-title { font-size: 16px; font-weight: 900; letter-spacing: -0.01em; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .l-toolbar-sub { font-size: 11px; color: var(--text-muted); line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .l-spacer { flex: 1 1 auto; min-width: 4px; }
 
-    .l-topbtn { color: var(--text-muted) !important; border-radius: 10px !important; }
+    .l-topbtn { color: var(--text-muted) !important; border-radius: 10px !important; flex-shrink: 0; }
     .l-topbtn:hover { color: var(--text) !important; background: var(--panel) !important; }
 
     .l-admin-bridge-top {
@@ -476,6 +479,7 @@ const ROUTE_TITLES: Record<string, string> = {
       display: inline-flex !important;
       align-items: center !important;
       gap: 5px !important;
+      flex-shrink: 0;
     }
     .l-admin-bridge-top mat-icon {
       font-size: 17px;
@@ -494,6 +498,7 @@ const ROUTE_TITLES: Record<string, string> = {
       display: inline-flex !important;
       align-items: center !important;
       gap: 5px !important;
+      flex-shrink: 0;
     }
     .l-staff-bridge-top mat-icon {
       font-size: 17px;
@@ -511,6 +516,7 @@ const ROUTE_TITLES: Record<string, string> = {
       font-size: 13px !important;
       font-weight: 700 !important;
       transition: background 150ms ease, border-color 150ms ease !important;
+      flex-shrink: 0;
     }
     .l-userbtn:hover { background: var(--panel-2) !important; border-color: var(--border-strong) !important; }
 
@@ -547,6 +553,15 @@ const ROUTE_TITLES: Record<string, string> = {
       .l-page { padding: 14px 12px; }
       .l-user-name { display: none; }
       .l-chevron { display: none; }
+    }
+
+    @media (max-width: 520px) {
+      .l-toolbar { padding: 0 10px !important; gap: 6px; }
+      .l-toolbar-sub { display: none; }
+      .l-bridge-label { display: none; }
+      .l-admin-bridge-top, .l-staff-bridge-top { width: 36px !important; padding: 0 !important; justify-content: center !important; }
+      .l-admin-bridge-top mat-icon, .l-staff-bridge-top mat-icon { margin: 0; }
+      .l-userbtn { padding: 4px !important; gap: 0 !important; }
     }
   `]
 })
