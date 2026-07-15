@@ -11,6 +11,8 @@ import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { AppLockService } from '../../core/app-lock/app-lock.service';
 import { ConnectivityService } from '../../core/connectivity/connectivity.service';
+import { TwoFactorService } from '../../core/auth/two-factor.service';
+import type { TotpSecret } from 'firebase/auth';
 
 type DependentDraft = {
   name: string;
@@ -332,6 +334,76 @@ const EMPTY_DEPENDENT: DependentDraft = {
             </label>
           </div>
         </section>
+
+        <section class="vs-glass-strong prof-card">
+          <div class="prof-card-head">
+            <div>
+              <h2>Two-Factor Authentication</h2>
+              <p>Require a code from an authenticator app (Google Authenticator, Authy, etc.) when signing in.</p>
+            </div>
+            <mat-icon>verified_user</mat-icon>
+          </div>
+
+          <div class="tfa-body">
+            <div class="tfa-status" *ngIf="tfaEnrolled && tfaStep === 'idle'">
+              <mat-icon class="tfa-status-icon tfa-status-icon--on">check_circle</mat-icon>
+              <div>
+                <strong>Two-factor authentication is enabled</strong>
+                <span>An authenticator app code is required at sign-in.</span>
+              </div>
+              <button class="vs-btn-ghost" type="button" (click)="startTfaDisable()" [disabled]="tfaBusy">Disable</button>
+            </div>
+
+            <div class="tfa-status" *ngIf="!tfaEnrolled && tfaStep === 'idle'">
+              <mat-icon class="tfa-status-icon">gpp_maybe</mat-icon>
+              <div>
+                <strong>Two-factor authentication is off</strong>
+                <span>Add an extra layer of security to your account.</span>
+              </div>
+              <button class="vs-btn-primary" type="button" (click)="startTfaEnroll()" [disabled]="tfaBusy">Enable</button>
+            </div>
+
+            <div class="tfa-step" *ngIf="tfaStep === 'password'">
+              <label class="vs-field-label">Confirm your password to continue</label>
+              <input class="doc-input" type="password" [(ngModel)]="tfaPassword" placeholder="Current password" (keyup.enter)="confirmTfaPassword()">
+              <div class="tfa-step-actions">
+                <button class="vs-btn-ghost" type="button" (click)="cancelTfa()" [disabled]="tfaBusy">Cancel</button>
+                <button class="vs-btn-primary" type="button" (click)="confirmTfaPassword()" [disabled]="tfaBusy || !tfaPassword">
+                  {{ tfaBusy ? 'Verifying…' : 'Continue' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="tfa-step" *ngIf="tfaStep === 'scan'">
+              <p class="tfa-hint">Scan this QR code with your authenticator app, or enter the key manually.</p>
+              <div class="tfa-qr-row">
+                <img *ngIf="tfaQrDataUrl" [src]="tfaQrDataUrl" alt="Two-factor authentication QR code" class="tfa-qr">
+                <div class="tfa-secret">
+                  <span>Manual entry key</span>
+                  <code>{{ tfaSecretKey }}</code>
+                </div>
+              </div>
+              <label class="vs-field-label">Enter the 6-digit code from your app</label>
+              <input class="doc-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" [(ngModel)]="tfaCode" placeholder="000000" (keyup.enter)="confirmTfaEnroll()">
+              <div class="tfa-step-actions">
+                <button class="vs-btn-ghost" type="button" (click)="cancelTfa()" [disabled]="tfaBusy">Cancel</button>
+                <button class="vs-btn-primary" type="button" (click)="confirmTfaEnroll()" [disabled]="tfaBusy || tfaCode.length !== 6">
+                  {{ tfaBusy ? 'Verifying…' : 'Verify & Enable' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="tfa-step" *ngIf="tfaStep === 'confirm-disable'">
+              <p class="tfa-hint">Two-factor authentication will no longer be required at sign-in.</p>
+              <div class="tfa-step-actions">
+                <button class="vs-btn-ghost" type="button" (click)="cancelTfa()" [disabled]="tfaBusy">Cancel</button>
+                <button class="vs-btn-primary tfa-danger" type="button" (click)="confirmTfaDisable()" [disabled]="tfaBusy">
+                  {{ tfaBusy ? 'Disabling…' : 'Disable Two-Factor' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
       </ng-container>
     </div>
   `,
@@ -401,6 +473,21 @@ const EMPTY_DEPENDENT: DependentDraft = {
     .prof-pref-grid { padding:18px 20px; display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; align-items:center; }
     .prof-switch { min-height:52px; border:1px solid var(--border); border-radius:8px; padding:12px 14px; display:flex; align-items:center; gap:10px; background:var(--panel); }
     .prof-switch span { margin:0; color:var(--text); }
+    .tfa-body { padding:18px 20px; display:grid; gap:14px; }
+    .tfa-status { display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:12px; padding:12px 14px; border:1px solid var(--border); border-radius:8px; background:var(--panel); }
+    .tfa-status-icon { color:var(--text-muted); }
+    .tfa-status-icon--on { color:#047857; }
+    .tfa-status strong { display:block; color:var(--text); font-size:14px; }
+    .tfa-status span { display:block; margin-top:2px; color:var(--text-muted); font-size:12px; }
+    .tfa-step { display:grid; gap:10px; padding:14px; border:1px solid var(--border); border-radius:8px; background:var(--panel); }
+    .tfa-hint { margin:0; color:var(--text-muted); font-size:12px; }
+    .tfa-qr-row { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+    .tfa-qr { width:160px; height:160px; border-radius:8px; border:1px solid var(--border); background:#fff; padding:8px; }
+    .tfa-secret { display:grid; gap:4px; }
+    .tfa-secret span { color:var(--text-muted); font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.05em; }
+    .tfa-secret code { padding:6px 10px; border-radius:6px; background:var(--panel-2, #eef2f7); color:var(--text); font-size:13px; letter-spacing:.05em; word-break:break-all; }
+    .tfa-step-actions { display:flex; justify-content:flex-end; gap:10px; }
+    .tfa-danger { background:#b91c1c !important; border-color:#b91c1c !important; }
     @media (max-width: 940px) {
       .prof-header, .prof-hero { flex-direction:column; }
       .prof-launchpad, .prof-grid, .prof-tax-grid, .prof-form-grid, .prof-form-grid--address, .prof-pref-grid { grid-template-columns:1fr; }
@@ -417,6 +504,15 @@ export class StaffProfilePage implements OnDestroy {
   lockSupported = false;
   lockEnabled = false;
   lockBusy = false;
+  tfaEnrolled = false;
+  tfaBusy = false;
+  tfaStep: 'idle' | 'password' | 'scan' | 'confirm-disable' = 'idle';
+  tfaPassword = '';
+  tfaCode = '';
+  tfaSecretKey = '';
+  tfaQrDataUrl = '';
+  private tfaPendingSecret: TotpSecret | null = null;
+  private tfaIntent: 'enroll' | 'disable' | null = null;
   private unsub: (() => void) | null = null;
   private source: any = {};
 
@@ -442,17 +538,103 @@ export class StaffProfilePage implements OnDestroy {
     private toast: ToastService,
     private appLock: AppLockService,
     private connectivity: ConnectivityService,
+    private twoFactor: TwoFactorService,
   ) {
     this.orgId = this.ctx.orgId();
     this.uid = this.ctx.uid();
     this.bind();
     void this.loadAppLockState();
+    this.loadTfaState();
   }
 
   private async loadAppLockState() {
     this.lockSupported = await this.appLock.isAvailable();
     if (this.uid) {
       this.lockEnabled = await this.appLock.isEnabled(this.uid);
+    }
+  }
+
+  private loadTfaState() {
+    const user = getAuth().currentUser;
+    this.tfaEnrolled = user ? this.twoFactor.isEnrolled(user) : false;
+  }
+
+  startTfaEnroll() {
+    this.tfaIntent = 'enroll';
+    this.tfaStep = 'password';
+    this.tfaPassword = '';
+  }
+
+  startTfaDisable() {
+    this.tfaIntent = 'disable';
+    this.tfaStep = 'password';
+    this.tfaPassword = '';
+  }
+
+  cancelTfa() {
+    this.tfaStep = 'idle';
+    this.tfaPassword = '';
+    this.tfaCode = '';
+    this.tfaSecretKey = '';
+    this.tfaQrDataUrl = '';
+    this.tfaPendingSecret = null;
+    this.tfaIntent = null;
+  }
+
+  async confirmTfaPassword() {
+    const user = getAuth().currentUser;
+    if (!user || !this.tfaPassword || this.tfaBusy) return;
+    this.tfaBusy = true;
+    try {
+      await this.twoFactor.reauthenticate(user, this.tfaPassword);
+      this.tfaPassword = '';
+      if (this.tfaIntent === 'enroll') {
+        const label = user.email || this.draft.displayName || 'InnovaShift user';
+        const start = await this.twoFactor.startEnrollment(user, label);
+        this.tfaPendingSecret = start.secret;
+        this.tfaSecretKey = start.secretKey;
+        this.tfaQrDataUrl = start.qrCodeDataUrl;
+        this.tfaStep = 'scan';
+      } else if (this.tfaIntent === 'disable') {
+        this.tfaStep = 'confirm-disable';
+      }
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Incorrect password.');
+    } finally {
+      this.tfaBusy = false;
+    }
+  }
+
+  async confirmTfaEnroll() {
+    const user = getAuth().currentUser;
+    if (!user || !this.tfaPendingSecret || this.tfaCode.length !== 6 || this.tfaBusy) return;
+    this.tfaBusy = true;
+    try {
+      await this.twoFactor.verifyAndEnroll(user, this.tfaPendingSecret, this.tfaCode, 'Authenticator app');
+      this.tfaEnrolled = true;
+      this.toast.success('Two-factor authentication enabled.');
+      this.cancelTfa();
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Invalid code. Check your authenticator app and try again.');
+    } finally {
+      this.tfaBusy = false;
+    }
+  }
+
+  async confirmTfaDisable() {
+    const user = getAuth().currentUser;
+    if (!user || this.tfaBusy) return;
+    this.tfaBusy = true;
+    try {
+      const factorUid = this.twoFactor.getEnrolledFactorUid(user);
+      if (factorUid) await this.twoFactor.unenroll(user, factorUid);
+      this.tfaEnrolled = false;
+      this.toast.success('Two-factor authentication disabled.');
+      this.cancelTfa();
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Unable to disable two-factor authentication.');
+    } finally {
+      this.tfaBusy = false;
     }
   }
 
