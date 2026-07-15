@@ -84,10 +84,8 @@ const ROUTE_TITLES: Record<string, string> = {
 
         <!-- Brand -->
         <div class="l-brand">
-          <div class="l-logo-wrap">
-            <span class="l-logo-vs">VS</span>
-          </div>
-          <div class="l-brand-text">
+          <img src="assets/logo.png" alt="InnovaShift" class="l-logo-img">
+          <div class="l-brand-text" *ngIf="shellMode() !== 'staff'">
             <div class="l-brand-name">{{ shellBrand() }}</div>
             <div class="l-brand-sub">{{ shellSubtitle() }}</div>
           </div>
@@ -316,20 +314,12 @@ const ROUTE_TITLES: Record<string, string> = {
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
-    .l-logo-wrap {
-      width: 38px; height: 38px;
-      flex: 0 0 38px;
-      border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-      box-shadow: 0 4px 12px var(--primary-glow);
+    .l-logo-img {
+      height: 32px;
+      width: auto;
+      max-width: 100%;
+      object-fit: contain;
       flex-shrink: 0;
-    }
-    .l-logo-vs {
-      font-size: 15px;
-      font-weight: 900;
-      color: #fff;
-      letter-spacing: 0.05em;
     }
     .l-brand-text { min-width: 0; display: flex; flex-direction: column; }
     .l-brand-name {
