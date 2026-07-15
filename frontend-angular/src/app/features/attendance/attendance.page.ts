@@ -1,4 +1,4 @@
-import { Component, EffectRef, OnDestroy, effect, signal } from '@angular/core';
+import { Component, EffectRef, OnDestroy, computed, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -164,23 +164,23 @@ import { fmtShiftDate, fmtShiftTime, shiftHours } from '../../shared/utils/shift
           </div>
         </section>
 
-        <section class="vs-glass-strong at-panel" *ngIf="mySchedule().length > 0 && !currentShift()">
+        <section class="vs-glass-strong at-panel" *ngIf="todaysSchedule().length > 0 && !currentShift()">
           <div class="vs-panel-head">
             <div>
               <div class="vs-panel-title">My Upcoming Shifts</div>
-              <div class="vs-panel-subtitle">Claimed shifts you need to clock in to</div>
+              <div class="vs-panel-subtitle">Today's shift — clock in when you're ready</div>
             </div>
             <mat-icon style="color:var(--primary);">event</mat-icon>
           </div>
-          <div class="at-schedule-list">
-            <div *ngFor="let s of mySchedule()" class="at-schedule-row vs-glass">
-              <div class="at-schedule-info">
+          <div class="at-schedule-cards">
+            <div *ngFor="let s of todaysSchedule()" class="at-schedule-card vs-glass">
+              <div class="at-schedule-card-head">
                 <strong>{{ s.title }}</strong>
-                <span>{{ fmtDate(s.startAt) }}</span>
-                <span>{{ fmtTime(s.startAt) }} &ndash; {{ fmtTime(s.endAt) }}</span>
-                <span class="at-loc"><mat-icon>location_on</mat-icon>{{ s.locationName }}</span>
+                <span class="at-schedule-card-date">{{ fmtDate(s.startAt) }}</span>
               </div>
-              <div class="at-schedule-actions">
+              <div class="at-schedule-card-time">{{ fmtTime(s.startAt) }} &ndash; {{ fmtTime(s.endAt) }}</div>
+              <div class="at-loc"><mat-icon>location_on</mat-icon>{{ s.locationName }}</div>
+              <div class="at-schedule-card-actions">
                 <button class="vs-btn-primary at-btn-in" (click)="clockInToShift(s)" [disabled]="busy">
                   <mat-icon>login</mat-icon> Clock In
                 </button>
@@ -602,13 +602,15 @@ import { fmtShiftDate, fmtShiftTime, shiftHours } from '../../shared/utils/shift
     .at-current-status { display:flex; align-items:center; gap:8px; padding:10px 16px; background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.26); border-radius:var(--radius-md); font-size:13px; color:var(--success); }
     .at-actions-current { padding: 0 20px 20px; border-top: none; }
 
-    .at-schedule-list { padding:8px 20px 20px; display:flex; flex-direction:column; gap:12px; }
-    .at-schedule-row { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-radius:var(--radius-md); gap:12px; flex-wrap:wrap; }
-    .at-schedule-info { display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:13px; color:var(--text-muted); }
-    .at-schedule-info strong { font-size:14px; color:var(--text); }
-    .at-loc { display:flex; align-items:center; gap:4px; }
+    .at-schedule-cards { padding:8px 20px 20px; display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:14px; }
+    .at-schedule-card { display:flex; flex-direction:column; gap:8px; padding:16px; border-radius:var(--radius-md); }
+    .at-schedule-card-head { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+    .at-schedule-card-head strong { font-size:15px; color:var(--text); }
+    .at-schedule-card-date { font-size:12px; color:var(--text-subtle); white-space:nowrap; }
+    .at-schedule-card-time { font-size:13px; font-weight:700; color:var(--text-muted); }
+    .at-loc { display:flex; align-items:center; gap:4px; font-size:13px; color:var(--text-muted); }
     .at-loc mat-icon { font-size:14px !important; width:14px; height:14px; }
-    .at-schedule-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .at-schedule-card-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
     .at-btn-callout { color:var(--danger); border-color:rgba(239,68,68,0.4) !important; }
     .at-callout-form { margin:12px 20px 4px; padding:16px; border:1px solid rgba(239,68,68,0.35); border-radius:var(--radius-md); background:rgba(239,68,68,0.06); }
     .at-callout-form-title { display:flex; align-items:center; gap:8px; font-weight:700; color:var(--text-muted); font-size:13px; margin-bottom:8px; }
@@ -717,6 +719,13 @@ export class AttendancePage implements OnDestroy {
   shiftMap = signal<Record<string, Shift>>({});
   currentShift = signal<Shift | null>(null);
   mySchedule = signal<Shift[]>([]);
+  todaysSchedule = computed(() => {
+    const today = new Date();
+    return this.mySchedule().filter((s) => {
+      const d = tsToDate(s.startAt);
+      return d ? this.isSameDay(d, today) : false;
+    });
+  });
   private shiftOptionToId: Record<string, string> = {};
   private shiftIdToOption: Record<string, string> = {};
 
@@ -805,6 +814,10 @@ export class AttendancePage implements OnDestroy {
 
   fmtDate(ts: any) {
     return fmtShiftDate(ts);
+  }
+
+  private isSameDay(a: Date, b: Date): boolean {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   }
 
   fmtTime(ts: any) {
