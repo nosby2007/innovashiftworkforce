@@ -9,6 +9,7 @@ import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { profileCompletion } from '../../shared/utils/profile-completion.util';
 import { EmployeeDocumentRecord, EmployeeDocumentType, EmployeeDocumentsRepo } from '../../core/repos/employee-documents.repo';
 import { ToastService } from '../../core/ui/toast.service';
+import { DocumentScanService } from '../../core/camera/document-scan.service';
 
 type DocumentTile = {
   title: string;
@@ -100,11 +101,28 @@ type DocumentTile = {
               </label>
               <label>
                 <span>File</span>
-                <input class="doc-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" (change)="selectFile($event)">
+                <div class="doc-file-row">
+                  <input class="doc-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" (change)="selectFile($event)">
+                  <button class="doc-scan-btn" type="button" (click)="scanDocument()" [disabled]="scanBusy" title="Scan with camera">
+                    <mat-icon>{{ scanBusy ? 'hourglass_empty' : 'photo_camera' }}</mat-icon>
+                  </button>
+                </div>
               </label>
               <button class="doc-primary doc-upload-btn" type="button" (click)="uploadDocument()" [disabled]="uploadBusy || !selectedFile">
                 <mat-icon>{{ uploadBusy ? 'hourglass_empty' : 'upload_file' }}</mat-icon>
                 {{ uploadBusy ? 'Uploading...' : 'Submit for Review' }}
+              </button>
+            </div>
+
+            <div class="doc-preview" *ngIf="selectedFile">
+              <img *ngIf="previewUrl()" [src]="previewUrl()" alt="Selected document preview">
+              <mat-icon *ngIf="!previewUrl()" class="doc-preview-icon">description</mat-icon>
+              <div>
+                <strong>{{ selectedFile.name }}</strong>
+                <span>{{ formatFileSize(selectedFile.size) }} — ready to submit</span>
+              </div>
+              <button type="button" class="doc-preview-clear" (click)="clearSelection()" title="Remove">
+                <mat-icon>close</mat-icon>
               </button>
             </div>
 
@@ -193,6 +211,16 @@ type DocumentTile = {
     .doc-upload-form { display:grid; grid-template-columns:1fr 1.2fr 1.2fr auto; gap:12px; align-items:end; margin-bottom:14px; }
     .doc-upload-form label span { display:block; margin-bottom:6px; color:#64748b; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.06em; }
     .doc-input { width:100%; min-height:42px; border:1px solid #cbd5e1; border-radius:8px; padding:0 11px; background:#fff; color:#0f172a; font-weight:700; }
+    .doc-file-row { display:flex; gap:8px; align-items:stretch; }
+    .doc-file-row .doc-input { flex:1; min-width:0; }
+    .doc-scan-btn { flex:0 0 42px; width:42px; border:1px solid #07533f; border-radius:8px; background:#07533f; color:#fff; display:grid; place-items:center; cursor:pointer; }
+    .doc-scan-btn:disabled { opacity:.6; cursor:not-allowed; }
+    .doc-preview { display:grid; grid-template-columns:56px 1fr auto; align-items:center; gap:12px; padding:10px 12px; margin-bottom:14px; border:1px solid #e5e7eb; border-radius:8px; background:#f8fafc; }
+    .doc-preview img { width:56px; height:56px; border-radius:6px; object-fit:cover; border:1px solid #e5e7eb; }
+    .doc-preview-icon { width:56px; height:56px; font-size:30px; display:grid; place-items:center; color:#64748b; background:#eef2f7; border-radius:6px; }
+    .doc-preview strong { display:block; color:#0f172a; font-size:13px; }
+    .doc-preview span { display:block; margin-top:2px; color:#64748b; font-size:12px; }
+    .doc-preview-clear { width:32px; height:32px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#64748b; display:grid; place-items:center; cursor:pointer; }
     .doc-history { display:grid; gap:8px; }
     .doc-history-row { min-height:58px; display:grid; grid-template-columns:1fr auto 40px; align-items:center; gap:10px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:8px; background:#f8fafc; }
     .doc-history-row strong, .doc-history-row span { display:block; }
@@ -214,6 +242,8 @@ export class StaffDocumentsPage implements OnDestroy {
   uploadTitle = '';
   selectedFile: File | null = null;
   uploadBusy = false;
+  scanBusy = false;
+  previewUrl = signal<string | null>(null);
   private unsub: (() => void) | null = null;
   private unsubDocs: (() => void) | null = null;
 
@@ -222,6 +252,7 @@ export class StaffDocumentsPage implements OnDestroy {
     private ctx: OrgContextService,
     private docsRepo: EmployeeDocumentsRepo,
     private toast: ToastService,
+    private docScan: DocumentScanService,
   ) {
     this.orgId = this.ctx.orgId();
     this.uid = this.ctx.uid();
@@ -232,6 +263,7 @@ export class StaffDocumentsPage implements OnDestroy {
   ngOnDestroy() {
     this.unsub?.();
     this.unsubDocs?.();
+    this.revokePreview();
   }
 
   private bind() {
@@ -289,10 +321,52 @@ export class StaffDocumentsPage implements OnDestroy {
 
   selectFile(event: Event) {
     const input = event.target as HTMLInputElement;
-    this.selectedFile = input.files?.[0] || null;
-    if (!this.uploadTitle && this.selectedFile) {
-      this.uploadTitle = this.docLabel(this.uploadType);
+    this.applySelectedFile(input.files?.[0] || null);
+  }
+
+  async scanDocument() {
+    if (this.scanBusy) return;
+    this.scanBusy = true;
+    try {
+      const file = await this.docScan.capture();
+      if (file) {
+        this.applySelectedFile(file);
+      }
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Unable to capture a photo.');
+    } finally {
+      this.scanBusy = false;
     }
+  }
+
+  clearSelection() {
+    this.applySelectedFile(null);
+  }
+
+  private applySelectedFile(file: File | null) {
+    this.revokePreview();
+    this.selectedFile = file;
+    if (file) {
+      if (file.type.startsWith('image/')) {
+        this.previewUrl.set(URL.createObjectURL(file));
+      }
+      if (!this.uploadTitle) {
+        this.uploadTitle = this.docLabel(this.uploadType);
+      }
+    }
+  }
+
+  private revokePreview() {
+    const current = this.previewUrl();
+    if (current) URL.revokeObjectURL(current);
+    this.previewUrl.set(null);
+  }
+
+  formatFileSize(bytes?: number): string {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   async uploadDocument() {
@@ -309,7 +383,7 @@ export class StaffDocumentsPage implements OnDestroy {
         file: this.selectedFile,
       });
       this.toast.success('Document submitted for review.');
-      this.selectedFile = null;
+      this.applySelectedFile(null);
       this.uploadTitle = '';
     } catch (e: any) {
       this.toast.errorFrom(e, 'Failed to upload document.');

@@ -2,11 +2,13 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, getMultiFactorResolver, signInWithEmailAndPassword } from 'firebase/auth';
+import type { MultiFactorResolver } from 'firebase/auth';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthService } from '../../core/auth/auth.service';
 import { ToastService } from '../../core/ui/toast.service';
+import { TwoFactorService } from '../../core/auth/two-factor.service';
 
 function normalizePlatformRole(role: unknown): string | undefined {
   const value = String(role ?? '').trim();
@@ -59,7 +61,7 @@ function isAdminLikeRole(role: unknown): boolean {
           <p class="login-sub">Sign in to your organization workspace</p>
         </div>
 
-        <form [formGroup]="form" (ngSubmit)="submit()" id="login-form" novalidate>
+        <form [formGroup]="form" (ngSubmit)="submit()" id="login-form" novalidate *ngIf="!mfaResolver()">
 
           <!-- Email -->
           <div class="login-field">
@@ -106,6 +108,40 @@ function isAdminLikeRole(role: unknown): boolean {
             [disabled]="form.invalid || loading()">
             <span *ngIf="!loading()">Sign in</span>
             <span *ngIf="loading()" class="login-spinner" aria-label="Signing in"></span>
+          </button>
+        </form>
+
+        <form (ngSubmit)="verifyMfaCode()" novalidate *ngIf="mfaResolver()">
+          <div class="login-field">
+            <label class="login-label" for="login-mfa-code">Verification code</label>
+            <p class="login-mfa-hint">Enter the 6-digit code from your authenticator app.</p>
+            <div class="login-input-wrap">
+              <mat-icon class="login-input-icon">verified_user</mat-icon>
+              <input
+                id="login-mfa-code"
+                class="login-input"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="6"
+                #mfaInput
+                [value]="mfaCode()"
+                (input)="mfaCode.set(mfaInput.value)"
+                placeholder="000000"
+                autofocus>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            class="login-btn"
+            [disabled]="mfaCode().length !== 6 || loading()">
+            <span *ngIf="!loading()">Verify</span>
+            <span *ngIf="loading()" class="login-spinner" aria-label="Verifying"></span>
+          </button>
+
+          <button type="button" class="login-mfa-back" (click)="cancelMfa()" [disabled]="loading()">
+            Back to sign in
           </button>
         </form>
 
@@ -248,6 +284,16 @@ function isAdminLikeRole(role: unknown): boolean {
       transition: color 150ms ease;
     }
     .login-forgot:hover { color: rgba(165,180,252,1); }
+    .login-mfa-hint {
+      margin: -2px 0 8px; font-size: 12px; color: rgba(71,85,105,0.85);
+    }
+    .login-mfa-back {
+      display: block; width: 100%; margin-top: 12px; background: none; border: none;
+      cursor: pointer; font-size: 12px; color: rgba(71,85,105,0.85); font-family: inherit;
+      text-align: center; padding: 6px;
+    }
+    .login-mfa-back:hover { color: rgba(30,41,59,1); }
+    .login-mfa-back:disabled { opacity: .6; cursor: not-allowed; }
 
     .login-input-wrap {
       position: relative;
@@ -380,10 +426,13 @@ export class LoginComponent {
   private router = inject(Router);
   private auth   = inject(AuthService);
   private toast  = inject(ToastService);
+  private twoFactor = inject(TwoFactorService);
 
   loading  = signal(false);
   showPass = signal(false);
   resetting = signal(false);
+  mfaResolver = signal<MultiFactorResolver | null>(null);
+  mfaCode = signal('');
 
   form = this.fb.group({
     email:    ['', [Validators.required, Validators.email]],
@@ -396,28 +445,42 @@ export class LoginComponent {
     await this.router.navigateByUrl('/forgot-password');
   }
 
+  cancelMfa() {
+    this.mfaResolver.set(null);
+    this.mfaCode.set('');
+  }
+
+  async verifyMfaCode() {
+    const resolver = this.mfaResolver();
+    if (!resolver || this.mfaCode().length !== 6 || this.loading()) return;
+    this.loading.set(true);
+    try {
+      await this.twoFactor.resolveTotpSignIn(resolver, this.mfaCode());
+      this.mfaResolver.set(null);
+      this.mfaCode.set('');
+      await this.completeLogin();
+    } catch (e: any) {
+      const msg = e?.code === 'auth/invalid-verification-code'
+        ? 'Incorrect code. Please try again.'
+        : e?.message ?? 'Verification failed.';
+      this.toast.errorFrom(e, msg);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
   async submit() {
     this.loading.set(true);
     try {
       const auth = getAuth();
       const { email, password } = this.form.getRawValue();
       await signInWithEmailAndPassword(auth, email!, password!);
-      // Force-refresh token so session bootstrap picks up fresh claims
-      const token = await auth.currentUser?.getIdTokenResult(true);
-      const tokenPlatformRole = normalizePlatformRole(token?.claims?.['platformRole']);
-      const tokenAccessRole = normalizeAccessRole(token?.claims?.['accessRole']);
-      const tokenOrgId = String(token?.claims?.['orgId'] || '').trim();
-      const fallback = await this.auth.resolveOrgContext(auth.currentUser?.uid ?? '');
-      const platformRole = tokenPlatformRole ?? normalizePlatformRole(fallback.platformRole);
-      const accessRole = tokenAccessRole ?? normalizeAccessRole(fallback.accessRole);
-      const orgId = tokenOrgId || fallback.orgId;
-      const target = platformRole === 'superAdmin'
-        ? '/platform'
-        : orgId && isAdminLikeRole(accessRole)
-          ? '/admin'
-          : '/app/dashboard';
-      await this.router.navigateByUrl(target);
+      await this.completeLogin();
     } catch (e: any) {
+      if (e?.code === 'auth/multi-factor-auth-required') {
+        this.mfaResolver.set(getMultiFactorResolver(getAuth(), e));
+        return;
+      }
       const msg = e?.code === 'auth/invalid-credential' || e?.code === 'auth/wrong-password'
         ? 'Invalid email or password.'
         : e?.code === 'auth/too-many-requests'
@@ -427,5 +490,24 @@ export class LoginComponent {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private async completeLogin() {
+    const auth = getAuth();
+    // Force-refresh token so session bootstrap picks up fresh claims
+    const token = await auth.currentUser?.getIdTokenResult(true);
+    const tokenPlatformRole = normalizePlatformRole(token?.claims?.['platformRole']);
+    const tokenAccessRole = normalizeAccessRole(token?.claims?.['accessRole']);
+    const tokenOrgId = String(token?.claims?.['orgId'] || '').trim();
+    const fallback = await this.auth.resolveOrgContext(auth.currentUser?.uid ?? '');
+    const platformRole = tokenPlatformRole ?? normalizePlatformRole(fallback.platformRole);
+    const accessRole = tokenAccessRole ?? normalizeAccessRole(fallback.accessRole);
+    const orgId = tokenOrgId || fallback.orgId;
+    const target = platformRole === 'superAdmin'
+      ? '/platform'
+      : orgId && isAdminLikeRole(accessRole)
+        ? '/admin'
+        : '/app/dashboard';
+    await this.router.navigateByUrl(target);
   }
 }
