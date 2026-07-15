@@ -12,6 +12,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { ConnectivityService } from '../connectivity/connectivity.service';
 
 export type EmployeeDocumentType = 'identity' | 'w4' | 'w2' | 'certification' | 'payroll' | 'policy' | 'other';
 export type EmployeeDocumentStatus = 'pending' | 'verified' | 'rejected';
@@ -49,7 +50,7 @@ type UploadInput = {
 
 @Injectable({ providedIn: 'root' })
 export class EmployeeDocumentsRepo {
-  constructor(private zone: NgZone) {}
+  constructor(private zone: NgZone, private connectivity: ConnectivityService) {}
 
   watchForUser(orgId: string, userId: string, cb: (items: EmployeeDocumentRecord[]) => void) {
     const q = query(
@@ -76,6 +77,9 @@ export class EmployeeDocumentsRepo {
   }
 
   async uploadEmployeeDocument(input: UploadInput): Promise<EmployeeDocumentRecord> {
+    // Storage uploads don't queue offline like Firestore writes do — fail
+    // fast with a clear message instead of hanging or erroring obscurely.
+    this.connectivity.assertOnline();
     const docId = doc(collection(getFirestore(), `orgs/${input.orgId}/employeeDocuments`)).id;
     const safeName = this.safeFileName(input.file.name);
     const storagePath = `orgs/${input.orgId}/users/${input.userId}/documents/${docId}-${safeName}`;

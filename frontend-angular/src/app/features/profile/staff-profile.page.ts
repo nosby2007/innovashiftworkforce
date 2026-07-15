@@ -10,6 +10,7 @@ import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { AppLockService } from '../../core/app-lock/app-lock.service';
+import { ConnectivityService } from '../../core/connectivity/connectivity.service';
 
 type DependentDraft = {
   name: string;
@@ -435,7 +436,13 @@ export class StaffProfilePage implements OnDestroy {
   draft: any = this.emptyDraft();
   dependents: DependentDraft[] = [];
 
-  constructor(private zone: NgZone, private ctx: OrgContextService, private toast: ToastService, private appLock: AppLockService) {
+  constructor(
+    private zone: NgZone,
+    private ctx: OrgContextService,
+    private toast: ToastService,
+    private appLock: AppLockService,
+    private connectivity: ConnectivityService,
+  ) {
     this.orgId = this.ctx.orgId();
     this.uid = this.ctx.uid();
     this.bind();
@@ -550,6 +557,12 @@ export class StaffProfilePage implements OnDestroy {
     }
     if (file.size > 5 * 1024 * 1024) {
       this.toast.error('Image must be 5MB or smaller.');
+      return;
+    }
+    try {
+      this.connectivity.assertOnline();
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Unable to upload photo.');
       return;
     }
 
