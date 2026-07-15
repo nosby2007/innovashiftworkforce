@@ -973,8 +973,13 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   staffSearch = '';
   staffPickForShiftId: string | null = null;
 
-  @ViewChild('shiftActionsTpl', { static: true }) shiftActionsTpl!: TemplateRef<any>;
-  @ViewChild('staffPickerTpl', { static: true }) staffPickerTpl!: TemplateRef<any>;
+  // Not { static: true }: these <ng-template>s live inside the *ngIf="orgId"
+  // container, which is still false on the first change-detection pass
+  // (orgId resolves asynchronously) — a static query would resolve to
+  // undefined and never update, leaving the "Shift Actions" modal
+  // permanently empty once orgId did load.
+  @ViewChild('shiftActionsTpl') shiftActionsTpl!: TemplateRef<any>;
+  @ViewChild('staffPickerTpl') staffPickerTpl!: TemplateRef<any>;
 
   constructor(
     private ctx: OrgContextService,
