@@ -77,13 +77,16 @@ both steps already done:
    Firebase Admin, granted from
    [IAM & Admin → Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts?project=atlanta-e04aa).
 2. **Tester group** — Firebase Console → App Distribution → Testers &
-   Groups → group named `internal-testers` (matches `--groups` in
+   Groups → group named `internal-testers` (matches `groups:` in
    `android-distribute.yml`), with testers added to it.
 
-Note: `appdistribution:distribute` doesn't reliably pick up
-`GOOGLE_APPLICATION_CREDENTIALS` the way `firebase deploy` does — the
-workflow passes `--service-account-json` explicitly to that command as
-well.
+Note: the workflow uploads via the
+[`wzieba/Firebase-Distribution-Github-Action`](https://github.com/wzieba/Firebase-Distribution-Github-Action)
+action, not `firebase-tools`' own `appdistribution:distribute` CLI
+command — that command doesn't reliably authenticate in CI (confirmed:
+it failed with "Failed to authenticate, have you run firebase login?"
+even with a valid service account key passed via
+`GOOGLE_APPLICATION_CREDENTIALS` and via `--service-account-json`).
 
 This ships a **debug-signed APK** — fine for internal testers, but not
 suitable for the Play Store. A real Play Store release needs a release

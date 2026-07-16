@@ -59,18 +59,18 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Write service account key
-        if: steps.creds.outputs.configured == 'true'
-        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "${{ runner.temp }}/gcp-key.json"
-
       - name: Distribute to Firebase App Distribution
         if: steps.creds.outputs.configured == 'true'
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/gcp-key.json
-        run: |
-          npx firebase-tools@13 appdistribution:distribute \
-            frontend-angular/android/app/build/outputs/apk/debug/app-debug.apk \
-            --app 1:404381833719:android:5df93f9adcee078f4d36f2 \
-            --groups "internal-testers" \
-            --release-notes "Automated build from ${{ github.sha }}" \
-            --service-account-json "${{ runner.temp }}/gcp-key.json"
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: 1:404381833719:android:5df93f9adcee078f4d36f2
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          groups: internal-testers
+          file: frontend-angular/android/app/build/outputs/apk/debug/app-debug.apk
+          releaseNotes: "Automated build from ${{ github.sha }}"
+        # firebase-tools' own `appdistribution:distribute` CLI command does not
+        # reliably authenticate via GOOGLE_APPLICATION_CREDENTIALS or
+        # --service-account-json in CI (confirmed: both failed with "Failed to
+        # authenticate, have you run firebase login?" even with a valid service
+        # account key present) — this action is purpose-built for App
+        # Distribution auth and takes the raw JSON key content directly.
