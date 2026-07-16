@@ -49,6 +49,20 @@ jobs:
         # config wired into app/build.gradle before switching this to
         # assembleRelease.
 
+      - name: List generated APK files
+        run: find frontend-angular/android/app/build/outputs -type f -name "*.apk" -exec ls -lh {} \;
+
+      - name: Locate built APK
+        id: find_apk
+        run: |
+          apk_path=$(find frontend-angular/android/app/build/outputs/apk/debug -type f -name "*.apk" | sort | head -n 1)
+          if [ -z "$apk_path" ]; then
+            echo "::error::No APK found under frontend-angular/android/app/build/outputs/apk/debug — see the 'List generated APK files' step above for what Gradle actually produced."
+            exit 1
+          fi
+          echo "Found APK: $apk_path"
+          echo "apk_path=$apk_path" >> "$GITHUB_OUTPUT"
+
       - name: Check deploy credentials are configured
         id: creds
         run: |
@@ -63,10 +77,10 @@ jobs:
         if: steps.creds.outputs.configured == 'true'
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
-          appId: 1:404381833719:android:5df93f9adcee078f4d36f2
+          appId: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           groups: internal-testers
-          file: frontend-angular/android/app/build/outputs/apk/debug/app-debug.apk
+          file: ${{ steps.find_apk.outputs.apk_path }}
           releaseNotes: "Automated build from ${{ github.sha }}"
         # firebase-tools' own `appdistribution:distribute` CLI command does not
         # reliably authenticate via GOOGLE_APPLICATION_CREDENTIALS or
@@ -74,3 +88,7 @@ jobs:
         # authenticate, have you run firebase login?" even with a valid service
         # account key present) — this action is purpose-built for App
         # Distribution auth and takes the raw JSON key content directly.
+        # Do not switch this back to google-github-actions/auth@v3 +
+        # `firebase-tools appdistribution:distribute` — both auth paths were
+        # tried and confirmed broken for this specific subcommand (see git
+        # history on this file).

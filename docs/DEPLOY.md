@@ -79,6 +79,12 @@ both steps already done:
 2. **Tester group** — Firebase Console → App Distribution → Testers &
    Groups → group named `internal-testers` (matches `groups:` in
    `android-distribute.yml`), with testers added to it.
+3. **`FIREBASE_ANDROID_APP_ID` secret** — GitHub repo → Settings →
+   Secrets and variables → Actions → New repository secret. Value is the
+   Android app ID from Firebase Console → Project Settings → Your apps
+   (format `1:...:android:...`). Not sensitive on its own, but kept as a
+   secret rather than hardcoded so the workflow isn't tied to one app
+   registration.
 
 Note: the workflow uploads via the
 [`wzieba/Firebase-Distribution-Github-Action`](https://github.com/wzieba/Firebase-Distribution-Github-Action)
