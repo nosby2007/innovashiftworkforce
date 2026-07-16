@@ -1,5 +1,5 @@
-import { Component, ElementRef, ViewChild, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, ElementRef, OnDestroy, ViewChild, signal } from '@angular/core';
+import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 
@@ -7,6 +7,8 @@ import { AiAssistantCommands, AiChatTurn, AiProposal } from '../../core/commands
 import { SchedulerCommands } from '../../core/commands/scheduler.commands';
 import { ShiftAdminCommands } from '../../core/commands/shift-admin.commands';
 import { ToastService } from '../../core/ui/toast.service';
+import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { AiDigestRepo, AiDigest } from '../../core/repos/ai-digest.repo';
 
 type ProposalStatus = 'pending' | 'confirmed' | 'dismissed' | 'error';
 
@@ -29,13 +31,49 @@ const SUGGESTIONS = [
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule],
+  imports: [CommonModule, FormsModule, MatIconModule, DatePipe],
   template: `
     <div class="vs-page-pad ac-page">
       <div class="vs-page-header">
         <div class="vs-page-title">
           <h1 class="vs-title">AI Copilot</h1>
           <p class="vs-page-subtitle">Ask about coverage, staffing, and shifts — every action needs your confirmation before it happens.</p>
+        </div>
+      </div>
+
+      <div class="vs-glass-strong ac-digest" *ngIf="digest() as d">
+        <div class="ac-digest-head">
+          <mat-icon class="ac-digest-icon">wb_sunny</mat-icon>
+          <div>
+            <div class="ac-digest-title">Today's Digest</div>
+            <div class="ac-digest-date">{{ d.generatedAt?.toDate ? (d.generatedAt.toDate() | date:'EEE MMM d, h:mm a') : d.dateKey }}</div>
+          </div>
+        </div>
+        <div class="ac-digest-summary">{{ d.summary }}</div>
+
+        <div class="ac-alerts" *ngIf="d.alerts?.length">
+          <div class="ac-alert" *ngFor="let a of d.alerts" [class.ac-alert--critical]="a.severity === 'critical'">
+            <mat-icon class="ac-alert-icon">{{ a.severity === 'critical' ? 'error' : 'warning' }}</mat-icon>
+            <span>{{ a.detail }}</span>
+          </div>
+        </div>
+
+        <div class="ac-proposals" *ngIf="digestProposals().length">
+          <div class="ac-proposal" *ngFor="let p of digestProposals()" [class.ac-proposal--done]="p.status !== 'pending'">
+            <div class="ac-proposal-summary">
+              <mat-icon class="ac-proposal-icon">{{ iconFor(p.kind) }}</mat-icon>
+              <span>{{ p.summary }}</span>
+            </div>
+            <div class="ac-proposal-actions" *ngIf="p.status === 'pending'">
+              <button class="vs-btn-primary ac-btn-sm" type="button" [disabled]="p.busy" (click)="confirmProposal(p)">
+                <mat-icon *ngIf="!p.busy">check</mat-icon> Confirm
+              </button>
+              <button class="vs-btn-ghost ac-btn-sm" type="button" [disabled]="p.busy" (click)="dismissProposal(p)">Dismiss</button>
+            </div>
+            <div class="ac-proposal-status" *ngIf="p.status === 'confirmed'"><mat-icon>check_circle</mat-icon> Done</div>
+            <div class="ac-proposal-status" *ngIf="p.status === 'dismissed'"><mat-icon>cancel</mat-icon> Dismissed</div>
+            <div class="ac-proposal-status ac-proposal-status--error" *ngIf="p.status === 'error'"><mat-icon>error</mat-icon> Failed</div>
+          </div>
         </div>
       </div>
 
@@ -62,10 +100,10 @@ const SUGGESTIONS = [
                     <span>{{ p.summary }}</span>
                   </div>
                   <div class="ac-proposal-actions" *ngIf="p.status === 'pending'">
-                    <button class="vs-btn-primary ac-btn-sm" type="button" [disabled]="p.busy" (click)="confirm(m, p)">
+                    <button class="vs-btn-primary ac-btn-sm" type="button" [disabled]="p.busy" (click)="confirmProposal(p)">
                       <mat-icon *ngIf="!p.busy">check</mat-icon> Confirm
                     </button>
-                    <button class="vs-btn-ghost ac-btn-sm" type="button" [disabled]="p.busy" (click)="dismiss(m, p)">Dismiss</button>
+                    <button class="vs-btn-ghost ac-btn-sm" type="button" [disabled]="p.busy" (click)="dismissProposal(p)">Dismiss</button>
                   </div>
                   <div class="ac-proposal-status" *ngIf="p.status === 'confirmed'"><mat-icon>check_circle</mat-icon> Done</div>
                   <div class="ac-proposal-status" *ngIf="p.status === 'dismissed'"><mat-icon>cancel</mat-icon> Dismissed</div>
@@ -99,6 +137,24 @@ const SUGGESTIONS = [
   `,
   styles: [`
     .ac-page { width: 100%; max-width: 900px; margin: 0 auto; }
+
+    .ac-digest { padding: 18px 20px; margin-bottom: 16px; }
+    .ac-digest-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .ac-digest-icon { color: #f59e0b; font-size: 24px !important; width: 24px !important; height: 24px !important; }
+    .ac-digest-title { font-weight: 800; font-size: 15px; }
+    .ac-digest-date { font-size: 11.5px; color: var(--text-muted); }
+    .ac-digest-summary { font-size: 13.5px; line-height: 1.5; color: var(--text); margin-bottom: 4px; }
+
+    .ac-alerts { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .ac-alert {
+      display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.4;
+      padding: 8px 10px; border-radius: 8px; background: rgba(245,158,11,0.10); color: var(--text);
+      border: 1px solid rgba(245,158,11,0.30);
+    }
+    .ac-alert--critical { background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.30); }
+    .ac-alert-icon { font-size: 16px !important; width: 16px !important; height: 16px !important; color: #f59e0b; flex-shrink: 0; margin-top: 1px; }
+    .ac-alert--critical .ac-alert-icon { color: var(--danger); }
+
     .ac-panel { display: flex; flex-direction: column; height: min(72vh, 760px); overflow: hidden; }
 
     .ac-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
@@ -144,7 +200,7 @@ const SUGGESTIONS = [
     .ac-send-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; padding: 0 !important; }
   `],
 })
-export class AiCopilotPage {
+export class AiCopilotPage implements OnDestroy {
   @ViewChild('scrollAnchor') private scrollAnchor?: ElementRef<HTMLDivElement>;
 
   suggestions = SUGGESTIONS;
@@ -152,14 +208,36 @@ export class AiCopilotPage {
   messages = signal<DisplayMessage[]>([]);
   sending = signal(false);
 
+  digest = signal<AiDigest | null>(null);
+  digestProposals = signal<DisplayProposal[]>([]);
+
   private history: AiChatTurn[] = [];
+  private unsubDigest: (() => void) | null = null;
 
   constructor(
     private ai: AiAssistantCommands,
     private schedulerCmd: SchedulerCommands,
     private shiftAdminCmd: ShiftAdminCommands,
     private toast: ToastService,
-  ) {}
+    private ctx: OrgContextService,
+    private digestRepo: AiDigestRepo,
+  ) {
+    const bind = () => {
+      const orgId = this.ctx.orgId();
+      if (!orgId || this.unsubDigest) return;
+      this.unsubDigest = this.digestRepo.watchLatest(orgId, (d) => {
+        this.digest.set(d);
+        this.digestProposals.set((d?.proposals || []).map((p) => ({ ...p, status: 'pending', busy: false })));
+      });
+    };
+    bind();
+    setTimeout(bind, 800);
+    setTimeout(bind, 2200);
+  }
+
+  ngOnDestroy() {
+    this.unsubDigest?.();
+  }
 
   sendSuggestion(text: string) {
     this.draft = text;
@@ -190,7 +268,7 @@ export class AiCopilotPage {
     }
   }
 
-  async confirm(msg: DisplayMessage, p: DisplayProposal) {
+  async confirmProposal(p: DisplayProposal) {
     p.busy = true;
     try {
       switch (p.kind) {
@@ -223,12 +301,14 @@ export class AiCopilotPage {
     } finally {
       p.busy = false;
       this.messages.update((list) => [...list]);
+      this.digestProposals.update((list) => [...list]);
     }
   }
 
-  dismiss(msg: DisplayMessage, p: DisplayProposal) {
+  dismissProposal(p: DisplayProposal) {
     p.status = 'dismissed';
     this.messages.update((list) => [...list]);
+    this.digestProposals.update((list) => [...list]);
   }
 
   iconFor(kind: AiProposal['kind']): string {
