@@ -5,12 +5,15 @@ import Anthropic from '@anthropic-ai/sdk';
 import { Timestamp } from 'firebase-admin/firestore';
 import { initFirebase } from '../infra/firebase';
 import { Proposal, buildProposal } from '../domain/ai-proposals';
+import { sendPushToUids } from '../infra/push';
 
 const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
 
 const MODEL = 'claude-sonnet-5';
 const LOOKAHEAD_MS = 3 * 24 * 60 * 60 * 1000; // shifts starting in the next 3 days
 const OPEN_STATUSES = new Set(['draft', 'open', 'published']);
+const ADMIN_LIKE_ROLES = ['admin', 'manager', 'scheduler', 'hr'];
+const NOTIFY_BATCH_CHUNK_SIZE = 400;
 
 // Compliance/fatigue thresholds — healthcare-typical defaults. Not yet
 // configurable per org; a reasonable starting point rather than a precise
@@ -201,6 +204,61 @@ function fallbackSummary(gapCount: number, alertCount: number): string {
   return parts.join('; ') + '.';
 }
 
+async function resolveAdminUids(db: FirebaseFirestore.Firestore, orgId: string): Promise<string[]> {
+  const usersSnap = await db.collection('orgs').doc(orgId).collection('users').get();
+  const adminUids: string[] = [];
+  for (const doc of usersSnap.docs) {
+    const x = doc.data() as Record<string, unknown>;
+    if (x.active === false) continue;
+    if (ADMIN_LIKE_ROLES.includes(String(x.accessRole || ''))) adminUids.push(doc.id);
+  }
+  return adminUids;
+}
+
+async function commitInChunks(db: FirebaseFirestore.Firestore, writes: Array<(batch: FirebaseFirestore.WriteBatch) => void>) {
+  for (let i = 0; i < writes.length; i += NOTIFY_BATCH_CHUNK_SIZE) {
+    const batch = db.batch();
+    for (const apply of writes.slice(i, i + NOTIFY_BATCH_CHUNK_SIZE)) apply(batch);
+    await batch.commit();
+  }
+}
+
+/**
+ * Notifies admin-like staff that a new digest is ready — in-app inbox item
+ * plus a best-effort push, mirroring the pattern in shift-reopen-notify.ts.
+ * Only called when a digest was actually generated (gaps or alerts exist).
+ */
+async function notifyAdminsOfDigest(db: FirebaseFirestore.Firestore, orgId: string, summary: string, dateKey: string, nowMs: number): Promise<void> {
+  const adminUids = await resolveAdminUids(db, orgId);
+  if (!adminUids.length) return;
+
+  const now = Timestamp.fromMillis(nowMs);
+  const writes: Array<(batch: FirebaseFirestore.WriteBatch) => void> = [];
+  for (const uid of adminUids) {
+    const itemRef = db.collection('orgs').doc(orgId).collection('userNotifications').doc(uid).collection('items').doc();
+    writes.push((batch) => batch.set(itemRef, {
+      orgId,
+      uid,
+      type: 'ai_digest',
+      title: 'Daily staffing digest',
+      body: summary,
+      read: false,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: 'system',
+      meta: { dateKey },
+    }));
+  }
+  await commitInChunks(db, writes);
+
+  await sendPushToUids(orgId, adminUids, {
+    title: 'Daily staffing digest',
+    body: summary,
+    data: { type: 'ai_digest', orgId, dateKey, deepLink: '/admin/ai-copilot' },
+    link: '/admin/ai-copilot',
+  });
+}
+
 async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: string, orgName: string, client: Anthropic | null, nowMs: number) {
   const [gaps, alerts] = await Promise.all([
     findCoverageGaps(db, orgId, nowMs),
@@ -228,6 +286,8 @@ async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: stri
       alerts,
       proposals,
     });
+
+  await notifyAdminsOfDigest(db, orgId, summary, dateKey, nowMs);
 }
 
 export const dailyDigest = onSchedule(

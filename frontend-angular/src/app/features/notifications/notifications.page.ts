@@ -213,6 +213,7 @@ export class NotificationsPage implements OnDestroy {
       case 'shift_unassigned': return 'event_busy';
       case 'time_correction': return 'update';
       case 'system': return 'info_outline';
+      case 'ai_digest': return 'auto_awesome';
       default: return 'notifications';
     }
   }
