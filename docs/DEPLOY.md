@@ -68,20 +68,22 @@ aren't part of this deploy pipeline:
 
 Every push to `main` that touches `frontend-angular/**` builds a debug
 APK and uploads it to **Firebase App Distribution**, so testers get a
-new build automatically without going through Play Store review. Two
-one-time steps beyond the `FIREBASE_SERVICE_ACCOUNT` secret above:
+new build automatically without going through Play Store review. Setup,
+both steps already done:
 
-1. **Grant the deploy service account App Distribution access** — same
-   service account as the main deploy workflow, one more role: open
-   [IAM & Admin → Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts?project=atlanta-e04aa)
-   → the `github-actions-deploy` account → **Permissions** tab (or grant
-   it from the project IAM page) → add role **Firebase App Distribution
-   Admin** (`roles/firebaseappdistro.admin`).
-2. **Create a tester group** — Firebase Console → your project → **App
-   Distribution** → **Testers & Groups** → create a group named
-   `internal-testers` (or edit the `--groups` value in
-   `.github/workflows/android-distribute.yml` to match whatever name you
-   use) and add tester emails to it.
+1. **Deploy service account has App Distribution access** — the
+   `github-actions-deploy` service account has **Firebase App
+   Distribution Admin** (`roles/firebaseappdistro.admin`) in addition to
+   Firebase Admin, granted from
+   [IAM & Admin → Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts?project=atlanta-e04aa).
+2. **Tester group** — Firebase Console → App Distribution → Testers &
+   Groups → group named `internal-testers` (matches `--groups` in
+   `android-distribute.yml`), with testers added to it.
+
+Note: `appdistribution:distribute` doesn't reliably pick up
+`GOOGLE_APPLICATION_CREDENTIALS` the way `firebase deploy` does — the
+workflow passes `--service-account-json` explicitly to that command as
+well.
 
 This ships a **debug-signed APK** — fine for internal testers, but not
 suitable for the Play Store. A real Play Store release needs a release

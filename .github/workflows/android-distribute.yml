@@ -72,4 +72,5 @@ jobs:
             frontend-angular/android/app/build/outputs/apk/debug/app-debug.apk \
             --app 1:404381833719:android:5df93f9adcee078f4d36f2 \
             --groups "internal-testers" \
-            --release-notes "Automated build from ${{ github.sha }}"
+            --release-notes "Automated build from ${{ github.sha }}" \
+            --service-account-json "${{ runner.temp }}/gcp-key.json"
