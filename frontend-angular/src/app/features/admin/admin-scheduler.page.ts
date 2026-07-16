@@ -1033,17 +1033,21 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   async publish(s: Shift, yes: boolean) {
     try {
       await this.cmd.publishShift(s.id, yes);
-      this.modal.close();
-      this.toast.success(yes ? 'Shift published.' : 'Shift unpublished.');
+      this.zone.run(() => {
+        this.modal.close();
+        this.toast.success(yes ? 'Shift published.' : 'Shift unpublished.');
+      });
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Publish failed.');
+      this.zone.run(() => this.toast.errorFrom(e, 'Publish failed.'));
     }
   }
 
   openStaffPicker(s: Shift) {
-    this.staffPickForShiftId = s.id;
-    this.staffSearch = '';
-    this.modal.open('Assign Staff', this.staffPickerTpl);
+    this.zone.run(() => {
+      this.staffPickForShiftId = s.id;
+      this.staffSearch = '';
+      this.modal.open('Assign Staff', this.staffPickerTpl);
+    });
   }
 
   filteredUsers() {
@@ -1061,25 +1065,29 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     if (!this.staffPickForShiftId) return;
     try {
       await this.cmd.assignShift(this.staffPickForShiftId, uid);
-      this.modal.close();
-      this.toast.success('Staff assigned successfully.');
+      this.zone.run(() => {
+        this.modal.close();
+        this.toast.success('Staff assigned successfully.');
+      });
     } catch (e: any) {
-      this.toast.errorFrom(e, mapAttendancePolicyError(e, 'Assign failed.'));
+      this.zone.run(() => this.toast.errorFrom(e, mapAttendancePolicyError(e, 'Assign failed.')));
     }
   }
 
   async unassign(s: Shift) {
     try {
       await this.cmd.unassignShift(s.id);
-      this.modal.close();
-      this.toast.success('Staff unassigned.');
+      this.zone.run(() => {
+        this.modal.close();
+        this.toast.success('Staff unassigned.');
+      });
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Unassign failed.');
+      this.zone.run(() => this.toast.errorFrom(e, 'Unassign failed.'));
     }
   }
 
   async openShiftChat(shiftId: string) {
-    this.modal.close();
+    this.zone.run(() => this.modal.close());
     await this.router.navigate(['/app/shift-chat'], { queryParams: { shiftId } });
   }
 
@@ -1150,29 +1158,42 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   }
 
   openEditDrawer(s: Shift) {
-    this.modal.close();
-    const start = tsToDate(s.startAt);
-    const end = tsToDate(s.endAt);
-    this.drawerTitle = 'Edit Shift';
-    this.editingShiftId = s.id;
-    this.drawerOpen = true;
-    this.draft = {
-      title: s.title || '',
-      locationId: s.locationId || '',
-      locationName: s.locationName || '',
-      requiredJobRole: s.requiredJobRole || '',
-      payRate: s.payRate ?? null,
-      notes: s.notes || '',
-      startLocal: start ? this.toLocalInput(start) : '',
-      endLocal: end ? this.toLocalInput(end) : '',
-      assigneeUid: s.assignedUserId || '',
-      publishIfUnassigned: false,
-      repeatWeekdays: false,
-      repeatWeeks: 1,
-    };
+    // Wrapped in zone.run(): this is invoked from a button inside a modal
+    // that was opened via a FullCalendar-originated click (eventClick runs
+    // outside Angular's zone — see the calendarOptions callbacks below).
+    // Without forcing re-entry here, drawerOpen flips but no change
+    // detection runs, so <app-drawer> only repaints on the next unrelated
+    // zone-tracked event (e.g. a mousemove).
+    this.zone.run(() => {
+      this.modal.close();
+      const start = tsToDate(s.startAt);
+      const end = tsToDate(s.endAt);
+      this.drawerTitle = 'Edit Shift';
+      this.editingShiftId = s.id;
+      this.drawerOpen = true;
+      this.draft = {
+        title: s.title || '',
+        locationId: s.locationId || '',
+        locationName: s.locationName || '',
+        requiredJobRole: s.requiredJobRole || '',
+        payRate: s.payRate ?? null,
+        notes: s.notes || '',
+        startLocal: start ? this.toLocalInput(start) : '',
+        endLocal: end ? this.toLocalInput(end) : '',
+        assigneeUid: s.assignedUserId || '',
+        publishIfUnassigned: false,
+        repeatWeekdays: false,
+        repeatWeeks: 1,
+      };
+    });
   }
 
-  closeDrawer() { this.drawerOpen = false; this.editingShiftId = null; }
+  closeDrawer() {
+    this.zone.run(() => {
+      this.drawerOpen = false;
+      this.editingShiftId = null;
+    });
+  }
 
   async saveDrawer() {
     if (this.editingShiftId) {
