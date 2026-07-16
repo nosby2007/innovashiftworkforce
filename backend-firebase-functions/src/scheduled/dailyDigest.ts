@@ -12,6 +12,16 @@ const MODEL = 'claude-sonnet-5';
 const LOOKAHEAD_MS = 3 * 24 * 60 * 60 * 1000; // shifts starting in the next 3 days
 const OPEN_STATUSES = new Set(['draft', 'open', 'published']);
 
+// Compliance/fatigue thresholds — healthcare-typical defaults. Not yet
+// configurable per org; a reasonable starting point rather than a precise
+// regulatory citation for any specific state.
+const ASSIGNED_STATUSES = new Set(['assigned', 'claimed', 'in_progress', 'completed']);
+const COMPLIANCE_WINDOW_BACK_MS = 1 * 24 * 60 * 60 * 1000; // include yesterday, so a rest gap spanning midnight is still caught
+const COMPLIANCE_WINDOW_FWD_MS = 7 * 24 * 60 * 60 * 1000;
+const MIN_REST_HOURS = 8;
+const MAX_CONSECUTIVE_DAYS = 6;
+const MAX_WEEKLY_HOURS = 60;
+
 interface GapItem {
   shiftId: string;
   title: string;
@@ -20,6 +30,14 @@ interface GapItem {
   requiredJobRole: string | null;
   startAtMs: number;
   needsPublish: boolean; // true if still draft/open — a publish proposal is staged for these
+}
+
+interface ComplianceAlert {
+  type: 'overlap' | 'insufficient_rest' | 'excessive_consecutive' | 'weekly_hours';
+  severity: 'warning' | 'critical';
+  userId: string;
+  userLabel: string;
+  detail: string;
 }
 
 function toMs(value: unknown): number | null {
@@ -60,11 +78,104 @@ async function findCoverageGaps(db: FirebaseFirestore.Firestore, orgId: string, 
   return gaps;
 }
 
-async function summarize(client: Anthropic, orgName: string, gaps: GapItem[]): Promise<string> {
+async function findComplianceAlerts(db: FirebaseFirestore.Firestore, orgId: string, nowMs: number): Promise<ComplianceAlert[]> {
+  const windowStart = nowMs - COMPLIANCE_WINDOW_BACK_MS;
+  const windowEnd = nowMs + COMPLIANCE_WINDOW_FWD_MS;
+
+  const snap = await db
+    .collection('orgs').doc(orgId).collection('shifts')
+    .where('startAt', '>=', Timestamp.fromMillis(windowStart))
+    .where('startAt', '<=', Timestamp.fromMillis(windowEnd))
+    .orderBy('startAt', 'asc')
+    .limit(500)
+    .get();
+
+  type ShiftSlice = { shiftId: string; title: string; startAtMs: number; endAtMs: number };
+  const byUser = new Map<string, ShiftSlice[]>();
+  for (const doc of snap.docs) {
+    const x = doc.data() as Record<string, unknown>;
+    if (!ASSIGNED_STATUSES.has(String(x.status ?? ''))) continue;
+    const uid = String(x.assignedUserId ?? '').trim();
+    if (!uid) continue;
+    const startAtMs = toMs(x.startAt);
+    const endAtMs = toMs(x.endAt);
+    if (startAtMs == null || endAtMs == null) continue;
+    const list = byUser.get(uid) ?? [];
+    list.push({ shiftId: doc.id, title: String(x.title ?? 'Shift'), startAtMs, endAtMs });
+    byUser.set(uid, list);
+  }
+  if (byUser.size === 0) return [];
+
+  // Resolve display names in one batch rather than per-alert.
+  const usersSnap = await db.collection('orgs').doc(orgId).collection('users').limit(300).get();
+  const labelByUid = new Map<string, string>();
+  for (const doc of usersSnap.docs) {
+    const x = doc.data() as Record<string, unknown>;
+    labelByUid.set(doc.id, String(x.displayName || x.email || 'Staff member'));
+  }
+
+  const alerts: ComplianceAlert[] = [];
+  const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
+
+  for (const [uid, rawShifts] of byUser) {
+    const shifts = [...rawShifts].sort((a, b) => a.startAtMs - b.startAtMs);
+    const userLabel = labelByUid.get(uid) || 'Staff member';
+
+    // Overlap / insufficient rest between consecutive shifts.
+    for (let i = 1; i < shifts.length; i++) {
+      const prev = shifts[i - 1];
+      const curr = shifts[i];
+      const gapHours = (curr.startAtMs - prev.endAtMs) / 3_600_000;
+      if (gapHours < 0) {
+        alerts.push({
+          type: 'overlap', severity: 'critical', userId: uid, userLabel,
+          detail: `${userLabel} is double-booked: "${prev.title}" overlaps "${curr.title}" around ${fmt(curr.startAtMs)}.`,
+        });
+      } else if (gapHours < MIN_REST_HOURS) {
+        alerts.push({
+          type: 'insufficient_rest', severity: 'warning', userId: uid, userLabel,
+          detail: `${userLabel} has only ${gapHours.toFixed(1)}h of rest between "${prev.title}" (ends ${fmt(prev.endAtMs)}) and "${curr.title}" (starts ${fmt(curr.startAtMs)}).`,
+        });
+      }
+    }
+
+    // Consecutive calendar days worked (UTC-date granularity — org-local
+    // timezone isn't tracked on the org record today).
+    const dateKeys = Array.from(new Set(shifts.map((s) => new Date(s.startAtMs).toISOString().slice(0, 10)))).sort();
+    let streak = 1;
+    let maxStreak = 1;
+    for (let i = 1; i < dateKeys.length; i++) {
+      const prevDate = new Date(dateKeys[i - 1] + 'T00:00:00Z').getTime();
+      const currDate = new Date(dateKeys[i] + 'T00:00:00Z').getTime();
+      streak = currDate - prevDate === 86_400_000 ? streak + 1 : 1;
+      maxStreak = Math.max(maxStreak, streak);
+    }
+    if (maxStreak > MAX_CONSECUTIVE_DAYS) {
+      alerts.push({
+        type: 'excessive_consecutive', severity: 'warning', userId: uid, userLabel,
+        detail: `${userLabel} is scheduled for ${maxStreak} consecutive days.`,
+      });
+    }
+
+    // Total scheduled hours across the ~8-day window.
+    const totalHours = shifts.reduce((sum, s) => sum + (s.endAtMs - s.startAtMs) / 3_600_000, 0);
+    if (totalHours > MAX_WEEKLY_HOURS) {
+      alerts.push({
+        type: 'weekly_hours', severity: 'warning', userId: uid, userLabel,
+        detail: `${userLabel} is scheduled for ${totalHours.toFixed(1)} hours this week.`,
+      });
+    }
+  }
+
+  return alerts;
+}
+
+async function summarize(client: Anthropic, orgName: string, gaps: GapItem[], alerts: ComplianceAlert[]): Promise<string> {
   const lines = gaps.map((g) => {
     const when = new Date(g.startAtMs).toISOString();
     return `- "${g.title}" at ${g.locationName || 'unspecified location'} (${g.requiredJobRole || 'any role'}), starts ${when}, status=${g.status}`;
   });
+  const alertLines = alerts.map((a) => `- [${a.severity}] ${a.detail}`);
   try {
     const resp = await client.messages.create({
       model: MODEL,
@@ -72,28 +183,38 @@ async function summarize(client: Anthropic, orgName: string, gaps: GapItem[]): P
       system: 'You write short, plain-English morning briefings for a healthcare scheduling admin. 2-3 sentences max. No greeting, no sign-off, just the facts and what needs attention.',
       messages: [{
         role: 'user',
-        content: `Organization: ${orgName}. Unfilled shifts in the next 3 days:\n${lines.join('\n')}\n\nWrite the briefing.`,
+        content: `Organization: ${orgName}. Unfilled shifts in the next 3 days:\n${lines.join('\n') || '(none)'}\n\nStaffing compliance alerts (rest periods, consecutive days, weekly hours):\n${alertLines.join('\n') || '(none)'}\n\nWrite the briefing.`,
       }],
     });
     const text = resp.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join(' ').trim();
-    return text || `${gaps.length} shift(s) in the next 3 days still need coverage.`;
+    return text || fallbackSummary(gaps.length, alerts.length);
   } catch (e) {
     logger.warn('[dailyDigest] Anthropic summary failed, falling back to a templated one', e);
-    return `${gaps.length} shift(s) in the next 3 days still need coverage.`;
+    return fallbackSummary(gaps.length, alerts.length);
   }
 }
 
+function fallbackSummary(gapCount: number, alertCount: number): string {
+  const parts: string[] = [];
+  if (gapCount > 0) parts.push(`${gapCount} shift(s) in the next 3 days still need coverage`);
+  if (alertCount > 0) parts.push(`${alertCount} staffing compliance alert(s) to review`);
+  return parts.join('; ') + '.';
+}
+
 async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: string, orgName: string, client: Anthropic | null, nowMs: number) {
-  const gaps = await findCoverageGaps(db, orgId, nowMs);
-  if (gaps.length === 0) return; // nothing to report — skip writing a doc and skip the API call entirely
+  const [gaps, alerts] = await Promise.all([
+    findCoverageGaps(db, orgId, nowMs),
+    findComplianceAlerts(db, orgId, nowMs),
+  ]);
+  if (gaps.length === 0 && alerts.length === 0) return; // nothing to report — skip writing a doc and skip the API call entirely
 
   const proposals: Proposal[] = gaps
     .filter((g) => g.needsPublish)
     .map((g) => buildProposal('propose_publish_shift', { shiftId: g.shiftId, shiftLabel: `${g.title} — ${g.locationName}` }));
 
   const summary = client
-    ? await summarize(client, orgName, gaps)
-    : `${gaps.length} shift(s) in the next 3 days still need coverage.`;
+    ? await summarize(client, orgName, gaps, alerts)
+    : fallbackSummary(gaps.length, alerts.length);
 
   const dateKey = new Date(nowMs).toISOString().slice(0, 10);
   await db
@@ -104,6 +225,7 @@ async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: stri
       generatedAt: Timestamp.fromMillis(nowMs),
       summary,
       gaps,
+      alerts,
       proposals,
     });
 }

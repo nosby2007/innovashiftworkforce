@@ -51,6 +51,13 @@ const SUGGESTIONS = [
         </div>
         <div class="ac-digest-summary">{{ d.summary }}</div>
 
+        <div class="ac-alerts" *ngIf="d.alerts?.length">
+          <div class="ac-alert" *ngFor="let a of d.alerts" [class.ac-alert--critical]="a.severity === 'critical'">
+            <mat-icon class="ac-alert-icon">{{ a.severity === 'critical' ? 'error' : 'warning' }}</mat-icon>
+            <span>{{ a.detail }}</span>
+          </div>
+        </div>
+
         <div class="ac-proposals" *ngIf="digestProposals().length">
           <div class="ac-proposal" *ngFor="let p of digestProposals()" [class.ac-proposal--done]="p.status !== 'pending'">
             <div class="ac-proposal-summary">
@@ -137,6 +144,16 @@ const SUGGESTIONS = [
     .ac-digest-title { font-weight: 800; font-size: 15px; }
     .ac-digest-date { font-size: 11.5px; color: var(--text-muted); }
     .ac-digest-summary { font-size: 13.5px; line-height: 1.5; color: var(--text); margin-bottom: 4px; }
+
+    .ac-alerts { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .ac-alert {
+      display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.4;
+      padding: 8px 10px; border-radius: 8px; background: rgba(245,158,11,0.10); color: var(--text);
+      border: 1px solid rgba(245,158,11,0.30);
+    }
+    .ac-alert--critical { background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.30); }
+    .ac-alert-icon { font-size: 16px !important; width: 16px !important; height: 16px !important; color: #f59e0b; flex-shrink: 0; margin-top: 1px; }
+    .ac-alert--critical .ac-alert-icon { color: var(--danger); }
 
     .ac-panel { display: flex; flex-direction: column; height: min(72vh, 760px); overflow: hidden; }
 

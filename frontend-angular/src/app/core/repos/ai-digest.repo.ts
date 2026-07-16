@@ -19,12 +19,21 @@ export interface AiDigestProposal {
   payload: Record<string, any>;
 }
 
+export interface AiDigestAlert {
+  type: 'overlap' | 'insufficient_rest' | 'excessive_consecutive' | 'weekly_hours';
+  severity: 'warning' | 'critical';
+  userId: string;
+  userLabel: string;
+  detail: string;
+}
+
 export interface AiDigest {
   id: string;
   dateKey: string;
   generatedAt: any;
   summary: string;
   gaps: AiDigestGap[];
+  alerts: AiDigestAlert[];
   proposals: AiDigestProposal[];
 }
 

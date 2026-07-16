@@ -76,8 +76,13 @@ aren't part of this deploy pipeline:
   it scans shifts starting in the next 3 days, and if any are unfilled
   it writes a summary + publish proposals to
   `orgs/{orgId}/aiDigests/{date}`, shown at the top of the AI Copilot
-  page. Orgs with full coverage get no digest doc that day (no API
-  call either — it's skipped entirely, not just hidden). Requires
+  page. The same run also flags staffing compliance risks over an
+  ~8-day window (yesterday through next week): double-bookings, under
+  8h rest between shifts, 7+ consecutive scheduled days, and 60+
+  scheduled hours — informational only, no proposal attached, since
+  fixing them is a judgment call for the admin. Orgs with full
+  coverage and no alerts get no digest doc that day (no API call
+  either — it's skipped entirely, not just hidden). Requires
   Cloud Scheduler to be enabled on the GCP project, which `firebase
   deploy` does automatically on first deploy of a scheduled function.
   If that first deploy fails with a permissions error creating the
