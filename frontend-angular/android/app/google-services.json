@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "404381833719",
+    "project_id": "atlanta-e04aa",
+    "storage_bucket": "atlanta-e04aa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:404381833719:android:5df93f9adcee078f4d36f2",
+        "android_client_info": {
+          "package_name": "com.innovashift.workforce"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "404381833719-0c7pvm85pfjim9lq4r7adm8kvptaqm38.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXofnLxljrFjn1Zc1w6uGj9C9OUuHzzRg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "404381833719-0c7pvm85pfjim9lq4r7adm8kvptaqm38.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

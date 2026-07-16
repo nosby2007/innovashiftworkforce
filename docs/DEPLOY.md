@@ -53,14 +53,42 @@ aren't part of this deploy pipeline:
   `firebase functions:secrets:set ACTION_TOKEN_SECRET` from your own
   machine with the Firebase CLI logged in (this is Firebase Secret
   Manager, not a GitHub secret, so CI can't set it for you).
-- **Web push VAPID key** — Firebase Console → Project Settings → Cloud
-  Messaging → Web Push certificates, then paste it into `VAPID_KEY` in
-  `frontend-angular/src/app/core/push/push-notifications.service.ts`.
-- **Native push** — `google-services.json` (Android) /
-  `GoogleService-Info.plist` (iOS) from Firebase Console into the native
-  Capacitor projects, then `npm run mobile:sync`.
+- **Web push VAPID key** — done (`VAPID_KEY` is set in
+  `push-notifications.service.ts`).
+- **Native push (Android)** — done. The app is registered in Firebase
+  (App ID `1:404381833719:android:5df93f9adcee078f4d36f2`) and
+  `google-services.json` is committed at
+  `frontend-angular/android/app/google-services.json`. iOS still needs
+  `GoogleService-Info.plist` from Firebase Console if/when that platform
+  is built.
 - **Two-factor authentication** — Firebase Console → Authentication →
   Sign-in method → Advanced → enable Multi-Factor Authentication + TOTP.
+
+## Android — deploy to testers (`android-distribute.yml`)
+
+Every push to `main` that touches `frontend-angular/**` builds a debug
+APK and uploads it to **Firebase App Distribution**, so testers get a
+new build automatically without going through Play Store review. Two
+one-time steps beyond the `FIREBASE_SERVICE_ACCOUNT` secret above:
+
+1. **Grant the deploy service account App Distribution access** — same
+   service account as the main deploy workflow, one more role: open
+   [IAM & Admin → Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts?project=atlanta-e04aa)
+   → the `github-actions-deploy` account → **Permissions** tab (or grant
+   it from the project IAM page) → add role **Firebase App Distribution
+   Admin** (`roles/firebaseappdistro.admin`).
+2. **Create a tester group** — Firebase Console → your project → **App
+   Distribution** → **Testers & Groups** → create a group named
+   `internal-testers` (or edit the `--groups` value in
+   `.github/workflows/android-distribute.yml` to match whatever name you
+   use) and add tester emails to it.
+
+This ships a **debug-signed APK** — fine for internal testers, but not
+suitable for the Play Store. A real Play Store release needs a release
+signing keystore (store it as a GitHub secret, never commit it) wired
+into `frontend-angular/android/app/build.gradle`'s `signingConfigs`, plus
+switching the workflow from `assembleDebug` to `assembleRelease` and
+adding the Play Console publishing step separately.
 
 ## Manual deploy (without CI)
 
