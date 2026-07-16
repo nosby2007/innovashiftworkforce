@@ -21,6 +21,13 @@ In the [Google Cloud Console](https://console.cloud.google.com/iam-admin/service
    - **Service Account User** (`roles/iam.serviceAccountUser`) — required
      so it can deploy Cloud Functions, which run under their own service
      account.
+   - **Secret Manager Secret Accessor** (`roles/secretmanager.secretAccessor`)
+     — required because several functions bind secrets via
+     `defineSecret()` (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+     `SENDGRID_API_KEY`, `ACTION_TOKEN_SECRET`); without this role,
+     `firebase deploy` fails partway through with `Permission
+     'secretmanager.secrets.get' denied` the first time it needs to read
+     one of them.
 3. Open the new service account → **Keys → Add Key → Create new key →
    JSON**. This downloads a `.json` file — treat it like a password, it
    grants deploy access to your whole project.
