@@ -8,7 +8,7 @@ import { ToastService } from '../ui/toast.service';
 // Generated in Firebase Console → Project settings → Cloud Messaging → Web
 // Push certificates. Left blank until that manual step is done, at which
 // point web push registration activates automatically — no code change.
-const VAPID_KEY = '';
+const VAPID_KEY = 'CxNz74-PUnam0UDcQW_YnCPfZgqVrza3EVGFqY1Eb4w';
 
 @Injectable({ providedIn: 'root' })
 export class PushNotificationsService {
