@@ -60,6 +60,16 @@ aren't part of this deploy pipeline:
   `firebase functions:secrets:set ACTION_TOKEN_SECRET` from your own
   machine with the Firebase CLI logged in (this is Firebase Secret
   Manager, not a GitHub secret, so CI can't set it for you).
+- **`ANTHROPIC_API_KEY`** (AI Copilot, `/admin/ai-copilot`, Pro plan and
+  up) — an Anthropic API key from
+  [console.anthropic.com](https://console.anthropic.com/settings/keys).
+  Set it the same way: `firebase functions:secrets:set ANTHROPIC_API_KEY`.
+  Uses the same **Secret Manager Secret Accessor** role on
+  `github-actions-deploy` already granted above — nothing extra to add
+  in IAM. The assistant only ever *proposes* shift actions (create,
+  assign, publish, unassign); it calls the same audited callables the
+  rest of the app uses, and only after an admin clicks Confirm in the
+  UI — it never writes to Firestore directly.
 - **Web push VAPID key** — done (`VAPID_KEY` is set in
   `push-notifications.service.ts`).
 - **Native push (Android)** — done. The app is registered in Firebase
