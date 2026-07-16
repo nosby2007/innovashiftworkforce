@@ -6,6 +6,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { initFirebase } from '../infra/firebase';
 import { resolveTenantWithFallback } from '../infra/tenancy';
 import { Proposal, buildProposal } from '../domain/ai-proposals';
+import { entryHours, grossPay, estimatedDeductions, estimatedNet } from '../domain/payroll-math';
 
 export const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
 
@@ -51,6 +52,19 @@ const TOOLS: Anthropic.Tool[] = [
         jobRole: { type: 'string', description: 'Filter by job role (e.g. "RN", "CNA"). Optional.' },
         limit: { type: 'number', description: 'Max results, default 30, max 100.' },
       },
+    },
+  },
+  {
+    name: 'get_timesheet_summary',
+    description: 'Summarize hours worked and estimated payroll cost for a date range, overall or for one staff member. Use this to answer questions about hours worked, labor cost, or which staff worked the most. Figures are the same flat-rate estimate (no tax tables) shown on the Payroll page, not a precise payroll run.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        startAtMs: { type: 'number', description: 'Start of the period, epoch ms.' },
+        endAtMs: { type: 'number', description: 'End of the period, epoch ms.' },
+        userId: { type: 'string', description: 'Optional — scope to one staff member (get the uid from get_org_users first). Omit for an org-wide summary.' },
+      },
+      required: ['startAtMs', 'endAtMs'],
     },
   },
   {
@@ -174,6 +188,82 @@ async function runGetOrgUsers(db: FirebaseFirestore.Firestore, orgId: string, in
   return items.slice(0, limit);
 }
 
+async function runGetTimesheetSummary(db: FirebaseFirestore.Firestore, orgId: string, input: any) {
+  const startAtMs = Number(input?.startAtMs);
+  const endAtMs = Number(input?.endAtMs);
+  if (!Number.isFinite(startAtMs) || !Number.isFinite(endAtMs) || endAtMs < startAtMs) {
+    return { error: 'startAtMs and endAtMs are required and endAtMs must be >= startAtMs.' };
+  }
+
+  let q: FirebaseFirestore.Query = db
+    .collection('orgs').doc(orgId).collection('timeEntries')
+    .where('checkInAt', '>=', Timestamp.fromMillis(startAtMs))
+    .where('checkInAt', '<=', Timestamp.fromMillis(endAtMs));
+  if (input?.userId) q = q.where('userId', '==', String(input.userId));
+
+  const snap = await q.orderBy('checkInAt', 'asc').limit(1000).get();
+  if (snap.empty) {
+    return { periodStart: startAtMs, periodEnd: endAtMs, totalHours: 0, totalGrossEstimate: 0, entryCount: 0, byUser: [] };
+  }
+
+  const shiftIds = Array.from(new Set(snap.docs.map((d) => String((d.data() as any).shiftId || '')).filter(Boolean)));
+  const rateByShiftId = new Map<string, number>();
+  await Promise.all(shiftIds.map(async (shiftId) => {
+    const shiftSnap = await db.collection('orgs').doc(orgId).collection('shifts').doc(shiftId).get();
+    rateByShiftId.set(shiftId, Number((shiftSnap.data() as any)?.payRate) || 0);
+  }));
+
+  const usersSnap = await db.collection('orgs').doc(orgId).collection('users').limit(300).get();
+  const labelByUid = new Map<string, string>();
+  for (const doc of usersSnap.docs) {
+    const x = doc.data() as Record<string, unknown>;
+    labelByUid.set(doc.id, String(x.displayName || x.email || 'Staff member'));
+  }
+
+  const byUser = new Map<string, { userId: string; userLabel: string; hours: number; grossEstimate: number; entryCount: number; openEntryCount: number }>();
+  for (const doc of snap.docs) {
+    const x = doc.data() as Record<string, unknown>;
+    const userId = String(x.userId || '');
+    if (!userId) continue;
+    const checkInMs = toMs(x.checkInAt) ?? 0;
+    const checkOutMs = toMs(x.checkOutAt);
+    const bucket = byUser.get(userId) ?? { userId, userLabel: labelByUid.get(userId) || 'Staff member', hours: 0, grossEstimate: 0, entryCount: 0, openEntryCount: 0 };
+    bucket.entryCount += 1;
+    if (checkOutMs == null) {
+      bucket.openEntryCount += 1;
+    } else {
+      const hours = entryHours(checkInMs, checkOutMs, Number(x.totalBreakMs) || 0);
+      const rate = rateByShiftId.get(String(x.shiftId || '')) || 0;
+      bucket.hours += hours;
+      bucket.grossEstimate += grossPay(hours, rate);
+    }
+    byUser.set(userId, bucket);
+  }
+
+  const users = Array.from(byUser.values())
+    .map((u) => ({
+      ...u,
+      hours: Math.round(u.hours * 100) / 100,
+      grossEstimate: Math.round(u.grossEstimate * 100) / 100,
+    }))
+    .sort((a, b) => b.hours - a.hours)
+    .slice(0, 50);
+
+  const totalHours = Math.round(users.reduce((sum, u) => sum + u.hours, 0) * 100) / 100;
+  const totalGrossEstimate = Math.round(users.reduce((sum, u) => sum + u.grossEstimate, 0) * 100) / 100;
+
+  return {
+    periodStart: startAtMs,
+    periodEnd: endAtMs,
+    totalHours,
+    totalGrossEstimate,
+    totalDeductionsEstimate: estimatedDeductions(totalGrossEstimate),
+    totalNetEstimate: estimatedNet(totalGrossEstimate),
+    entryCount: snap.size,
+    byUser: users,
+  };
+}
+
 interface ChatTurn {
   role: 'user' | 'assistant';
   text: string;
@@ -206,7 +296,8 @@ export const aiAssistantChat = onCall({ secrets: [anthropicApiKey] }, async (req
     'You are the InnovaShift AI Copilot, an assistant embedded in a healthcare workforce scheduling app.',
     `You are helping an admin/manager (role: ${ctx.role ?? 'admin'}) manage organization ${orgId}.`,
     `Today's date is ${todayIso}.`,
-    'Use the get_shifts and get_org_users tools to look up real data before answering — never guess or invent shift IDs, names, or counts.',
+    'Use the get_shifts, get_org_users, and get_timesheet_summary tools to look up real data before answering — never guess or invent shift IDs, names, counts, hours, or dollar amounts.',
+    'get_timesheet_summary figures (gross/deductions/net) are the same flat-rate estimate shown on the Payroll page — a rough placeholder, not a real tax/withholding calculation. When you report a dollar figure from it, call it an estimate.',
     'When the admin asks you to create, assign, publish, or unassign a shift, use the matching propose_* tool. These tools do NOT execute anything — they only stage a proposal that the admin must explicitly confirm in the UI. Always tell the user the action is pending their confirmation, never say it is done.',
     'Be concise. Prefer short, direct answers over long explanations.',
   ].join('\n');
@@ -266,6 +357,9 @@ export const aiAssistantChat = onCall({ secrets: [anthropicApiKey] }, async (req
         } else if (tu.name === 'get_org_users') {
           const items = await runGetOrgUsers(db, orgId, tu.input);
           toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(items) });
+        } else if (tu.name === 'get_timesheet_summary') {
+          const summary = await runGetTimesheetSummary(db, orgId, tu.input);
+          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(summary) });
         } else {
           toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Unknown tool.', is_error: true });
         }
