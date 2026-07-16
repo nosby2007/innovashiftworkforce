@@ -33,6 +33,7 @@ const PLANS = [
       'Up to 150 employees',
       'Smart Scheduling + Conflicts',
       'GPS Attendance Verification',
+      'AI Copilot for scheduling',
       'Admin Analytics Dashboard',
       'Timesheet Export (PDF/CSV)',
       'Role-based Access Control',

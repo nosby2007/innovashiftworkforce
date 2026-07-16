@@ -22,6 +22,7 @@ import { StaffOnboardingPage } from './features/onboarding/staff-onboarding.page
 import { SuperAdminDashboardPage } from './features/super-admin/super-admin-dashboard.page';
 
 import { AdminAuditPage }          from './features/admin/admin-audit.page';
+import { AiCopilotPage }           from './features/admin/ai-copilot.page';
 import { AdminDashboardPage }      from './features/admin/admin-dashboard.page';
 import { AdminSchedulerPage }      from './features/admin/admin-scheduler.page';
 import { AdminShiftCreatePage }    from './features/admin/admin-shift-create.page';
@@ -162,6 +163,7 @@ export const APP_ROUTES: Routes = [
       { path: 'payroll/payslip',      component: PayslipPrintPage,        canActivate: [planFeatureGuard('timesheetsExport', '/admin')] },
       { path: 'timesheets/print',     component: AdminTimesheetsPrintPage,canActivate: [planFeatureGuard('timesheetsExport', '/admin')] },
       { path: 'audit',                component: AdminAuditPage,          canActivate: [planFeatureGuard('auditLog', '/admin')] },
+      { path: 'ai-copilot',           component: AiCopilotPage,           canActivate: [planFeatureGuard('aiCopilot', '/admin')] },
       { path: 'employees',            component: AdminEmployeesPage },
       { path: 'employees/:uid',       component: AdminEmployeeDetailsPage },
       { path: 'schedule-details',     component: AdminScheduleDetailsPage },
