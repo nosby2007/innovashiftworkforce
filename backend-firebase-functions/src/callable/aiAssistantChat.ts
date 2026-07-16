@@ -3,9 +3,9 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import Anthropic from '@anthropic-ai/sdk';
 import { Timestamp } from 'firebase-admin/firestore';
-import { randomUUID } from 'crypto';
 import { initFirebase } from '../infra/firebase';
 import { resolveTenantWithFallback } from '../infra/tenancy';
+import { Proposal, buildProposal } from '../domain/ai-proposals';
 
 export const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
 
@@ -117,13 +117,6 @@ const PROPOSAL_TOOL_NAMES = new Set([
   'propose_unassign_shift',
 ]);
 
-interface Proposal {
-  id: string;
-  kind: 'create_shift' | 'assign_shift' | 'publish_shift' | 'unassign_shift';
-  summary: string;
-  payload: Record<string, unknown>;
-}
-
 function toMs(value: unknown): number | null {
   if (!value) return null;
   const asAny = value as { toMillis?: () => number };
@@ -179,50 +172,6 @@ async function runGetOrgUsers(db: FirebaseFirestore.Firestore, orgId: string, in
     items = items.filter((u) => String(u.jobRole || '').trim().toLowerCase() === wanted);
   }
   return items.slice(0, limit);
-}
-
-function buildProposal(toolName: string, input: any): Proposal {
-  const id = randomUUID();
-  switch (toolName) {
-    case 'propose_create_shift':
-      return {
-        id,
-        kind: 'create_shift',
-        summary: `Create "${input.title}" at ${input.locationName}`,
-        payload: {
-          title: String(input.title || ''),
-          locationName: String(input.locationName || ''),
-          startAtMs: Number(input.startAtMs),
-          endAtMs: Number(input.endAtMs),
-          requiredJobRole: input.requiredJobRole ? String(input.requiredJobRole) : null,
-          payRate: input.payRate != null ? Number(input.payRate) : null,
-          notes: input.notes ? String(input.notes) : null,
-        },
-      };
-    case 'propose_assign_shift':
-      return {
-        id,
-        kind: 'assign_shift',
-        summary: `Assign ${input.assigneeLabel || input.assigneeUid} to ${input.shiftLabel || input.shiftId}`,
-        payload: { shiftId: String(input.shiftId), assigneeUid: String(input.assigneeUid) },
-      };
-    case 'propose_publish_shift':
-      return {
-        id,
-        kind: 'publish_shift',
-        summary: `Publish ${input.shiftLabel || input.shiftId} to the marketplace`,
-        payload: { shiftId: String(input.shiftId) },
-      };
-    case 'propose_unassign_shift':
-      return {
-        id,
-        kind: 'unassign_shift',
-        summary: `Unassign staff from ${input.shiftLabel || input.shiftId}`,
-        payload: { shiftId: String(input.shiftId) },
-      };
-    default:
-      throw new Error(`Unknown proposal tool: ${toolName}`);
-  }
 }
 
 interface ChatTurn {

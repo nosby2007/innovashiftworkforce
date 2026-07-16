@@ -326,6 +326,15 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // ── AI Digests (scheduled Cloud Function writes) ──
+      match /aiDigests/{digestId} {
+        allow read:  if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isOrgAdminLike())
+        );
+        allow write: if false; // Cloud Functions only
+      }
+
       // ── Payroll Runs (org admin managed period locks) ──────
       match /payrollRuns/{runId} {
         allow read, create, update: if signedIn() && (

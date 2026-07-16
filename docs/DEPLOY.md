@@ -70,6 +70,21 @@ aren't part of this deploy pipeline:
   assign, publish, unassign); it calls the same audited callables the
   rest of the app uses, and only after an admin clicks Confirm in the
   UI — it never writes to Firestore directly.
+- **Daily AI digest** (`dailyDigest` scheduled function) — runs every
+  day at 8am America/New_York automatically once deployed, no extra
+  setup beyond the same `ANTHROPIC_API_KEY` above. For each active org
+  it scans shifts starting in the next 3 days, and if any are unfilled
+  it writes a summary + publish proposals to
+  `orgs/{orgId}/aiDigests/{date}`, shown at the top of the AI Copilot
+  page. Orgs with full coverage get no digest doc that day (no API
+  call either — it's skipped entirely, not just hidden). Requires
+  Cloud Scheduler to be enabled on the GCP project, which `firebase
+  deploy` does automatically on first deploy of a scheduled function.
+  If that first deploy fails with a permissions error creating the
+  Cloud Scheduler job (separate from the Secret Manager one already
+  fixed), grant `github-actions-deploy` the **Cloud Scheduler Admin**
+  (`roles/cloudscheduler.admin`) role too — untested whether
+  **Firebase Admin** alone already covers it on this project.
 - **Web push VAPID key** — done (`VAPID_KEY` is set in
   `push-notifications.service.ts`).
 - **Native push (Android)** — done. The app is registered in Firebase
