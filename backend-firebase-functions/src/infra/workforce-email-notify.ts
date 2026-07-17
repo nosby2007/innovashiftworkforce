@@ -208,7 +208,7 @@ export function formatDurationMs(value: number): string {
 }
 
 export function joinEmailLines(lines: Array<string | null | undefined | false>): string {
-  return lines.filter((line): line is string => typeof line === 'string' && line.length > 0).join('\n');
+  return lines.filter((line): line is string => typeof line === 'string').join('\n');
 }
 
 export function appLink(path: string): string {
