@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { AppLayoutComponent } from './layout/app-shell/app-shell.component';
 import { adminGuard } from './core/auth/admin.guard';
+import { adminOrHrGuard } from './core/auth/admin-or-hr.guard';
 import { superAdminGuard } from './core/auth/super-admin.guard';
 import { authGuard } from './core/auth/auth.guard';
 import { planFeatureGuard } from './core/auth/plan-feature.guard';
@@ -67,7 +68,7 @@ export const APP_ROUTES: Routes = [
   {
     path: 'print/payroll-batch',
     component: AdminPayrollBatchPrintPage,
-    canActivate: [authGuard, adminGuard, planFeatureGuard('timesheetsExport', '/admin')],
+    canActivate: [authGuard, adminOrHrGuard, planFeatureGuard('timesheetsExport', '/admin')],
   },
 
   // ── Public (no auth required) ──────────────────────────────────────────────
@@ -156,11 +157,11 @@ export const APP_ROUTES: Routes = [
       { path: 'shifts/new',           component: AdminShiftCreatePage },
       { path: 'scheduler',            component: AdminSchedulerPage,      canActivate: [planFeatureGuard('smartScheduler', '/admin')] },
       { path: 'timesheets',           component: AdminTimesheetsPage,     canActivate: [planFeatureGuard('timesheetsExport', '/admin')] },
-      { path: 'payroll',              component: AdminPayrollPage,        canActivate: [planFeatureGuard('timesheetsExport', '/admin')] },
-      { path: 'pto',                  component: AdminPtoPage },
-      { path: 'documents',            component: AdminDocumentsPage },
+      { path: 'payroll',              component: AdminPayrollPage,        canActivate: [adminOrHrGuard, planFeatureGuard('timesheetsExport', '/admin')] },
+      { path: 'pto',                  component: AdminPtoPage,            canActivate: [adminOrHrGuard] },
+      { path: 'documents',            component: AdminDocumentsPage,      canActivate: [adminOrHrGuard] },
       { path: 'readiness',            component: AdminReadinessPage },
-      { path: 'payroll/payslip',      component: PayslipPrintPage,        canActivate: [planFeatureGuard('timesheetsExport', '/admin')] },
+      { path: 'payroll/payslip',      component: PayslipPrintPage,        canActivate: [adminOrHrGuard, planFeatureGuard('timesheetsExport', '/admin')] },
       { path: 'timesheets/print',     component: AdminTimesheetsPrintPage,canActivate: [planFeatureGuard('timesheetsExport', '/admin')] },
       { path: 'audit',                component: AdminAuditPage,          canActivate: [planFeatureGuard('auditLog', '/admin')] },
       { path: 'ai-copilot',           component: AiCopilotPage,           canActivate: [planFeatureGuard('aiCopilot', '/admin')] },

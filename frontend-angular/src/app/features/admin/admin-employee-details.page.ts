@@ -152,10 +152,10 @@ type EmployeeProfileDraft = {
                 <mat-icon>{{ profileDraft.active ? 'person_off' : 'person' }}</mat-icon>
                 {{ profileDraft.active ? 'Deactivate' : 'Activate' }}
               </button>
-              <button class="vs-btn-ghost empd-btn" type="button" (click)="openEmployeePto()">
+              <button class="vs-btn-ghost empd-btn" type="button" *ngIf="isAdminOrHr()" (click)="openEmployeePto()">
                 <mat-icon>event_available</mat-icon> PTO Center
               </button>
-              <button class="vs-btn-ghost empd-btn" type="button" (click)="openEmployeePayslip()">
+              <button class="vs-btn-ghost empd-btn" type="button" *ngIf="isAdminOrHr()" (click)="openEmployeePayslip()">
                 <mat-icon>picture_as_pdf</mat-icon> Payslip
               </button>
               <button class="vs-btn-primary empd-btn" type="button" (click)="saveEmployeeProfile()" [disabled]="profileSaving">
@@ -207,8 +207,10 @@ type EmployeeProfileDraft = {
               </div>
               <div class="empd-payroll-facts">
                 <div><span>Timesheet hours</span><strong>{{ totalHours() }}</strong></div>
-                <div><span>PTO balance</span><strong>{{ accrualBalance().ptoBalance.toFixed(2) }}</strong></div>
-                <div><span>Sick balance</span><strong>{{ accrualBalance().sickBalance.toFixed(2) }}</strong></div>
+                <ng-container *ngIf="isAdminOrHr()">
+                  <div><span>PTO balance</span><strong>{{ accrualBalance().ptoBalance.toFixed(2) }}</strong></div>
+                  <div><span>Sick balance</span><strong>{{ accrualBalance().sickBalance.toFixed(2) }}</strong></div>
+                </ng-container>
               </div>
             </article>
 
@@ -243,7 +245,7 @@ type EmployeeProfileDraft = {
               </label>
             </article>
 
-            <article class="empd-admin-card">
+            <article class="empd-admin-card" *ngIf="isAdminOrHr()">
               <h3><mat-icon>beach_access</mat-icon> Time-Off Requests</h3>
               <div class="empd-pto-list" *ngIf="timeOffRequests().length > 0; else noTimeOff">
                 <div class="empd-pto-row" *ngFor="let req of timeOffRequests() | slice:0:6">
@@ -265,7 +267,7 @@ type EmployeeProfileDraft = {
               </ng-template>
             </article>
 
-            <article class="empd-admin-card empd-doc-card">
+            <article class="empd-admin-card empd-doc-card" *ngIf="isAdminOrHr()">
               <h3><mat-icon>verified_user</mat-icon> Document Verification</h3>
               <div class="empd-doc-list" *ngIf="employeeDocuments().length > 0; else noEmployeeDocs">
                 <div class="empd-doc-row" *ngFor="let item of employeeDocuments()">
@@ -1091,14 +1093,23 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
     });
 
     this.rebindTimesheet();
-    this.unsubTimeOff = this.accruals.watchRequests(this.orgId, this.userId, (items) => {
-      this.timeOffRequests.set(items);
-    }, 20);
-    this.unsubAccrual = this.accruals.watchBalance(this.orgId, this.userId, (balance) => {
-      this.accrualBalance.set(balance);
-    });
-    this.unsubDocs = this.docsRepo.watchForUser(this.orgId, this.userId, (items) => {
-      this.employeeDocuments.set(items);
-    });
+    if (this.isAdminOrHr()) {
+      this.unsubTimeOff = this.accruals.watchRequests(this.orgId, this.userId, (items) => {
+        this.timeOffRequests.set(items);
+      }, 20);
+      this.unsubAccrual = this.accruals.watchBalance(this.orgId, this.userId, (balance) => {
+        this.accrualBalance.set(balance);
+      });
+      this.unsubDocs = this.docsRepo.watchForUser(this.orgId, this.userId, (items) => {
+        this.employeeDocuments.set(items);
+      });
+    }
+  }
+
+  // Payroll, PTO requests, and employee documents are admin/hr-only —
+  // gates both the Firestore watchers above and the template cards below.
+  isAdminOrHr(): boolean {
+    const role = this.ctx.accessRole();
+    return role === 'admin' || role === 'hr';
   }
 }
