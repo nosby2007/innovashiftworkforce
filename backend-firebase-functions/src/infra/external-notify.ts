@@ -3,7 +3,7 @@ import { defineSecret } from 'firebase-functions/params';
 import sgMail from '@sendgrid/mail';
 
 export const sendgridApiKey = defineSecret('SENDGRID_API_KEY');
-const FROM_EMAIL = process.env.NOTIFY_FROM_EMAIL || 'no-reply@innovashiftworkforce.com';
+const FROM_EMAIL = process.env.NOTIFY_FROM_EMAIL || 'contact@innovacarereview.com';
 
 let sgConfigured = false;
 
