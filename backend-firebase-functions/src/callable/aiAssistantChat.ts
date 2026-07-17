@@ -343,11 +343,12 @@ export const aiAssistantChat = onCall({ secrets: [openaiApiKey] }, async (req) =
     let response: OpenAI.Chat.ChatCompletion;
     try {
       response = await client.chat.completions.create({
-        model: MODEL,
-        max_completion_tokens: 1024,
-        tools: TOOLS,
-        messages,
-      });
+  model: MODEL,
+  reasoning_effort: 'none',
+  max_completion_tokens: 1024,
+  tools: TOOLS,
+  messages,
+});
     } catch (e: any) {
       logger.error('[aiAssistantChat] OpenAI API error', e);
       throw new HttpsError('internal', 'AI assistant is temporarily unavailable. Please try again.');
