@@ -73,7 +73,7 @@ function sanitizeProviderBody(value: unknown): string | null {
   }
 }
 
-function createEmailHtml(input: {
+export function renderEmailHtml(input: {
   subject: string;
   message: string;
   presentation?: ExternalEmailPresentation;
@@ -184,7 +184,7 @@ export async function externalNotify(payload: ExternalNotifyPayload): Promise<Ex
       replyTo: { email: REPLY_TO_EMAIL, name: 'InnovaShift Support' },
       subject,
       text: payload.message,
-      html: createEmailHtml({
+      html: renderEmailHtml({
         subject,
         message: payload.message,
         presentation: payload.presentation,
