@@ -58,6 +58,19 @@ const SUGGESTIONS = [
           </div>
         </div>
 
+        <div class="ac-forecast" *ngIf="d.forecast as f" [class.ac-forecast--worsening]="f.direction === 'worsening'" [class.ac-forecast--improving]="f.direction === 'improving'">
+          <mat-icon class="ac-forecast-icon">{{ f.direction === 'worsening' ? 'trending_up' : f.direction === 'improving' ? 'trending_down' : 'trending_flat' }}</mat-icon>
+          <div>
+            <div class="ac-forecast-title">
+              Long-term outlook: {{ f.direction === 'worsening' ? 'Trending worse' : f.direction === 'improving' ? 'Trending better' : 'Stable' }}
+            </div>
+            <div class="ac-forecast-detail" *ngIf="f.commentary">{{ f.commentary }}</div>
+            <div class="ac-forecast-detail" *ngIf="!f.commentary">
+              {{ f.recentProblemDays }} problem day(s) in the last 4 weeks (avg {{ f.recentAvgGaps | number:'1.0-1' }} unfilled shifts) vs {{ f.priorProblemDays }} in the prior 4 weeks (avg {{ f.priorAvgGaps | number:'1.0-1' }}).
+            </div>
+          </div>
+        </div>
+
         <div class="ac-proposals" *ngIf="digestProposals().length">
           <div class="ac-proposal" *ngFor="let p of digestProposals()" [class.ac-proposal--done]="p.status !== 'pending'">
             <div class="ac-proposal-summary">
@@ -154,6 +167,19 @@ const SUGGESTIONS = [
     .ac-alert--critical { background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.30); }
     .ac-alert-icon { font-size: 16px !important; width: 16px !important; height: 16px !important; color: #f59e0b; flex-shrink: 0; margin-top: 1px; }
     .ac-alert--critical .ac-alert-icon { color: var(--danger); }
+
+    .ac-forecast {
+      display: flex; align-items: flex-start; gap: 10px; margin-top: 12px;
+      padding: 10px 12px; border-radius: 8px; background: rgba(148,163,184,0.10);
+      border: 1px solid rgba(148,163,184,0.25);
+    }
+    .ac-forecast--worsening { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.25); }
+    .ac-forecast--improving { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.25); }
+    .ac-forecast-icon { font-size: 18px !important; width: 18px !important; height: 18px !important; color: var(--text-muted); flex-shrink: 0; margin-top: 1px; }
+    .ac-forecast--worsening .ac-forecast-icon { color: var(--danger); }
+    .ac-forecast--improving .ac-forecast-icon { color: #10b981; }
+    .ac-forecast-title { font-weight: 800; font-size: 12.5px; margin-bottom: 2px; }
+    .ac-forecast-detail { font-size: 12px; line-height: 1.4; color: var(--text-muted); }
 
     .ac-panel { display: flex; flex-direction: column; height: min(72vh, 760px); overflow: hidden; }
 
