@@ -1136,6 +1136,11 @@ import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
       .mk-hero-copy h1 { font-size:44px; }
       .mk-hero-copy p { max-width:100%; }
       .mk-feature-list { max-width:100%; grid-template-columns:1fr 1fr; }
+      .mk-header { flex-direction:column; align-items:flex-start; }
+      .mk-header-actions { width:100%; justify-content:flex-start; }
+      .mk-summary-grid { grid-template-columns:1fr; }
+      .mk-tools { grid-template-columns:1fr; }
+      .mk-tabs { width:100%; overflow-x:auto; }
     }
     @media (max-width: 560px) {
       .mk-feature-list { grid-template-columns:1fr; }
@@ -1153,6 +1158,8 @@ import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
       .mk-card-foot { flex-direction:column; align-items:stretch; }
       .mk-actions { justify-content:stretch; }
       .mk-actions .mk-btn { flex:1; justify-content:center; }
+      .mk-header-actions { flex-wrap:nowrap; overflow-x:auto; }
+      .mk-nav-btn { flex-shrink:0; }
     }
   `]
 })
