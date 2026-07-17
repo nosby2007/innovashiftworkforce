@@ -206,6 +206,14 @@
         { "arrayConfig": "CONTAINS", "queryScope": "COLLECTION" },
         { "order": "DESCENDING", "queryScope": "COLLECTION_GROUP" }
       ]
+    },
+    {
+      "collectionGroup": "shifts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "requiredJobRole", "mode": "ASCENDING" },
+        { "fieldPath": "startAt", "mode": "ASCENDING" }
+      ]
     }
   ]
 }
