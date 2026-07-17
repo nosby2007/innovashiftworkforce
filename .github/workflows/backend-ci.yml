@@ -1,0 +1,42 @@
+name: Backend Functions CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend-firebase-functions/**'
+      - '.github/workflows/backend-ci.yml'
+  push:
+    branches:
+      - 'feat/workforce-email-notifications'
+    paths:
+      - 'backend-firebase-functions/**'
+      - '.github/workflows/backend-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Build and test Firebase functions
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend-firebase-functions
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend-firebase-functions/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
