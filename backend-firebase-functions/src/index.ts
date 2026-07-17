@@ -44,6 +44,8 @@ import { updateShift } from './callable/updateShift';
 import { registerPushToken } from './callable/registerPushToken';
 import { unregisterPushToken } from './callable/unregisterPushToken';
 import { shiftActionFromNotification } from './http/shiftActionFromNotification';
+import { aiAssistantChat } from './callable/aiAssistantChat';
+import { dailyDigest } from './scheduled/dailyDigest';
 
 // ----------------------------------------------------------------------
 // Stripe Billing
@@ -101,4 +103,6 @@ export {
   registerPushToken,
   unregisterPushToken,
   shiftActionFromNotification,
+  aiAssistantChat,
+  dailyDigest,
 };

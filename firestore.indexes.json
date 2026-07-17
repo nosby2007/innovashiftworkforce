@@ -162,6 +162,23 @@
       ]
     },
     {
+      "collectionGroup": "shifts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "assignedUserId", "mode": "ASCENDING" },
+        { "fieldPath": "status", "mode": "ASCENDING" },
+        { "fieldPath": "clockOutAt", "mode": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shifts",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "status", "mode": "ASCENDING" },
+        { "fieldPath": "endAt", "mode": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "timeEntries",
       "queryScope": "COLLECTION",
       "fields": [

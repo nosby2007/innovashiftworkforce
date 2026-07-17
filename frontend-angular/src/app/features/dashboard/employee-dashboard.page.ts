@@ -49,6 +49,8 @@ export type ShiftSwapCandidateShift = {
   requiredJobRole?: string | null;
 };
 
+export type ShiftSwapMatchLabel = 'great_fit' | 'conflict' | 'tight_turnaround';
+
 export type ShiftSwapCandidate = {
   uid: string;
   displayName: string;
@@ -56,6 +58,7 @@ export type ShiftSwapCandidate = {
   jobRole?: string | null;
   canCoverSource: boolean;
   shifts: ShiftSwapCandidateShift[];
+  match?: { score: number; label: ShiftSwapMatchLabel; hasConflict: boolean };
 };
 
 @Component({
@@ -870,7 +873,7 @@ export type ShiftSwapDialogData = {
             <select class="vs-select" [(ngModel)]="targetUid" (ngModelChange)="targetShiftId = ''">
               <option value="">Select staff</option>
               <option *ngFor="let c of data.candidates" [value]="c.uid">
-                {{ c.displayName }} - {{ c.jobRole || 'No role' }}
+                {{ c.displayName }} - {{ c.jobRole || 'No role' }} ({{ matchText(c) }})
               </option>
             </select>
           </label>
@@ -880,7 +883,7 @@ export type ShiftSwapDialogData = {
               <div class="shift-switch-title">{{ c.displayName }}</div>
               <div class="shift-switch-meta">{{ c.email || 'Email not set' }} - {{ c.jobRole || 'No role' }}</div>
             </div>
-            <span class="vs-badge vs-badge--success">Compatible</span>
+            <span class="vs-badge" [ngClass]="matchBadgeClass(c)">{{ matchText(c) }}</span>
           </div>
 
           <label *ngIf="selectedCandidate() as c" class="shift-switch-field">
@@ -1021,6 +1024,22 @@ export class ShiftSwapDialogComponent {
 
   selectedCandidate(): ShiftSwapCandidate | null {
     return this.data.candidates.find((c) => c.uid === this.targetUid) || null;
+  }
+
+  matchText(c: ShiftSwapCandidate): string {
+    switch (c.match?.label) {
+      case 'conflict': return 'Schedule conflict';
+      case 'tight_turnaround': return 'Tight turnaround';
+      default: return 'Great fit';
+    }
+  }
+
+  matchBadgeClass(c: ShiftSwapCandidate): string {
+    switch (c.match?.label) {
+      case 'conflict': return 'vs-badge--danger';
+      case 'tight_turnaround': return 'vs-badge--warning';
+      default: return 'vs-badge--success';
+    }
   }
 
   fmtDateRange(startAt: any, endAt: any): string {

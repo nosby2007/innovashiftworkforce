@@ -13,10 +13,12 @@ import { Shift } from '../../shared/models/shift.model';
 import { ToastService } from '../../core/ui/toast.service';
 import { mapAttendancePolicyError } from '../../shared/utils/attendance-policy-error.util';
 import { getCurrentWeekRange, fmtShiftDate, fmtShiftTime, canClaimShift, shiftHours } from '../../shared/utils/shift-lifecycle.utils';
+import { scoreShiftMatch, ShiftMatchLabel } from '../../shared/utils/shift-match.util';
+import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, CurrencyPipe],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, CurrencyPipe, TipCardComponent],
   template: `
     <div class="vs-page-pad mk-page">
       <header class="mk-header">
@@ -40,6 +42,10 @@ import { getCurrentWeekRange, fmtShiftDate, fmtShiftTime, canClaimShift, shiftHo
           </button>
         </div>
       </header>
+
+      <app-tip-card tipId="marketplace-intro" title="Finding your best-fit shift" icon="stars">
+        Shifts are sorted for you — "Great fit" ones match your role with no schedule conflict, while shifts with a conflict or tight turnaround sink lower and are flagged, not hidden.
+      </app-tip-card>
 
       <div *ngIf="!orgId" class="mk-no-org vs-glass">
         <mat-icon>warning_amber</mat-icon> Missing org context.
@@ -144,6 +150,9 @@ import { getCurrentWeekRange, fmtShiftDate, fmtShiftTime, canClaimShift, shiftHo
                   <span>{{ s.locationName || 'Location TBD' }}</span>
                 </div>
                 <span class="vs-badge vs-badge--primary" *ngIf="shiftRole(s)">{{ shiftRole(s) }}</span>
+              </div>
+              <div class="mk-match" *ngIf="matchBadge(s) as mb" [ngClass]="mb.cls">
+                <mat-icon>{{ mb.icon }}</mat-icon>{{ mb.label }}
               </div>
               <div class="mk-shift-meta">
                 <span><mat-icon>schedule</mat-icon>{{ fmtTime(s.startAt) }} - {{ fmtTime(s.endAt) }}</span>
@@ -553,6 +562,17 @@ import { getCurrentWeekRange, fmtShiftDate, fmtShiftTime, canClaimShift, shiftHo
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .mk-match {
+      display: inline-flex; align-items: center; gap: 6px; width: fit-content;
+      font-size: 11.5px; font-weight: 800; letter-spacing: 0.02em;
+      padding: 4px 10px; border-radius: 100px; margin-top: 10px;
+    }
+    .mk-match mat-icon { font-size: 14px !important; width: 14px !important; height: 14px !important; }
+    .mk-match--good { background: rgba(34,197,94,0.16); color: #4ade80; }
+    .mk-match--warn { background: rgba(245,158,11,0.16); color: #fbbf24; }
+    .mk-match--bad { background: rgba(239,68,68,0.16); color: #f87171; }
+    .mk-match--neutral { background: rgba(148,163,184,0.16); color: var(--mk-subtle); }
+
     .mk-shift-meta {
       display: grid;
       gap: 8px;
@@ -1141,6 +1161,7 @@ export class MarketplacePage implements OnDestroy {
   uid: string | null = null;
   isAdminLike = false;
   items = signal<Shift[]>([]);
+  myShifts = signal<Shift[]>([]);
   currentShift = signal<Shift | null>(null);
   swapRequests: any[] = [];
   activityItems = signal<UserNotification[]>([]);
@@ -1159,6 +1180,7 @@ export class MarketplacePage implements OnDestroy {
   private unsub: (() => void) | null = null;
   private unsubCurrent: (() => void) | null = null;
   private unsubActivity: (() => void) | null = null;
+  private unsubMyShifts: (() => void) | null = null;
   private ctxEffect?: EffectRef;
 
   constructor(
@@ -1180,6 +1202,7 @@ export class MarketplacePage implements OnDestroy {
 
       if (!orgId || !this.uid) {
         this.items.set([]);
+        this.myShifts.set([]);
         this.swapRequests = [];
         this.activityItems.set([]);
         this.currentShift.set(null);
@@ -1195,6 +1218,14 @@ export class MarketplacePage implements OnDestroy {
         this.unsubCurrent = null;
       }
       this.unsubCurrent = this.repo.watchCurrentShift(orgId, this.uid, (s) => this.currentShift.set(s));
+
+      if (this.unsubMyShifts) {
+        this.unsubMyShifts();
+        this.unsubMyShifts = null;
+      }
+      // Own assigned shifts (any status/date) — used only to score marketplace
+      // shifts for role fit and schedule conflicts, never sent anywhere.
+      this.unsubMyShifts = this.repo.watchAssignedShifts(orgId, this.uid, (items) => this.myShifts.set(items));
 
       if (this.unsubActivity) {
         this.unsubActivity();
@@ -1311,19 +1342,42 @@ export class MarketplacePage implements OnDestroy {
   filteredItems() {
     const q = this.marketQuery.trim().toLowerCase();
     const role = this.roleFilter.trim().toLowerCase();
-    return this.items().filter((s) => {
-      const shiftRole = this.shiftRole(s).toLowerCase();
-      if (role && shiftRole !== role) return false;
-      if (!q) return true;
-      const haystack = [
-        s.title,
-        s.locationName,
-        shiftRole,
-        String(s.description || ''),
-        String(s.notes || ''),
-      ].join(' ').toLowerCase();
-      return haystack.includes(q);
-    });
+    const matched = this.items()
+      .filter((s) => {
+        const shiftRole = this.shiftRole(s).toLowerCase();
+        if (role && shiftRole !== role) return false;
+        if (!q) return true;
+        const haystack = [
+          s.title,
+          s.locationName,
+          shiftRole,
+          String(s.description || ''),
+          String(s.notes || ''),
+        ].join(' ').toLowerCase();
+        return haystack.includes(q);
+      })
+      .map((s) => ({ shift: s, match: this.matchFor(s) }));
+
+    // Best-fit shifts first (role match, no schedule conflict); shifts that
+    // conflict with something the staff member is already assigned to sink
+    // to the bottom rather than being hidden — they can still see why.
+    matched.sort((a, b) => b.match.score - a.match.score);
+    return matched.map((m) => m.shift);
+  }
+
+  matchFor(s: Shift) {
+    return scoreShiftMatch(s, this.myShifts(), this.ctx.jobRole());
+  }
+
+  matchBadge(s: Shift): { label: string; icon: string; cls: string } | null {
+    const label: ShiftMatchLabel = this.matchFor(s).label;
+    switch (label) {
+      case 'great_fit': return { label: 'Great fit', icon: 'stars', cls: 'mk-match--good' };
+      case 'conflict': return { label: 'Conflicts with your schedule', icon: 'event_busy', cls: 'mk-match--bad' };
+      case 'tight_turnaround': return { label: 'Tight turnaround', icon: 'schedule', cls: 'mk-match--warn' };
+      case 'role_mismatch': return { label: 'Different role', icon: 'info', cls: 'mk-match--neutral' };
+      default: return null;
+    }
   }
 
   shiftRole(s: Shift) {
@@ -1502,8 +1556,10 @@ export class MarketplacePage implements OnDestroy {
     if (this.unsub) this.unsub();
     if (this.unsubCurrent) this.unsubCurrent();
     if (this.unsubActivity) this.unsubActivity();
+    if (this.unsubMyShifts) this.unsubMyShifts();
     this.unsub = null;
     this.unsubCurrent = null;
     this.unsubActivity = null;
+    this.unsubMyShifts = null;
   }
 }

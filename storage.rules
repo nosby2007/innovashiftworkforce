@@ -5,16 +5,22 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    // .get(key, default) tolerates tokens that don't carry a custom claim yet
+    // (e.g. a session still on an old ID token from before the claim was
+    // set) — a plain `.orgId` accessor throws on a missing claim, which
+    // Storage rules treat as a deny, surfacing as a generic
+    // storage/unknown error instead of a clean permission check. Mirrors
+    // the same fix already applied in firestore.rules.
     function tokenOrgId() {
-      return signedIn() ? request.auth.token.orgId : null;
+      return signedIn() ? request.auth.token.get('orgId', null) : null;
     }
 
     function accessRole() {
-      return signedIn() ? request.auth.token.accessRole : null;
+      return signedIn() ? request.auth.token.get('accessRole', null) : null;
     }
 
     function platformRole() {
-      return signedIn() ? request.auth.token.platformRole : null;
+      return signedIn() ? request.auth.token.get('platformRole', null) : null;
     }
 
     function isSuperAdmin() {

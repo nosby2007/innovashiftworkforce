@@ -21,6 +21,13 @@ In the [Google Cloud Console](https://console.cloud.google.com/iam-admin/service
    - **Service Account User** (`roles/iam.serviceAccountUser`) — required
      so it can deploy Cloud Functions, which run under their own service
      account.
+   - **Secret Manager Secret Accessor** (`roles/secretmanager.secretAccessor`)
+     — required because several functions bind secrets via
+     `defineSecret()` (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+     `SENDGRID_API_KEY`, `ACTION_TOKEN_SECRET`); without this role,
+     `firebase deploy` fails partway through with `Permission
+     'secretmanager.secrets.get' denied` the first time it needs to read
+     one of them.
 3. Open the new service account → **Keys → Add Key → Create new key →
    JSON**. This downloads a `.json` file — treat it like a password, it
    grants deploy access to your whole project.
@@ -53,6 +60,47 @@ aren't part of this deploy pipeline:
   `firebase functions:secrets:set ACTION_TOKEN_SECRET` from your own
   machine with the Firebase CLI logged in (this is Firebase Secret
   Manager, not a GitHub secret, so CI can't set it for you).
+- **`ANTHROPIC_API_KEY`** (AI Copilot, `/admin/ai-copilot`, Pro plan and
+  up) — an Anthropic API key from
+  [console.anthropic.com](https://console.anthropic.com/settings/keys).
+  Set it the same way: `firebase functions:secrets:set ANTHROPIC_API_KEY`.
+  Uses the same **Secret Manager Secret Accessor** role on
+  `github-actions-deploy` already granted above — nothing extra to add
+  in IAM. The assistant only ever *proposes* shift actions (create,
+  assign, publish, unassign); it calls the same audited callables the
+  rest of the app uses, and only after an admin clicks Confirm in the
+  UI — it never writes to Firestore directly.
+- **Daily AI digest** (`dailyDigest` scheduled function) — runs every
+  day at 8am America/New_York automatically once deployed, no extra
+  setup beyond the same `ANTHROPIC_API_KEY` above. For each active org
+  it scans shifts starting in the next 3 days, and if any are unfilled
+  it writes a summary + publish proposals to
+  `orgs/{orgId}/aiDigests/{date}`, shown at the top of the AI Copilot
+  page. The same run also flags staffing compliance risks over an
+  ~8-day window (yesterday through next week): double-bookings, under
+  8h rest between shifts, 7+ consecutive scheduled days, and 60+
+  scheduled hours — informational only, no proposal attached, since
+  fixing them is a judgment call for the admin. Orgs with full
+  coverage and no alerts get no digest doc that day (no API call
+  either — it's skipped entirely, not just hidden). When a digest is
+  generated, admin-like staff (admin/manager/scheduler/hr) also get an
+  in-app notification and a best-effort push (same infra as the other
+  push notifications below) linking to `/admin/ai-copilot` — reuses
+  their existing registered device tokens, no extra setup. On Mondays,
+  the same run also checks the org's own `aiDigests` history over the
+  last 8 weeks for a long-term understaffing trend (recent 4 weeks of
+  problem-days vs the prior 4) and, if there's enough history, adds a
+  `forecast` field with a direction (worsening/improving/stable) and a
+  one-sentence AI outlook — shown as a callout on the AI Copilot page.
+  Weekly rather than daily to keep the extra Anthropic call bounded;
+  no extra setup beyond `ANTHROPIC_API_KEY` above. Requires
+  Cloud Scheduler to be enabled on the GCP project, which `firebase
+  deploy` does automatically on first deploy of a scheduled function.
+  If that first deploy fails with a permissions error creating the
+  Cloud Scheduler job (separate from the Secret Manager one already
+  fixed), grant `github-actions-deploy` the **Cloud Scheduler Admin**
+  (`roles/cloudscheduler.admin`) role too — untested whether
+  **Firebase Admin** alone already covers it on this project.
 - **Web push VAPID key** — done (`VAPID_KEY` is set in
   `push-notifications.service.ts`).
 - **Native push (Android)** — done. The app is registered in Firebase
@@ -79,6 +127,12 @@ both steps already done:
 2. **Tester group** — Firebase Console → App Distribution → Testers &
    Groups → group named `internal-testers` (matches `groups:` in
    `android-distribute.yml`), with testers added to it.
+3. **`FIREBASE_ANDROID_APP_ID` secret** — GitHub repo → Settings →
+   Secrets and variables → Actions → New repository secret. Value is the
+   Android app ID from Firebase Console → Project Settings → Your apps
+   (format `1:...:android:...`). Not sensitive on its own, but kept as a
+   secret rather than hardcoded so the workflow isn't tied to one app
+   registration.
 
 Note: the workflow uploads via the
 [`wzieba/Firebase-Distribution-Github-Action`](https://github.com/wzieba/Firebase-Distribution-Github-Action)
@@ -94,6 +148,30 @@ signing keystore (store it as a GitHub secret, never commit it) wired
 into `frontend-angular/android/app/build.gradle`'s `signingConfigs`, plus
 switching the workflow from `assembleDebug` to `assembleRelease` and
 adding the Play Console publishing step separately.
+
+## Firestore indexes
+
+`firestore.indexes.json` is the source of truth `firebase deploy` uses —
+it's declared in `firebase.json` and deployed automatically alongside
+rules/functions/hosting on every push to `main`, no `--only` flag needed.
+
+If a deploy ever fails with `firestore: there are N indexes defined in
+your project that are not present in your firestore indexes file`, it
+means someone (often via a "This query requires an index" error link
+in the Firebase Console or Cloud Functions logs) created a composite
+index directly in the console without it ever being added to this file.
+**Do not pass `--force`** to fix this — that flag tells the CLI to
+*delete* those live indexes, which is destructive and will break
+whatever query needed them. Instead, sync the file to match reality:
+
+```bash
+firebase login
+firebase firestore:indexes --project atlanta-e04aa > firestore.indexes.json
+```
+
+This is a **read-only** pull (it only lists what's currently live, no
+writes), so it's always safe to run. Review the diff, commit it, and
+the next deploy will succeed without needing `--force`.
 
 ## Manual deploy (without CI)
 

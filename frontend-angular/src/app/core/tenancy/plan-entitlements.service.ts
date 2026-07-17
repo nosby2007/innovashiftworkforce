@@ -9,7 +9,8 @@ export type PlanFeature =
   | 'gpsAttendance'
   | 'multiSiteManagement'
   | 'ssoConfig'
-  | 'customIntegrations';
+  | 'customIntegrations'
+  | 'aiCopilot';
 
 const PLAN_ORDER = ['starter', 'pro', 'enterprise'] as const;
 const FEATURE_MIN_PLAN: Record<PlanFeature, typeof PLAN_ORDER[number]> = {
@@ -21,6 +22,7 @@ const FEATURE_MIN_PLAN: Record<PlanFeature, typeof PLAN_ORDER[number]> = {
   multiSiteManagement: 'enterprise',
   ssoConfig: 'enterprise',
   customIntegrations: 'enterprise',
+  aiCopilot: 'pro',
 };
 
 @Injectable({ providedIn: 'root' })
