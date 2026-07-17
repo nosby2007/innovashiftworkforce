@@ -17,10 +17,12 @@ export interface TenantContext {
   orgId: string;
   role: AccessRole | null;
   isAdminLike: boolean;   // admin | scheduler | manager | hr
+  isAdminOrHr: boolean;   // admin | hr — payroll, PTO decisions, employee documents
   isSuperAdmin: boolean;
 }
 
 const ADMIN_LIKE: ReadonlySet<string> = new Set(['admin', 'scheduler', 'manager', 'hr']);
+const ADMIN_OR_HR: ReadonlySet<string> = new Set(['admin', 'hr']);
 
 export function resolveTenant(req: any): TenantContext {
   requireAuth(req);
@@ -41,6 +43,7 @@ export function resolveTenant(req: any): TenantContext {
     orgId: claims.orgId,
     role,
     isAdminLike: isSuperAdmin || (role != null && ADMIN_LIKE.has(role)),
+    isAdminOrHr: isSuperAdmin || (role != null && ADMIN_OR_HR.has(role)),
     isSuperAdmin,
   };
 }
@@ -80,6 +83,7 @@ export async function resolveTenantWithFallback(req: any): Promise<TenantContext
     orgId,
     role,
     isAdminLike: isSuperAdmin || (role != null && ADMIN_LIKE.has(role)),
+    isAdminOrHr: isSuperAdmin || (role != null && ADMIN_OR_HR.has(role)),
     isSuperAdmin,
   };
 }
@@ -88,6 +92,14 @@ export function requireAdminTenant(req: any): TenantContext {
   const ctx = resolveTenant(req);
   if (!ctx.isAdminLike) {
     throw new HttpsError('permission-denied', 'Admin-level privileges required.');
+  }
+  return ctx;
+}
+
+export function requireAdminOrHrTenant(req: any): TenantContext {
+  const ctx = resolveTenant(req);
+  if (!ctx.isAdminOrHr) {
+    throw new HttpsError('permission-denied', 'Admin/HR privileges required.');
   }
   return ctx;
 }

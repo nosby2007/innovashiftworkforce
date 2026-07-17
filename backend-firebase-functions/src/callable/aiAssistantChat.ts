@@ -351,7 +351,14 @@ export const aiAssistantChat = onCall({ secrets: [openaiApiKey] }, async (req) =
 });
     } catch (e: any) {
       logger.error('[aiAssistantChat] OpenAI API error', e);
-      throw new HttpsError('internal', 'AI assistant is temporarily unavailable. Please try again.');
+      // Surface the OpenAI error status/code (not the key or full stack) so a
+      // failure is diagnosable from the browser console without needing
+      // Firebase Console log access — e.g. "(404 model_not_found)" points
+      // straight at a bad MODEL value, "(401 invalid_api_key)" at the secret.
+      const status = e?.status ?? e?.response?.status;
+      const code = e?.code || e?.error?.code || e?.type;
+      const hint = status || code ? ` (${[status, code].filter(Boolean).join(' ')})` : '';
+      throw new HttpsError('internal', `AI assistant is temporarily unavailable${hint}. Please try again.`);
     }
 
     const assistantMessage = response.choices[0]?.message;

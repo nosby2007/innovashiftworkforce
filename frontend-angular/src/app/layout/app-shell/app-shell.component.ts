@@ -25,6 +25,8 @@ type NavItem = {
   adminOnly?: boolean;
   superAdminOnly?: boolean;
   feature?: PlanFeature;
+  /** Restricts to specific access roles beyond the general admin-like set (e.g. payroll/PTO/documents: admin+hr only). Omit for no extra restriction. */
+  roles?: string[];
 };
 
 const ROUTE_TITLES: Record<string, string> = {
@@ -597,10 +599,10 @@ export class AppLayoutComponent implements OnDestroy {
     { label: 'Scheduler',        link: '/admin/scheduler',        icon: 'calendar_month',       section: 'admin', adminOnly: true, feature: 'smartScheduler' },
     { label: 'AI Copilot',       link: '/admin/ai-copilot',       icon: 'auto_awesome',         section: 'admin', adminOnly: true, feature: 'aiCopilot' },
     { label: 'Timesheets',       link: '/admin/timesheets',       icon: 'receipt_long',         section: 'admin', adminOnly: true, feature: 'timesheetsExport' },
-    { label: 'PTO Requests',      link: '/admin/pto',              icon: 'event_available',      section: 'admin', adminOnly: true },
-    { label: 'Documents',         link: '/admin/documents',        icon: 'folder_shared',        section: 'admin', adminOnly: true },
+    { label: 'PTO Requests',      link: '/admin/pto',              icon: 'event_available',      section: 'admin', adminOnly: true, roles: ['admin', 'hr'] },
+    { label: 'Documents',         link: '/admin/documents',        icon: 'folder_shared',        section: 'admin', adminOnly: true, roles: ['admin', 'hr'] },
     { label: 'Launch Readiness',  link: '/admin/readiness',        icon: 'health_and_safety',    section: 'admin', adminOnly: true },
-    { label: 'Payroll',          link: '/admin/payroll',          icon: 'payments',             section: 'admin', adminOnly: true, feature: 'timesheetsExport' },
+    { label: 'Payroll',          link: '/admin/payroll',          icon: 'payments',             section: 'admin', adminOnly: true, feature: 'timesheetsExport', roles: ['admin', 'hr'] },
     { label: 'Audit Log',        link: '/admin/audit',            icon: 'history',              section: 'admin', adminOnly: true, feature: 'auditLog' },
     { label: 'Org Settings',     link: '/admin/org-settings',     icon: 'business',             section: 'admin', adminOnly: true },
   ];
@@ -650,7 +652,10 @@ export class AppLayoutComponent implements OnDestroy {
     return ['admin','manager','scheduler','hr'].includes(r ?? '');
   });
   isSuperAdmin = computed(() => this.ctx.platformRole() === 'superAdmin');
-  visibleAdminNav = computed(() => this.adminNav.filter((item) => !item.feature || this.plans.has(item.feature)));
+  visibleAdminNav = computed(() => this.adminNav.filter((item) =>
+    (!item.feature || this.plans.has(item.feature)) &&
+    (!item.roles || item.roles.includes(this.accessRole() ?? ''))
+  ));
 
   shellBrand = computed(() => {
     switch (this.shellMode()) {

@@ -36,6 +36,12 @@ service cloud.firestore {
       return isAdmin() || isManager() || isScheduler() || isHR();
     }
 
+    // Discretionary/sensitive data (payroll, PTO decisions, employee
+    // documents) — admin and hr only, narrower than isOrgAdminLike().
+    function isAdminOrHR() {
+      return isAdmin() || isHR();
+    }
+
     // Caller belongs to this org AND is an admin-like role
     function isOrgAdmin(o)   { return isOrgMember(o) && isOrgAdminLike(); }
 
@@ -198,7 +204,7 @@ service cloud.firestore {
       match /requests/{requestId} {
         allow read: if signedIn() && (
           isSuperAdmin() ||
-          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
+          (isOrgMember(orgId) && (isAdminOrHR() || uid() == resource.data.userId))
         );
         allow create: if signedIn() && (
           isSuperAdmin() ||
@@ -214,7 +220,7 @@ service cloud.firestore {
       match /accrualBalances/{targetUid} {
         allow read: if signedIn() && (
           isSuperAdmin() ||
-          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == targetUid))
+          (isOrgMember(orgId) && (isAdminOrHR() || uid() == targetUid))
         );
         // Written only by decideTimeOffRequest (approval) and accrueTimeOff (grants).
         allow create, update, delete: if false;
@@ -224,7 +230,7 @@ service cloud.firestore {
       match /accrualLedger/{entryId} {
         allow read: if signedIn() && (
           isSuperAdmin() ||
-          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
+          (isOrgMember(orgId) && (isAdminOrHR() || uid() == resource.data.userId))
         );
         allow create, update, delete: if false;
       }
@@ -233,7 +239,7 @@ service cloud.firestore {
       match /employeeDocuments/{documentId} {
         allow read: if signedIn() && (
           isSuperAdmin() ||
-          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
+          (isOrgMember(orgId) && (isAdminOrHR() || uid() == resource.data.userId))
         );
         allow create: if signedIn() && (
           isSuperAdmin() ||
@@ -246,7 +252,7 @@ service cloud.firestore {
         );
         allow update: if signedIn() && (
           isSuperAdmin() ||
-          (isOrgMember(orgId) && isOrgAdminLike())
+          (isOrgMember(orgId) && isAdminOrHR())
         );
         allow delete: if signedIn() && (
           isSuperAdmin() ||
@@ -339,7 +345,7 @@ service cloud.firestore {
       match /payrollRuns/{runId} {
         allow read, create, update: if signedIn() && (
           isSuperAdmin() ||
-          (isOrgMember(orgId) && isOrgAdminLike())
+          (isOrgMember(orgId) && isAdminOrHR())
         );
         allow delete: if signedIn() && (
           isSuperAdmin() ||

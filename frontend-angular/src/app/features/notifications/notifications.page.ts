@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
-import { NotificationsRepo, UserNotification } from '../../core/repos/notifications.repo';
+import { NotificationsRepo, UserNotification, NOTIFICATION_ARCHIVE_RETENTION_DAYS } from '../../core/repos/notifications.repo';
 import { ToastService } from '../../core/ui/toast.service';
 import { PushNotificationsService } from '../../core/push/push-notifications.service';
 import { formatDateTime } from '../../shared/utils/date.util';
@@ -102,6 +102,11 @@ import { formatDateTime } from '../../shared/utils/date.util';
               <mat-icon>done</mat-icon>
               {{ n.read ? 'Already read' : 'Mark as read' }}
             </button>
+            <button class="ntf-detail-action ntf-detail-action--danger" type="button" (click)="deleteNotification(n)" [disabled]="busy">
+              <mat-icon>delete_outline</mat-icon>
+              Delete
+            </button>
+            <p class="ntf-detail-hint">Deleted notifications are removed from this list right away and permanently erased after {{ retentionDays }} days.</p>
           </ng-container>
           <ng-template #noDetail>
             <div class="ntf-muted">Select a notification to review details.</div>
@@ -148,6 +153,9 @@ import { formatDateTime } from '../../shared/utils/date.util';
     .ntf-detail-action { width:100%; height:38px; margin-top:14px; border:1px solid #0f766e; border-radius:8px; background:#0f766e; color:#fff; display:inline-flex; align-items:center; justify-content:center; gap:8px; font-weight:800; cursor:pointer; }
     .ntf-detail-action:disabled { opacity:.55; cursor:not-allowed; background:#94a3b8; border-color:#94a3b8; }
     .ntf-detail-action mat-icon { font-size:18px; width:18px; height:18px; }
+    .ntf-detail-action--danger { margin-top:8px; background:#fff; color:#b91c1c; border-color:#fecaca; }
+    .ntf-detail-action--danger:disabled { background:#fff; color:#b91c1c; border-color:#fecaca; }
+    .ntf-detail-hint { margin:10px 0 0; color:#64748b; font-size:11px; line-height:1.4; }
     .ntf-muted { color:#64748b; font-size:12px; }
     @media (max-width: 980px) { .ntf-shell { grid-template-columns:1fr; } .ntf-cats, .ntf-detail { border:0; } .ntf-top { align-items:flex-start; flex-direction:column; height:auto; padding:16px; } }
   `]
@@ -162,6 +170,7 @@ export class NotificationsPage implements OnDestroy {
   pushBusy = false;
   pushSupported = false;
   pushEnabled = false;
+  readonly retentionDays = NOTIFICATION_ARCHIVE_RETENTION_DAYS;
   private unsub: (() => void) | null = null;
 
   constructor(
@@ -275,6 +284,21 @@ export class NotificationsPage implements OnDestroy {
       if (showToast) this.toast.success('Notification marked read.');
     } catch (e: any) {
       this.toast.errorFrom(e, 'Unable to update notification.');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  async deleteNotification(notification: UserNotification) {
+    if (!this.orgId || !this.uid || !notification?.id || this.busy) return;
+    this.busy = true;
+    try {
+      await this.repo.archive(this.orgId, this.uid, notification.id);
+      this.items.set(this.items().filter((n) => n.id !== notification.id));
+      this.selectedIndex = 0;
+      this.toast.success('Notification deleted.');
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Unable to delete notification.');
     } finally {
       this.busy = false;
     }
