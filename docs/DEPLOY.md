@@ -82,7 +82,11 @@ aren't part of this deploy pipeline:
   scheduled hours — informational only, no proposal attached, since
   fixing them is a judgment call for the admin. Orgs with full
   coverage and no alerts get no digest doc that day (no API call
-  either — it's skipped entirely, not just hidden). Requires
+  either — it's skipped entirely, not just hidden). When a digest is
+  generated, admin-like staff (admin/manager/scheduler/hr) also get an
+  in-app notification and a best-effort push (same infra as the other
+  push notifications below) linking to `/admin/ai-copilot` — reuses
+  their existing registered device tokens, no extra setup. Requires
   Cloud Scheduler to be enabled on the GCP project, which `firebase
   deploy` does automatically on first deploy of a scheduled function.
   If that first deploy fails with a permissions error creating the
