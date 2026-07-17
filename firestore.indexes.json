@@ -193,6 +193,14 @@
         { "fieldPath": "exceptionStatus", "mode": "ASCENDING" },
         { "fieldPath": "createdAt", "mode": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "shifts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "requiredJobRole", "mode": "ASCENDING" },
+        { "fieldPath": "startAt", "mode": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -205,14 +213,6 @@
         { "order": "DESCENDING", "queryScope": "COLLECTION" },
         { "arrayConfig": "CONTAINS", "queryScope": "COLLECTION" },
         { "order": "DESCENDING", "queryScope": "COLLECTION_GROUP" }
-      ]
-    },
-    {
-      "collectionGroup": "shifts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "requiredJobRole", "mode": "ASCENDING" },
-        { "fieldPath": "startAt", "mode": "ASCENDING" }
       ]
     }
   ]
