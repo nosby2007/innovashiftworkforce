@@ -4,6 +4,7 @@ import { initFirebase } from '../infra/firebase';
 import { resolveTenantWithFallback } from '../infra/tenancy';
 import { writeAudit } from '../infra/audit';
 import { shiftRoleMatches } from '../domain/job-roles';
+import { scoreSwapCandidate } from '../domain/swap-match';
 
 const ACTIVE_SHIFT_STATUSES = new Set(['assigned', 'claimed']);
 const TERMINAL_SHIFT_STATUSES = new Set(['cancelled', 'completed', 'expired', 'no_show']);
@@ -202,7 +203,7 @@ export const listShiftSwapCandidates = onCall(async (req) => {
       .get(),
   ]);
 
-  const futureShiftsByUid = new Map<string, Array<Record<string, unknown>>>();
+  const futureShiftsByUid = new Map<string, Array<ReturnType<typeof serializeShift>>>();
   for (const doc of shiftsSnap.docs) {
     if (doc.id === shiftId) continue;
     const s = doc.data() as any;
@@ -215,10 +216,13 @@ export const listShiftSwapCandidates = onCall(async (req) => {
     futureShiftsByUid.set(assignedUserId, list);
   }
 
+  const sourceSlice = { startAtMs: toMillis(source.startAt), endAtMs: toMillis(source.endAt) };
+
   const candidates = usersSnap.docs
     .filter((doc) => doc.id !== String(source.assignedUserId || ctx.uid))
     .map((doc) => {
       const user = doc.data() as any;
+      const shifts = futureShiftsByUid.get(doc.id) || [];
       return {
         uid: doc.id,
         displayName: personName(user, doc.id),
@@ -226,10 +230,12 @@ export const listShiftSwapCandidates = onCall(async (req) => {
         jobRole: user?.jobRole || null,
         active: user?.active !== false,
         canCoverSource: user?.active !== false && shiftRoleMatches(user?.jobRole, source.requiredJobRoles ?? source.requiredJobRole),
-        shifts: futureShiftsByUid.get(doc.id) || [],
+        shifts,
+        match: scoreSwapCandidate(sourceSlice, shifts),
       };
     })
     .filter((user) => user.canCoverSource)
+    .sort((a, b) => b.match.score - a.match.score)
     .slice(0, 200);
 
   return {
