@@ -199,6 +199,7 @@ const STATUS_BADGE: Record<string, string> = {
           </div>
         </main>
 
+        <div class="sched-backdrop" *ngIf="selectedRow()" (click)="selectedId.set(null)"></div>
         <aside class="sched-detail" *ngIf="selectedRow() as row">
           <button class="sched-detail-close" (click)="selectedId.set(null)" aria-label="Close"><mat-icon>close</mat-icon></button>
           <h2>Your Shift</h2>
