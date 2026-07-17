@@ -118,4 +118,38 @@ export class SuperAdminService {
     const res = await call({ limit });
     return res.data as any[];
   }
+
+  async createUsers(users: NewEmployeeInput[]): Promise<CreateUsersResult> {
+    const call = this.fn('superAdminCreateUsers');
+    const res = await call({ users });
+    return res.data as CreateUsersResult;
+  }
+}
+
+export interface NewEmployeeInput {
+  email: string;
+  displayName: string;
+  orgId: string;
+  accessRole: AccessRole;
+  jobRole: string;
+  payRate?: number | null;
+  payType?: string;
+  phone?: string;
+  employeeNumber?: string;
+  department?: string;
+  hireDate?: string;
+  photoURL?: string;
+}
+
+export interface CreateUsersRowResult {
+  email: string;
+  ok: boolean;
+  uid?: string;
+  isNewUser?: boolean;
+  passwordResetLink?: string;
+  error?: string;
+}
+
+export interface CreateUsersResult {
+  results: CreateUsersRowResult[];
 }

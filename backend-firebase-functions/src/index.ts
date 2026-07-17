@@ -48,6 +48,7 @@ import { shiftActionFromNotification } from './http/shiftActionFromNotification'
 import { aiAssistantChat } from './callable/aiAssistantChat';
 import { dailyDigest } from './scheduled/dailyDigest';
 import { cleanupArchivedNotifications } from './scheduled/cleanupArchivedNotifications';
+import { superAdminCreateUsers } from './callable/superAdminCreateUsers';
 
 // ----------------------------------------------------------------------
 // Stripe Billing
@@ -111,4 +112,5 @@ export {
   aiAssistantChat,
   dailyDigest,
   cleanupArchivedNotifications,
+  superAdminCreateUsers,
 };

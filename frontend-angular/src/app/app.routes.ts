@@ -20,8 +20,6 @@ import { StaffProfilePage } from './features/profile/staff-profile.page';
 import { StaffDocumentsPage } from './features/documents/staff-documents.page';
 import { StaffOnboardingPage } from './features/onboarding/staff-onboarding.page';
 
-import { SuperAdminDashboardPage } from './features/super-admin/super-admin-dashboard.page';
-
 import { AdminAuditPage }          from './features/admin/admin-audit.page';
 import { AiCopilotPage }           from './features/admin/ai-copilot.page';
 import { AdminDashboardPage }      from './features/admin/admin-dashboard.page';
@@ -180,7 +178,7 @@ export const APP_ROUTES: Routes = [
     canActivate: [authGuard, superAdminGuard],
     data: { shellMode: 'platform' },
     children: [
-      { path: '',         component: SuperAdminDashboardPage },
+      { path: '',         loadComponent: () => import('./features/super-admin/super-admin-dashboard.page').then(m => m.SuperAdminDashboardPage) },
       { path: 'settings', loadComponent: () => import('./features/settings/settings.component').then(m => m.SettingsComponent) },
     ],
   },
