@@ -24,6 +24,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import dayGridPlugin from '@fullcalendar/daygrid';
 
 import { MatIconModule } from '@angular/material/icon';
+import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
 
 interface OrgSite {
   id: string;
@@ -33,7 +34,7 @@ interface OrgSite {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FullCalendarModule, DrawerComponent, FormsModule, MatIconModule],
+  imports: [CommonModule, FullCalendarModule, DrawerComponent, FormsModule, MatIconModule, TipCardComponent],
   template: `
     <div class="vs-page-pad sch-page">
       <!-- Header -->
@@ -58,6 +59,10 @@ interface OrgSite {
           </button>
         </div>
       </div>
+
+      <app-tip-card tipId="scheduler-intro" title="Working with the calendar" icon="calendar_month">
+        Click any shift to open its actions — assign, publish, or cancel. Use "Create Shift" above to add a new one, and the filters below to focus on a location or role.
+      </app-tip-card>
 
       <div *ngIf="!orgId" class="ad-no-org vs-glass">
         <mat-icon>warning_amber</mat-icon> Missing org context.

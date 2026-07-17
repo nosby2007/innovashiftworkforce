@@ -9,6 +9,7 @@ import { ShiftAdminCommands } from '../../core/commands/shift-admin.commands';
 import { ToastService } from '../../core/ui/toast.service';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { AiDigestRepo, AiDigest } from '../../core/repos/ai-digest.repo';
+import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
 
 type ProposalStatus = 'pending' | 'confirmed' | 'dismissed' | 'error';
 
@@ -31,7 +32,7 @@ const SUGGESTIONS = [
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, DatePipe],
+  imports: [CommonModule, FormsModule, MatIconModule, DatePipe, TipCardComponent],
   template: `
     <div class="vs-page-pad ac-page">
       <div class="vs-page-header">
@@ -40,6 +41,10 @@ const SUGGESTIONS = [
           <p class="vs-page-subtitle">Ask about coverage, staffing, and shifts — every action needs your confirmation before it happens.</p>
         </div>
       </div>
+
+      <app-tip-card tipId="ai-copilot-intro" title="How the Copilot works" icon="auto_awesome">
+        Ask it anything about your schedule — it can also draft actions like creating or publishing a shift, but it never touches anything without you clicking Confirm first.
+      </app-tip-card>
 
       <div class="vs-glass-strong ac-digest" *ngIf="digest() as d">
         <div class="ac-digest-head">
@@ -55,6 +60,19 @@ const SUGGESTIONS = [
           <div class="ac-alert" *ngFor="let a of d.alerts" [class.ac-alert--critical]="a.severity === 'critical'">
             <mat-icon class="ac-alert-icon">{{ a.severity === 'critical' ? 'error' : 'warning' }}</mat-icon>
             <span>{{ a.detail }}</span>
+          </div>
+        </div>
+
+        <div class="ac-forecast" *ngIf="d.forecast as f" [class.ac-forecast--worsening]="f.direction === 'worsening'" [class.ac-forecast--improving]="f.direction === 'improving'">
+          <mat-icon class="ac-forecast-icon">{{ f.direction === 'worsening' ? 'trending_up' : f.direction === 'improving' ? 'trending_down' : 'trending_flat' }}</mat-icon>
+          <div>
+            <div class="ac-forecast-title">
+              Long-term outlook: {{ f.direction === 'worsening' ? 'Trending worse' : f.direction === 'improving' ? 'Trending better' : 'Stable' }}
+            </div>
+            <div class="ac-forecast-detail" *ngIf="f.commentary">{{ f.commentary }}</div>
+            <div class="ac-forecast-detail" *ngIf="!f.commentary">
+              {{ f.recentProblemDays }} problem day(s) in the last 4 weeks (avg {{ f.recentAvgGaps | number:'1.0-1' }} unfilled shifts) vs {{ f.priorProblemDays }} in the prior 4 weeks (avg {{ f.priorAvgGaps | number:'1.0-1' }}).
+            </div>
           </div>
         </div>
 
@@ -154,6 +172,19 @@ const SUGGESTIONS = [
     .ac-alert--critical { background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.30); }
     .ac-alert-icon { font-size: 16px !important; width: 16px !important; height: 16px !important; color: #f59e0b; flex-shrink: 0; margin-top: 1px; }
     .ac-alert--critical .ac-alert-icon { color: var(--danger); }
+
+    .ac-forecast {
+      display: flex; align-items: flex-start; gap: 10px; margin-top: 12px;
+      padding: 10px 12px; border-radius: 8px; background: rgba(148,163,184,0.10);
+      border: 1px solid rgba(148,163,184,0.25);
+    }
+    .ac-forecast--worsening { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.25); }
+    .ac-forecast--improving { background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.25); }
+    .ac-forecast-icon { font-size: 18px !important; width: 18px !important; height: 18px !important; color: var(--text-muted); flex-shrink: 0; margin-top: 1px; }
+    .ac-forecast--worsening .ac-forecast-icon { color: var(--danger); }
+    .ac-forecast--improving .ac-forecast-icon { color: #10b981; }
+    .ac-forecast-title { font-weight: 800; font-size: 12.5px; margin-bottom: 2px; }
+    .ac-forecast-detail { font-size: 12px; line-height: 1.4; color: var(--text-muted); }
 
     .ac-panel { display: flex; flex-direction: column; height: min(72vh, 760px); overflow: hidden; }
 

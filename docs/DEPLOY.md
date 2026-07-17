@@ -86,7 +86,14 @@ aren't part of this deploy pipeline:
   generated, admin-like staff (admin/manager/scheduler/hr) also get an
   in-app notification and a best-effort push (same infra as the other
   push notifications below) linking to `/admin/ai-copilot` — reuses
-  their existing registered device tokens, no extra setup. Requires
+  their existing registered device tokens, no extra setup. On Mondays,
+  the same run also checks the org's own `aiDigests` history over the
+  last 8 weeks for a long-term understaffing trend (recent 4 weeks of
+  problem-days vs the prior 4) and, if there's enough history, adds a
+  `forecast` field with a direction (worsening/improving/stable) and a
+  one-sentence AI outlook — shown as a callout on the AI Copilot page.
+  Weekly rather than daily to keep the extra Anthropic call bounded;
+  no extra setup beyond `ANTHROPIC_API_KEY` above. Requires
   Cloud Scheduler to be enabled on the GCP project, which `firebase
   deploy` does automatically on first deploy of a scheduled function.
   If that first deploy fails with a permissions error creating the
@@ -141,6 +148,30 @@ signing keystore (store it as a GitHub secret, never commit it) wired
 into `frontend-angular/android/app/build.gradle`'s `signingConfigs`, plus
 switching the workflow from `assembleDebug` to `assembleRelease` and
 adding the Play Console publishing step separately.
+
+## Firestore indexes
+
+`firestore.indexes.json` is the source of truth `firebase deploy` uses —
+it's declared in `firebase.json` and deployed automatically alongside
+rules/functions/hosting on every push to `main`, no `--only` flag needed.
+
+If a deploy ever fails with `firestore: there are N indexes defined in
+your project that are not present in your firestore indexes file`, it
+means someone (often via a "This query requires an index" error link
+in the Firebase Console or Cloud Functions logs) created a composite
+index directly in the console without it ever being added to this file.
+**Do not pass `--force`** to fix this — that flag tells the CLI to
+*delete* those live indexes, which is destructive and will break
+whatever query needed them. Instead, sync the file to match reality:
+
+```bash
+firebase login
+firebase firestore:indexes --project atlanta-e04aa > firestore.indexes.json
+```
+
+This is a **read-only** pull (it only lists what's currently live, no
+writes), so it's always safe to run. Review the diff, commit it, and
+the next deploy will succeed without needing `--force`.
 
 ## Manual deploy (without CI)
 

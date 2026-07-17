@@ -17,12 +17,13 @@ import { PlanEntitlementsService } from '../../core/tenancy/plan-entitlements.se
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
 import { fmtShiftDate, fmtShiftTime, shiftHours } from '../../shared/utils/shift-lifecycle.utils';
 import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map/geofence-map.component';
+import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, GeofenceMapComponent, TablePaginatorComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, GeofenceMapComponent, TablePaginatorComponent, TipCardComponent],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
@@ -31,6 +32,10 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
           <p class="vs-page-subtitle">Log your shift hours and manage active time entries</p>
         </div>
       </div>
+
+      <app-tip-card tipId="attendance-intro" title="Clocking in with GPS" icon="my_location">
+        Your location is checked against the shift's site when you clock in or out — make sure location access is allowed so the map can confirm you're on-site.
+      </app-tip-card>
 
       <div *ngIf="!orgId" class="at-no-org vs-glass">
         <mat-icon>warning_amber</mat-icon> Missing org context.

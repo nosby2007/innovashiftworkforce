@@ -27,6 +27,15 @@ export interface AiDigestAlert {
   detail: string;
 }
 
+export interface AiDigestForecast {
+  direction: 'worsening' | 'improving' | 'stable';
+  recentProblemDays: number;
+  priorProblemDays: number;
+  recentAvgGaps: number;
+  priorAvgGaps: number;
+  commentary: string | null;
+}
+
 export interface AiDigest {
   id: string;
   dateKey: string;
@@ -35,6 +44,7 @@ export interface AiDigest {
   gaps: AiDigestGap[];
   alerts: AiDigestAlert[];
   proposals: AiDigestProposal[];
+  forecast?: AiDigestForecast | null;
 }
 
 @Injectable({ providedIn: 'root' })

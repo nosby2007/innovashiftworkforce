@@ -6,6 +6,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { initFirebase } from '../infra/firebase';
 import { Proposal, buildProposal } from '../domain/ai-proposals';
 import { sendPushToUids } from '../infra/push';
+import { deriveUnderstaffingTrend, UnderstaffingTrend } from '../domain/understaffing-trend';
 
 const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
 
@@ -25,6 +26,12 @@ const MIN_REST_HOURS = 8;
 const MAX_CONSECUTIVE_DAYS = 6;
 const MAX_WEEKLY_HOURS = 60;
 
+// Long-term understaffing forecast — reuses the aiDigests history that's
+// already stored (one doc per day that had gaps/alerts). Only computed
+// weekly, not daily, since it adds an extra Claude call per org.
+const FORECAST_LOOKBACK_MS = 56 * 24 * 60 * 60 * 1000; // 8 weeks of digest history
+const FORECAST_HALF_MS = 28 * 24 * 60 * 60 * 1000; // recent 4 weeks vs prior 4 weeks
+
 interface GapItem {
   shiftId: string;
   title: string;
@@ -41,6 +48,10 @@ interface ComplianceAlert {
   userId: string;
   userLabel: string;
   detail: string;
+}
+
+interface UnderstaffingForecast extends UnderstaffingTrend {
+  commentary: string | null;
 }
 
 function toMs(value: unknown): number | null {
@@ -204,6 +215,61 @@ function fallbackSummary(gapCount: number, alertCount: number): string {
   return parts.join('; ') + '.';
 }
 
+function isForecastDay(nowMs: number): boolean {
+  return new Date(nowMs).getUTCDay() === 1; // Monday — keeps the extra LLM call weekly, not daily
+}
+
+/**
+ * Trend over the last 8 weeks of digest history, split into a recent and a
+ * prior 4-week half. aiDigests only has a doc for days that actually had
+ * gaps/alerts (see generateDigestForOrg's early return), so this measures
+ * both how often problem-days occur and how bad they are on those days —
+ * not a full daily time series. See deriveUnderstaffingTrend for the
+ * direction math.
+ */
+async function computeUnderstaffingTrend(db: FirebaseFirestore.Firestore, orgId: string, nowMs: number): Promise<UnderstaffingTrend | null> {
+  const since = nowMs - FORECAST_LOOKBACK_MS;
+  const splitAt = nowMs - FORECAST_HALF_MS;
+
+  const snap = await db
+    .collection('orgs').doc(orgId).collection('aiDigests')
+    .where('generatedAt', '>=', Timestamp.fromMillis(since))
+    .orderBy('generatedAt', 'asc')
+    .limit(56)
+    .get();
+
+  const recent: number[] = [];
+  const prior: number[] = [];
+  for (const doc of snap.docs) {
+    const x = doc.data() as Record<string, unknown>;
+    const ts = toMs(x.generatedAt);
+    if (ts == null) continue;
+    const gapCount = Array.isArray(x.gaps) ? x.gaps.length : 0;
+    (ts >= splitAt ? recent : prior).push(gapCount);
+  }
+
+  return deriveUnderstaffingTrend(recent, prior);
+}
+
+async function forecastCommentary(client: Anthropic, orgName: string, trend: UnderstaffingTrend): Promise<string | null> {
+  try {
+    const resp = await client.messages.create({
+      model: MODEL,
+      max_tokens: 120,
+      system: 'You write a single forward-looking sentence (max 30 words) about a healthcare org\'s longer-term staffing risk trend, based on problem-day counts over the last 4 weeks vs the prior 4 weeks. No greeting, no hedging filler — one direct sentence.',
+      messages: [{
+        role: 'user',
+        content: `Organization: ${orgName}. Last 4 weeks: ${trend.recentProblemDays} day(s) with coverage/compliance issues (avg ${trend.recentAvgGaps.toFixed(1)} unfilled shifts on those days). Prior 4 weeks: ${trend.priorProblemDays} day(s) (avg ${trend.priorAvgGaps.toFixed(1)}). Overall trend: ${trend.direction}. Write the one-sentence outlook.`,
+      }],
+    });
+    const text = resp.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join(' ').trim();
+    return text || null;
+  } catch (e) {
+    logger.warn('[dailyDigest] forecast commentary failed, digest will show the trend without commentary', e);
+    return null;
+  }
+}
+
 async function resolveAdminUids(db: FirebaseFirestore.Firestore, orgId: string): Promise<string[]> {
   const usersSnap = await db.collection('orgs').doc(orgId).collection('users').get();
   const adminUids: string[] = [];
@@ -274,6 +340,15 @@ async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: stri
     ? await summarize(client, orgName, gaps, alerts)
     : fallbackSummary(gaps.length, alerts.length);
 
+  let forecast: UnderstaffingForecast | null = null;
+  if (isForecastDay(nowMs)) {
+    const trend = await computeUnderstaffingTrend(db, orgId, nowMs);
+    if (trend) {
+      const commentary = client ? await forecastCommentary(client, orgName, trend) : null;
+      forecast = { ...trend, commentary };
+    }
+  }
+
   const dateKey = new Date(nowMs).toISOString().slice(0, 10);
   await db
     .collection('orgs').doc(orgId).collection('aiDigests').doc(dateKey)
@@ -285,6 +360,7 @@ async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: stri
       gaps,
       alerts,
       proposals,
+      forecast,
     });
 
   await notifyAdminsOfDigest(db, orgId, summary, dateKey, nowMs);
