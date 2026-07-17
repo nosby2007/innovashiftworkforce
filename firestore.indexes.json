@@ -75,6 +75,15 @@
       "collectionGroup": "shifts",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "assignedUserId", "mode": "ASCENDING" },
+        { "fieldPath": "status", "mode": "ASCENDING" },
+        { "fieldPath": "endAt", "mode": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shifts",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "orgId", "mode": "ASCENDING" },
         { "fieldPath": "status", "mode": "ASCENDING" },
         { "fieldPath": "startAt", "mode": "ASCENDING" }
@@ -145,6 +154,14 @@
       ]
     },
     {
+      "collectionGroup": "timeEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "mode": "ASCENDING" },
+        { "fieldPath": "checkInAt", "mode": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "shifts",
       "queryScope": "COLLECTION",
       "fields": [
@@ -176,13 +193,18 @@
         { "fieldPath": "exceptionStatus", "mode": "ASCENDING" },
         { "fieldPath": "createdAt", "mode": "DESCENDING" }
       ]
-    },
+    }
+  ],
+  "fieldOverrides": [
     {
-      "collectionGroup": "timeEntries",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "userId", "mode": "ASCENDING" },
-        { "fieldPath": "checkInAt", "mode": "ASCENDING" }
+      "collectionGroup": "auditLogs",
+      "fieldPath": "createdAt",
+      "ttl": false,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" },
+        { "arrayConfig": "CONTAINS", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION_GROUP" }
       ]
     },
     {
@@ -193,6 +215,5 @@
         { "fieldPath": "startAt", "mode": "ASCENDING" }
       ]
     }
-  ],
-  "fieldOverrides": []
+  ]
 }
