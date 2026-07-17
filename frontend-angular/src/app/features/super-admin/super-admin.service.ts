@@ -124,6 +124,33 @@ export class SuperAdminService {
     const res = await call({ users });
     return res.data as CreateUsersResult;
   }
+
+  async listContactRequests(limit: number = 100): Promise<ContactRequestItem[]> {
+    const call = this.fn('listContactRequests');
+    const res = await call({ limit });
+    return Array.isArray(res.data?.items) ? res.data.items as ContactRequestItem[] : [];
+  }
+
+  async updateContactRequestStatus(requestId: string, status: ContactRequestStatus) {
+    const call = this.fn('updateContactRequestStatus');
+    const res = await call({ requestId, status });
+    return res.data;
+  }
+}
+
+export type ContactRequestStatus = 'new' | 'contacted' | 'converted' | 'dismissed';
+
+export interface ContactRequestItem {
+  id: string;
+  name: string;
+  organization: string;
+  email: string;
+  size: string;
+  message?: string | null;
+  status: ContactRequestStatus;
+  createdAt: any;
+  updatedAt?: any;
+  reviewedBy?: string | null;
 }
 
 export interface NewEmployeeInput {

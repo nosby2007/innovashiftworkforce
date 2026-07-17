@@ -49,6 +49,8 @@ import { aiAssistantChat } from './callable/aiAssistantChat';
 import { dailyDigest } from './scheduled/dailyDigest';
 import { cleanupArchivedNotifications } from './scheduled/cleanupArchivedNotifications';
 import { superAdminCreateUsers } from './callable/superAdminCreateUsers';
+import { listContactRequests } from './callable/listContactRequests';
+import { updateContactRequestStatus } from './callable/updateContactRequestStatus';
 
 // ----------------------------------------------------------------------
 // Stripe Billing
@@ -113,4 +115,6 @@ export {
   dailyDigest,
   cleanupArchivedNotifications,
   superAdminCreateUsers,
+  listContactRequests,
+  updateContactRequestStatus,
 };

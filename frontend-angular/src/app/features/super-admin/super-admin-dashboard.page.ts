@@ -19,6 +19,7 @@ import {
 import { computeBillingSummary } from '../../shared/utils/billing-summary.util';
 import { ACCESS_ROLES, JOB_ROLES } from '../../shared/models/access-roles.model';
 import { SuperAdminAddEmployeesComponent } from './super-admin-add-employees.component';
+import { SuperAdminDemoRequestsComponent } from './super-admin-demo-requests.component';
 
 const PLANS = ['free', 'starter', 'pro', 'enterprise'] as const;
 const PLAN_STATUSES = ['active', 'trialing', 'past_due', 'canceled'] as const;
@@ -88,7 +89,7 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, TablePaginatorComponent, SuperAdminAddEmployeesComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, TablePaginatorComponent, SuperAdminAddEmployeesComponent, SuperAdminDemoRequestsComponent],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
@@ -137,6 +138,8 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
       </div>
 
       <div *ngIf="activeTab() === 'overview'">
+        <app-super-admin-demo-requests></app-super-admin-demo-requests>
+
         <div class="vs-grid-3 sa-kpis">
           <div class="vs-stat-card vs-stat--primary">
             <div class="vs-stat-label">Total Organizations</div>
