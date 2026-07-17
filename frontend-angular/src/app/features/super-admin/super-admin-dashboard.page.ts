@@ -17,9 +17,9 @@ import {
   defaultCurrencyForTaxProfile,
 } from '../../core/tenancy/org-finance.model';
 import { computeBillingSummary } from '../../shared/utils/billing-summary.util';
+import { ACCESS_ROLES, JOB_ROLES } from '../../shared/models/access-roles.model';
+import { SuperAdminAddEmployeesComponent } from './super-admin-add-employees.component';
 
-const ACCESS_ROLES = ['staff', 'manager', 'scheduler', 'admin', 'hr'] as const;
-const JOB_ROLES = ['RN', 'CNA', 'LPN', 'Caregiver', 'NP', 'MD', 'Manager', 'Admin', 'HR', 'Other'];
 const PLANS = ['free', 'starter', 'pro', 'enterprise'] as const;
 const PLAN_STATUSES = ['active', 'trialing', 'past_due', 'canceled'] as const;
 // Mirrors the public pricing page (features/public/pricing/pricing.page.ts).
@@ -88,7 +88,7 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, TablePaginatorComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, TablePaginatorComponent, SuperAdminAddEmployeesComponent],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
@@ -544,11 +544,13 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
       </div>
 
       <div *ngIf="activeTab() === 'user'">
+        <app-super-admin-add-employees></app-super-admin-add-employees>
+
         <section class="vs-glass-strong sa-section">
           <div class="vs-panel-head">
             <div>
               <div class="vs-panel-title">User Provisioning</div>
-              <div class="vs-panel-subtitle">Look up a user and assign org, access role, job role, or platform role</div>
+              <div class="vs-panel-subtitle">Look up an existing account and assign org, access role, job role, or platform role</div>
             </div>
             <mat-icon class="sa-icon">manage_accounts</mat-icon>
           </div>
