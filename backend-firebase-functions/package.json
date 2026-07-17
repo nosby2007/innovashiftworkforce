@@ -10,10 +10,10 @@
     "repair:attendance": "node tools/repair-stuck-attendance.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.112.0",
     "@sendgrid/mail": "^8.1.6",
     "firebase-admin": "^13.6.0",
     "firebase-functions": "^7.2.5",
+    "openai": "^6.47.0",
     "stripe": "^22.1.1"
   },
   "devDependencies": {
