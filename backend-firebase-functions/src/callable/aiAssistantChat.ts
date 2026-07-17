@@ -1,16 +1,20 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { Timestamp } from 'firebase-admin/firestore';
 import { initFirebase } from '../infra/firebase';
 import { resolveTenantWithFallback } from '../infra/tenancy';
 import { Proposal, buildProposal } from '../domain/ai-proposals';
 import { entryHours, grossPay, estimatedDeductions, estimatedNet } from '../domain/payroll-math';
 
-export const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
+export const openaiApiKey = defineSecret('OPENAI_API_KEY');
 
-const MODEL = 'claude-sonnet-5';
+// The ChatGPT app's model picker shows friendly names ("GPT-5.6 Sol") that
+// don't always match the exact API model id — verify this against the
+// model list on platform.openai.com if calls start failing with a
+// "model not found" error, and update just this one constant.
+const MODEL = 'gpt-5.6';
 const MAX_TOOL_ITERATIONS = 5;
 const MAX_HISTORY_TURNS = 20;
 
@@ -25,101 +29,122 @@ const MAX_HISTORY_TURNS = 20;
 //    publishShift, unassignShift) the rest of the app already uses. The
 //    assistant itself has no write path into the database.
 // ----------------------------------------------------------------------
-const TOOLS: Anthropic.Tool[] = [
+const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
-    name: 'get_shifts',
-    description: 'List shifts for this organization within an optional date range and status. Use this to answer questions about coverage, open shifts, or who is scheduled.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        startAtMs: { type: 'number', description: 'Only shifts starting on/after this epoch ms. Optional.' },
-        endAtMs: { type: 'number', description: 'Only shifts starting on/before this epoch ms. Optional.' },
-        status: {
-          type: 'string',
-          enum: ['open', 'published', 'assigned', 'claimed', 'in_progress', 'completed', 'expired', 'cancelled', 'no_show'],
-          description: 'Filter by shift status. Optional.',
+    type: 'function',
+    function: {
+      name: 'get_shifts',
+      description: 'List shifts for this organization within an optional date range and status. Use this to answer questions about coverage, open shifts, or who is scheduled.',
+      parameters: {
+        type: 'object',
+        properties: {
+          startAtMs: { type: 'number', description: 'Only shifts starting on/after this epoch ms. Optional.' },
+          endAtMs: { type: 'number', description: 'Only shifts starting on/before this epoch ms. Optional.' },
+          status: {
+            type: 'string',
+            enum: ['open', 'published', 'assigned', 'claimed', 'in_progress', 'completed', 'expired', 'cancelled', 'no_show'],
+            description: 'Filter by shift status. Optional.',
+          },
+          limit: { type: 'number', description: 'Max results, default 30, max 50.' },
         },
-        limit: { type: 'number', description: 'Max results, default 30, max 50.' },
       },
     },
   },
   {
-    name: 'get_org_users',
-    description: 'List staff members in this organization, optionally filtered by job role. Use this to find candidates to assign to a shift.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        jobRole: { type: 'string', description: 'Filter by job role (e.g. "RN", "CNA"). Optional.' },
-        limit: { type: 'number', description: 'Max results, default 30, max 100.' },
+    type: 'function',
+    function: {
+      name: 'get_org_users',
+      description: 'List staff members in this organization, optionally filtered by job role. Use this to find candidates to assign to a shift.',
+      parameters: {
+        type: 'object',
+        properties: {
+          jobRole: { type: 'string', description: 'Filter by job role (e.g. "RN", "CNA"). Optional.' },
+          limit: { type: 'number', description: 'Max results, default 30, max 100.' },
+        },
       },
     },
   },
   {
-    name: 'get_timesheet_summary',
-    description: 'Summarize hours worked and estimated payroll cost for a date range, overall or for one staff member. Use this to answer questions about hours worked, labor cost, or which staff worked the most. Figures are the same flat-rate estimate (no tax tables) shown on the Payroll page, not a precise payroll run.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        startAtMs: { type: 'number', description: 'Start of the period, epoch ms.' },
-        endAtMs: { type: 'number', description: 'End of the period, epoch ms.' },
-        userId: { type: 'string', description: 'Optional — scope to one staff member (get the uid from get_org_users first). Omit for an org-wide summary.' },
+    type: 'function',
+    function: {
+      name: 'get_timesheet_summary',
+      description: 'Summarize hours worked and estimated payroll cost for a date range, overall or for one staff member. Use this to answer questions about hours worked, labor cost, or which staff worked the most. Figures are the same flat-rate estimate (no tax tables) shown on the Payroll page, not a precise payroll run.',
+      parameters: {
+        type: 'object',
+        properties: {
+          startAtMs: { type: 'number', description: 'Start of the period, epoch ms.' },
+          endAtMs: { type: 'number', description: 'End of the period, epoch ms.' },
+          userId: { type: 'string', description: 'Optional — scope to one staff member (get the uid from get_org_users first). Omit for an org-wide summary.' },
+        },
+        required: ['startAtMs', 'endAtMs'],
       },
-      required: ['startAtMs', 'endAtMs'],
     },
   },
   {
-    name: 'propose_create_shift',
-    description: 'Propose creating a new shift. This does NOT create it — it is shown to the admin for one-click confirmation.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        title: { type: 'string' },
-        locationName: { type: 'string' },
-        startAtMs: { type: 'number', description: 'Epoch ms.' },
-        endAtMs: { type: 'number', description: 'Epoch ms.' },
-        requiredJobRole: { type: 'string' },
-        payRate: { type: 'number' },
-        notes: { type: 'string' },
+    type: 'function',
+    function: {
+      name: 'propose_create_shift',
+      description: 'Propose creating a new shift. This does NOT create it — it is shown to the admin for one-click confirmation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          locationName: { type: 'string' },
+          startAtMs: { type: 'number', description: 'Epoch ms.' },
+          endAtMs: { type: 'number', description: 'Epoch ms.' },
+          requiredJobRole: { type: 'string' },
+          payRate: { type: 'number' },
+          notes: { type: 'string' },
+        },
+        required: ['title', 'locationName', 'startAtMs', 'endAtMs'],
       },
-      required: ['title', 'locationName', 'startAtMs', 'endAtMs'],
     },
   },
   {
-    name: 'propose_assign_shift',
-    description: 'Propose assigning a staff member to an existing shift. This does NOT assign it — it is shown to the admin for one-click confirmation.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        shiftId: { type: 'string' },
-        shiftLabel: { type: 'string', description: 'Human-readable label for the shift, e.g. "Standard Shift — Tue Jul 14, 8:00 AM".' },
-        assigneeUid: { type: 'string' },
-        assigneeLabel: { type: 'string', description: 'Human-readable name of the staff member.' },
+    type: 'function',
+    function: {
+      name: 'propose_assign_shift',
+      description: 'Propose assigning a staff member to an existing shift. This does NOT assign it — it is shown to the admin for one-click confirmation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          shiftId: { type: 'string' },
+          shiftLabel: { type: 'string', description: 'Human-readable label for the shift, e.g. "Standard Shift — Tue Jul 14, 8:00 AM".' },
+          assigneeUid: { type: 'string' },
+          assigneeLabel: { type: 'string', description: 'Human-readable name of the staff member.' },
+        },
+        required: ['shiftId', 'assigneeUid'],
       },
-      required: ['shiftId', 'assigneeUid'],
     },
   },
   {
-    name: 'propose_publish_shift',
-    description: 'Propose publishing an open/draft shift to the marketplace so staff can see and claim it. This does NOT publish it — it is shown to the admin for one-click confirmation.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        shiftId: { type: 'string' },
-        shiftLabel: { type: 'string' },
+    type: 'function',
+    function: {
+      name: 'propose_publish_shift',
+      description: 'Propose publishing an open/draft shift to the marketplace so staff can see and claim it. This does NOT publish it — it is shown to the admin for one-click confirmation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          shiftId: { type: 'string' },
+          shiftLabel: { type: 'string' },
+        },
+        required: ['shiftId'],
       },
-      required: ['shiftId'],
     },
   },
   {
-    name: 'propose_unassign_shift',
-    description: 'Propose removing the currently assigned staff member from a shift. This does NOT unassign it — it is shown to the admin for one-click confirmation.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        shiftId: { type: 'string' },
-        shiftLabel: { type: 'string' },
+    type: 'function',
+    function: {
+      name: 'propose_unassign_shift',
+      description: 'Propose removing the currently assigned staff member from a shift. This does NOT unassign it — it is shown to the admin for one-click confirmation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          shiftId: { type: 'string' },
+          shiftLabel: { type: 'string' },
+        },
+        required: ['shiftId'],
       },
-      required: ['shiftId'],
     },
   },
 ];
@@ -269,7 +294,7 @@ interface ChatTurn {
   text: string;
 }
 
-export const aiAssistantChat = onCall({ secrets: [anthropicApiKey] }, async (req) => {
+export const aiAssistantChat = onCall({ secrets: [openaiApiKey] }, async (req) => {
   const ctx = await resolveTenantWithFallback(req);
   if (!ctx.isAdminLike) {
     throw new HttpsError('permission-denied', 'Admin-level privileges required.');
@@ -302,77 +327,86 @@ export const aiAssistantChat = onCall({ secrets: [anthropicApiKey] }, async (req
     'Be concise. Prefer short, direct answers over long explanations.',
   ].join('\n');
 
-  const messages: Anthropic.MessageParam[] = [];
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    { role: 'system', content: systemPrompt },
+  ];
   for (const turn of history) {
     messages.push({ role: turn.role, content: turn.text });
   }
   messages.push({ role: 'user', content: message });
 
-  const client = new Anthropic({ apiKey: anthropicApiKey.value() });
+  const client = new OpenAI({ apiKey: openaiApiKey.value() });
   const proposals: Proposal[] = [];
   let replyText = '';
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-    let response: Anthropic.Message;
+    let response: OpenAI.Chat.ChatCompletion;
     try {
-      response = await client.messages.create({
+      response = await client.chat.completions.create({
         model: MODEL,
-        max_tokens: 1024,
-        system: systemPrompt,
+        max_completion_tokens: 1024,
         tools: TOOLS,
         messages,
       });
     } catch (e: any) {
-      logger.error('[aiAssistantChat] Anthropic API error', e);
+      logger.error('[aiAssistantChat] OpenAI API error', e);
       throw new HttpsError('internal', 'AI assistant is temporarily unavailable. Please try again.');
     }
 
-    messages.push({ role: 'assistant', content: response.content });
+    const assistantMessage = response.choices[0]?.message;
+    if (!assistantMessage) break;
+    messages.push({
+      role: 'assistant',
+      content: assistantMessage.content,
+      tool_calls: assistantMessage.tool_calls,
+    });
 
-    const toolUses = response.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+    if (assistantMessage.content) replyText = assistantMessage.content.trim();
+
+    const toolCalls = (assistantMessage.tool_calls || []).filter(
+      (tc): tc is OpenAI.Chat.ChatCompletionMessageFunctionToolCall => tc.type === 'function'
     );
-
-    const textBlocks = response.content.filter((b): b is Anthropic.TextBlock => b.type === 'text');
-    if (textBlocks.length) replyText = textBlocks.map((b) => b.text).join('\n').trim();
-
-    if (toolUses.length === 0) {
+    if (toolCalls.length === 0) {
       break;
     }
 
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
-    for (const tu of toolUses) {
+    for (const tc of toolCalls) {
+      let input: any = {};
       try {
-        if (PROPOSAL_TOOL_NAMES.has(tu.name)) {
-          const proposal = buildProposal(tu.name, tu.input);
+        input = tc.function.arguments ? JSON.parse(tc.function.arguments) : {};
+      } catch {
+        input = {};
+      }
+      try {
+        if (PROPOSAL_TOOL_NAMES.has(tc.function.name)) {
+          const proposal = buildProposal(tc.function.name, input);
           proposals.push(proposal);
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: tu.id,
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
             content: 'Proposal staged and shown to the admin for confirmation. It has not been executed yet.',
           });
-        } else if (tu.name === 'get_shifts') {
-          const items = await runGetShifts(db, orgId, tu.input);
-          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(items) });
-        } else if (tu.name === 'get_org_users') {
-          const items = await runGetOrgUsers(db, orgId, tu.input);
-          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(items) });
-        } else if (tu.name === 'get_timesheet_summary') {
-          const summary = await runGetTimesheetSummary(db, orgId, tu.input);
-          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(summary) });
+        } else if (tc.function.name === 'get_shifts') {
+          const items = await runGetShifts(db, orgId, input);
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(items) });
+        } else if (tc.function.name === 'get_org_users') {
+          const items = await runGetOrgUsers(db, orgId, input);
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(items) });
+        } else if (tc.function.name === 'get_timesheet_summary') {
+          const summary = await runGetTimesheetSummary(db, orgId, input);
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(summary) });
         } else {
-          toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Unknown tool.', is_error: true });
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: 'Unknown tool.' });
         }
       } catch (e: any) {
-        logger.error(`[aiAssistantChat] tool ${tu.name} failed`, e);
-        toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Tool execution failed.', is_error: true });
+        logger.error(`[aiAssistantChat] tool ${tc.function.name} failed`, e);
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: 'Tool execution failed.' });
       }
     }
-    messages.push({ role: 'user', content: toolResults });
 
     // If this turn only produced proposals (no reads), there's nothing further
     // for the model to reason over — stop rather than spending another round trip.
-    if (toolUses.every((tu) => PROPOSAL_TOOL_NAMES.has(tu.name))) {
+    if (toolCalls.every((tc) => PROPOSAL_TOOL_NAMES.has(tc.function.name))) {
       break;
     }
   }

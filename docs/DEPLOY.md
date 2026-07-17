@@ -60,10 +60,15 @@ aren't part of this deploy pipeline:
   `firebase functions:secrets:set ACTION_TOKEN_SECRET` from your own
   machine with the Firebase CLI logged in (this is Firebase Secret
   Manager, not a GitHub secret, so CI can't set it for you).
-- **`ANTHROPIC_API_KEY`** (AI Copilot, `/admin/ai-copilot`, Pro plan and
-  up) — an Anthropic API key from
-  [console.anthropic.com](https://console.anthropic.com/settings/keys).
-  Set it the same way: `firebase functions:secrets:set ANTHROPIC_API_KEY`.
+- **`OPENAI_API_KEY`** (AI Copilot, `/admin/ai-copilot`, Pro plan and
+  up) — an OpenAI API key from
+  [platform.openai.com](https://platform.openai.com/api-keys). Verify
+  the exact model id in `MODEL` (`callable/aiAssistantChat.ts` and
+  `scheduled/dailyDigest.ts`, kept in sync between the two) still
+  matches what's available on your account before relying on this in
+  production — model ids shown in the ChatGPT app don't always match
+  the API model id exactly.
+  Set it the same way: `firebase functions:secrets:set OPENAI_API_KEY`.
   Uses the same **Secret Manager Secret Accessor** role on
   `github-actions-deploy` already granted above — nothing extra to add
   in IAM. The assistant only ever *proposes* shift actions (create,
@@ -72,7 +77,7 @@ aren't part of this deploy pipeline:
   UI — it never writes to Firestore directly.
 - **Daily AI digest** (`dailyDigest` scheduled function) — runs every
   day at 8am America/New_York automatically once deployed, no extra
-  setup beyond the same `ANTHROPIC_API_KEY` above. For each active org
+  setup beyond the same `OPENAI_API_KEY` above. For each active org
   it scans shifts starting in the next 3 days, and if any are unfilled
   it writes a summary + publish proposals to
   `orgs/{orgId}/aiDigests/{date}`, shown at the top of the AI Copilot
@@ -92,8 +97,8 @@ aren't part of this deploy pipeline:
   problem-days vs the prior 4) and, if there's enough history, adds a
   `forecast` field with a direction (worsening/improving/stable) and a
   one-sentence AI outlook — shown as a callout on the AI Copilot page.
-  Weekly rather than daily to keep the extra Anthropic call bounded;
-  no extra setup beyond `ANTHROPIC_API_KEY` above. Requires
+  Weekly rather than daily to keep the extra OpenAI call bounded;
+  no extra setup beyond `OPENAI_API_KEY` above. Requires
   Cloud Scheduler to be enabled on the GCP project, which `firebase
   deploy` does automatically on first deploy of a scheduled function.
   If that first deploy fails with a permissions error creating the
