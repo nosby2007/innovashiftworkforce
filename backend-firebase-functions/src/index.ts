@@ -10,6 +10,7 @@ import { getGlobalAuditLogs } from './callable/getGlobalAuditLogs';
 import { rescheduleShift } from './callable/rescheduleShift';
 import { createShift } from './callable/createShift';
 import { onShiftWriteMetrics } from './triggers/onShiftWriteMetrics';
+import { onShiftWorkforceEmail, onTimeEntryWorkforceEmail, onShiftSwapWorkforceEmail } from './triggers/onWorkforceEmailEvents';
 import { unassignShift } from './callable/unassignShift';
 import { deleteShift } from './callable/deleteShift';
 import { assignShift } from './callable/assignShift';
@@ -90,6 +91,9 @@ export {
   unassignShift,
   deleteShift,
   onShiftWriteMetrics,
+  onShiftWorkforceEmail,
+  onTimeEntryWorkforceEmail,
+  onShiftSwapWorkforceEmail,
   createShift,
   rescheduleShift,
   externalNotifyCallable,
