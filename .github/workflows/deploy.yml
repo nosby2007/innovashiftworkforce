@@ -50,4 +50,6 @@ jobs:
         if: steps.creds.outputs.configured == 'true'
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/gcp-key.json
-        run: npx firebase-tools@13 deploy --project atlanta-e04aa --non-interactive
+        # --force is required for intentional Cloud Functions failure-policy
+        # changes, including enabling retry on idempotent Firestore triggers.
+        run: npx firebase-tools@13 deploy --project atlanta-e04aa --non-interactive --force
