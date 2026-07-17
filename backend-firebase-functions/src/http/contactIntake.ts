@@ -8,9 +8,8 @@ import { externalNotify, sendgridApiKey } from '../infra/external-notify';
 // So a demo request is never just sitting invisibly in Firestore waiting for
 // someone to happen to check the console — this fires immediately and
 // doesn't depend on any admin being online. Configurable without a
-// redeploy-of-logic via env var; defaults to the address already shown on
-// the public Contact page.
-const DEMO_REQUEST_NOTIFY_EMAIL = process.env.DEMO_REQUEST_NOTIFY_EMAIL || 'hello@innovashift.com';
+// redeploy-of-logic via env var.
+const DEMO_REQUEST_NOTIFY_EMAIL = process.env.DEMO_REQUEST_NOTIFY_EMAIL || 'contact@innovacarereview.com';
 
 function normalizeText(value: unknown, maxLength: number) {
   return String(value ?? '').trim().slice(0, maxLength);
