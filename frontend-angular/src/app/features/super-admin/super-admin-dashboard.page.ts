@@ -16,11 +16,23 @@ import {
   TaxProfileId,
   defaultCurrencyForTaxProfile,
 } from '../../core/tenancy/org-finance.model';
+import { computeBillingSummary } from '../../shared/utils/billing-summary.util';
 
 const ACCESS_ROLES = ['staff', 'manager', 'scheduler', 'admin', 'hr'] as const;
 const JOB_ROLES = ['RN', 'CNA', 'LPN', 'Caregiver', 'NP', 'MD', 'Manager', 'Admin', 'HR', 'Other'];
 const PLANS = ['free', 'starter', 'pro', 'enterprise'] as const;
 const PLAN_STATUSES = ['active', 'trialing', 'past_due', 'canceled'] as const;
+// Mirrors the public pricing page (features/public/pricing/pricing.page.ts).
+// Stripe checkout isn't wired to that page yet (org.plan is set manually by
+// super-admins today), so these list prices are the best available source
+// for a revenue estimate — not a live Stripe amount. Enterprise has no fixed
+// price, so it's tracked separately rather than folded into MRR as $0.
+const PLAN_MONTHLY_PRICE_USD: Record<(typeof PLANS)[number], number | null> = {
+  free: 0,
+  starter: 49,
+  pro: 149,
+  enterprise: null,
+};
 const INDUSTRIES = [
   'Healthcare', 'Hospitality', 'Retail', 'Manufacturing',
   'Transportation', 'Education', 'Finance', 'Technology', 'Other',
@@ -205,6 +217,39 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
             </div>
           </section>
         </div>
+
+        <section class="vs-glass-strong sa-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Revenue by Plan (MRR)</div>
+              <div class="vs-panel-subtitle">Estimated from list pricing × active paying orgs — not a live Stripe amount (self-serve checkout isn't wired up yet, plans are set manually)</div>
+            </div>
+            <mat-icon class="sa-icon">payments</mat-icon>
+          </div>
+          <div class="vs-panel-body">
+            <div class="sa-mrr-total">
+              <span class="vs-stat-label">Estimated Monthly Recurring Revenue</span>
+              <strong>{{ billingSummary().totalMrrUsd | currency:'USD':'symbol':'1.0-0' }}</strong>
+            </div>
+            <table class="sa-mrr-table">
+              <thead>
+                <tr><th>Plan</th><th>Active orgs</th><th>Price / mo</th><th>Subtotal</th></tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of billingSummary().rows">
+                  <td>{{ row.plan | titlecase }}</td>
+                  <td>{{ row.activeCount }}</td>
+                  <td>{{ row.priceUsd == null ? 'Custom' : (row.priceUsd | currency:'USD':'symbol':'1.0-0') + '/mo' }}</td>
+                  <td>{{ row.plan === 'enterprise' ? '—' : (row.mrrUsd | currency:'USD':'symbol':'1.0-0') }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="sa-mrr-notes">
+              <span *ngIf="billingSummary().enterpriseActiveCount > 0">{{ billingSummary().enterpriseActiveCount }} active enterprise account(s) on custom pricing — contact billing records for actual amount, not included above.</span>
+              <span *ngIf="billingSummary().trialingCount > 0">{{ billingSummary().trialingCount }} org(s) currently trialing — not yet counted as revenue.</span>
+            </div>
+          </div>
+        </section>
       </div>
 
       <div *ngIf="activeTab() === 'organization'">
@@ -953,6 +998,13 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
     .sa-health-strip span { color: #64748b; font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
     .sa-health-strip strong { color: #0f172a; font-size: 30px; line-height: 1; }
     .sa-health-strip small { color: #475569; line-height: 1.35; }
+    .sa-mrr-total { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+    .sa-mrr-total .vs-stat-label { color: var(--text-subtle); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+    .sa-mrr-total strong { font-size: 32px; font-weight: 900; color: var(--text); }
+    .sa-mrr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .sa-mrr-table th { text-align: left; color: var(--text-subtle); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    .sa-mrr-table td { padding: 10px; border-bottom: 1px solid var(--border); color: var(--text); }
+    .sa-mrr-notes { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; color: var(--text-muted); font-size: 12px; }
     .sa-icon { color: var(--text-subtle); }
     .sa-head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .sa-search { min-width: 260px; }
@@ -1176,6 +1228,8 @@ export class SuperAdminDashboardPage implements OnInit, OnDestroy {
   countryCount() {
     return new Set(this.orgs().map((o: any) => String(o.countryCode || '').trim()).filter(Boolean)).size;
   }
+
+  billingSummary = computed(() => computeBillingSummary(this.orgs(), PLAN_MONTHLY_PRICE_USD));
 
   platformHealthScore() {
     const orgs = this.orgs();
