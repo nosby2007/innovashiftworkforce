@@ -9,6 +9,7 @@ import { ShiftAdminCommands } from '../../core/commands/shift-admin.commands';
 import { ToastService } from '../../core/ui/toast.service';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { AiDigestRepo, AiDigest } from '../../core/repos/ai-digest.repo';
+import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
 
 type ProposalStatus = 'pending' | 'confirmed' | 'dismissed' | 'error';
 
@@ -31,7 +32,7 @@ const SUGGESTIONS = [
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, DatePipe],
+  imports: [CommonModule, FormsModule, MatIconModule, DatePipe, TipCardComponent],
   template: `
     <div class="vs-page-pad ac-page">
       <div class="vs-page-header">
@@ -40,6 +41,10 @@ const SUGGESTIONS = [
           <p class="vs-page-subtitle">Ask about coverage, staffing, and shifts — every action needs your confirmation before it happens.</p>
         </div>
       </div>
+
+      <app-tip-card tipId="ai-copilot-intro" title="How the Copilot works" icon="auto_awesome">
+        Ask it anything about your schedule — it can also draft actions like creating or publishing a shift, but it never touches anything without you clicking Confirm first.
+      </app-tip-card>
 
       <div class="vs-glass-strong ac-digest" *ngIf="digest() as d">
         <div class="ac-digest-head">

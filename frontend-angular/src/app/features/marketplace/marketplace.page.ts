@@ -14,10 +14,11 @@ import { ToastService } from '../../core/ui/toast.service';
 import { mapAttendancePolicyError } from '../../shared/utils/attendance-policy-error.util';
 import { getCurrentWeekRange, fmtShiftDate, fmtShiftTime, canClaimShift, shiftHours } from '../../shared/utils/shift-lifecycle.utils';
 import { scoreShiftMatch, ShiftMatchLabel } from '../../shared/utils/shift-match.util';
+import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, CurrencyPipe],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, CurrencyPipe, TipCardComponent],
   template: `
     <div class="vs-page-pad mk-page">
       <header class="mk-header">
@@ -41,6 +42,10 @@ import { scoreShiftMatch, ShiftMatchLabel } from '../../shared/utils/shift-match
           </button>
         </div>
       </header>
+
+      <app-tip-card tipId="marketplace-intro" title="Finding your best-fit shift" icon="stars">
+        Shifts are sorted for you — "Great fit" ones match your role with no schedule conflict, while shifts with a conflict or tight turnaround sink lower and are flagged, not hidden.
+      </app-tip-card>
 
       <div *ngIf="!orgId" class="mk-no-org vs-glass">
         <mat-icon>warning_amber</mat-icon> Missing org context.
