@@ -57,6 +57,7 @@ type EmployeeProfileDraft = {
   medicarePercent: number | null;
   retirement401kPercent: number;
   retirement401kMatchPercent: number | null;
+  retirement401kProvider: string | null;
   benefits: BenefitLine[];
 };
 
@@ -263,6 +264,7 @@ type EmployeeProfileDraft = {
                 <label><span>Medicare % (org default {{ orgDeductionDefaults.medicarePercent }})</span><input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="profileDraft.medicarePercent" placeholder="default"></label>
                 <label><span>401(k) Employee %</span><input class="vs-input" type="number" min="0" step="0.1" [(ngModel)]="profileDraft.retirement401kPercent"></label>
                 <label><span>401(k) Employer Match % (org default {{ orgDeductionDefaults.retirement401kMatchPercent }})</span><input class="vs-input" type="number" min="0" step="0.1" [(ngModel)]="profileDraft.retirement401kMatchPercent" placeholder="default"></label>
+                <label><span>401(k) Provider (org default: {{ orgDeductionDefaults.retirement401kProvider || 'not set' }})</span><input class="vs-input" [(ngModel)]="profileDraft.retirement401kProvider" placeholder="default"></label>
               </div>
 
               <div class="empd-benefit-head">
@@ -285,6 +287,7 @@ type EmployeeProfileDraft = {
 
               <div class="empd-benefit-row" *ngFor="let b of profileDraft.benefits; index as i">
                 <input class="vs-input" [(ngModel)]="b.label" placeholder="Benefit name">
+                <input class="vs-input" [(ngModel)]="b.provider" placeholder="Provider / carrier">
                 <input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="b.employeeAmount" placeholder="Employee $/paycheck">
                 <input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="b.employerAmount" placeholder="Employer $/paycheck">
                 <button class="vs-btn-ghost" type="button" (click)="removeEmployeeBenefit(i)">
@@ -560,7 +563,8 @@ type EmployeeProfileDraft = {
     .empd-benefit-add { display:flex; gap:8px; align-items:center; }
     .empd-benefit-add .vs-select { min-width:160px; }
     .empd-benefit-empty { border:1px dashed var(--border); border-radius:12px; padding:14px; color:var(--text-muted); font-size:13px; }
-    .empd-benefit-row { display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; align-items:center; margin-bottom:8px; }
+    .empd-benefit-row { display:grid; grid-template-columns:1.4fr 1.4fr 1fr 1fr auto; gap:8px; align-items:center; margin-bottom:8px; }
+    @media (max-width:900px) { .empd-benefit-row { grid-template-columns:1fr 1fr; } }
     .empd-text-lines textarea { min-height:96px; resize:vertical; }
     .empd-pto-list { display:grid; gap:8px; }
     .empd-pto-row { display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid var(--border); border-radius:12px; padding:10px; background:rgba(255,255,255,0.03); }
@@ -658,7 +662,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
   profileDraft: EmployeeProfileDraft = this.emptyProfileDraft();
   dependentsText = '';
   orgBenefitPlans = signal<BenefitLine[]>([]);
-  orgDeductionDefaults = { federalTaxPercent: 0, stateTaxPercent: 0, socialSecurityPercent: 0, medicarePercent: 0, retirement401kMatchPercent: 0 };
+  orgDeductionDefaults = { federalTaxPercent: 0, stateTaxPercent: 0, socialSecurityPercent: 0, medicarePercent: 0, retirement401kMatchPercent: 0, retirement401kProvider: '' };
   selectedBenefitPlanId = '';
   timeOffRequests = signal<TimeOffRequest[]>([]);
   employeeDocuments = signal<EmployeeDocumentRecord[]>([]);
@@ -742,6 +746,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
         socialSecurityPercent: Number(data.defaultSocialSecurityPercent ?? countryDefaults.socialSecurityPercent),
         medicarePercent: Number(data.defaultMedicarePercent ?? countryDefaults.medicarePercent),
         retirement401kMatchPercent: Number(data.default401kMatchPercent ?? 0),
+        retirement401kProvider: String(data.default401kProvider || ''),
       };
       this.orgBenefitPlans.set(Array.isArray(data.benefitPlans) ? data.benefitPlans : []);
     } catch { /* non-critical */ }
@@ -752,7 +757,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
     if (!plan) return;
     this.profileDraft.benefits = [
       ...this.profileDraft.benefits,
-      { id: this.createLocalId('benefit'), label: plan.label, employeeAmount: plan.employeeAmount, employerAmount: plan.employerAmount },
+      { id: this.createLocalId('benefit'), label: plan.label, provider: plan.provider || '', employeeAmount: plan.employeeAmount, employerAmount: plan.employerAmount },
     ];
     this.selectedBenefitPlanId = '';
   }
@@ -760,7 +765,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
   addCustomBenefit() {
     this.profileDraft.benefits = [
       ...this.profileDraft.benefits,
-      { id: this.createLocalId('benefit'), label: '', employeeAmount: 0, employerAmount: 0 },
+      { id: this.createLocalId('benefit'), label: '', provider: '', employeeAmount: 0, employerAmount: 0 },
     ];
   }
 
@@ -1037,8 +1042,9 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
             medicarePercent: this.profileDraft.medicarePercent != null ? this.num(this.profileDraft.medicarePercent) : null,
             retirement401kPercent: this.num(this.profileDraft.retirement401kPercent),
             retirement401kMatchPercent: this.profileDraft.retirement401kMatchPercent != null ? this.num(this.profileDraft.retirement401kMatchPercent) : null,
+            retirement401kProvider: this.profileDraft.retirement401kProvider != null ? this.profileDraft.retirement401kProvider.trim() || null : null,
             benefits: this.profileDraft.benefits
-              .map((b) => ({ id: b.id, label: b.label.trim(), employeeAmount: this.num(b.employeeAmount), employerAmount: this.num(b.employerAmount) }))
+              .map((b) => ({ id: b.id, label: b.label.trim(), provider: (b.provider || '').trim(), employeeAmount: this.num(b.employeeAmount), employerAmount: this.num(b.employerAmount) }))
               .filter((b) => b.label),
           },
           updatedAt: serverTimestamp(),
@@ -1126,7 +1132,8 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
       medicarePercent: deductions.medicarePercent != null ? this.num(deductions.medicarePercent) : null,
       retirement401kPercent: this.num(deductions.retirement401kPercent || 0),
       retirement401kMatchPercent: deductions.retirement401kMatchPercent != null ? this.num(deductions.retirement401kMatchPercent) : null,
-      benefits: Array.isArray(deductions.benefits) ? deductions.benefits.map((b: any) => ({ id: String(b.id || this.createLocalId('benefit')), label: String(b.label || ''), employeeAmount: this.num(b.employeeAmount || 0), employerAmount: this.num(b.employerAmount || 0) })) : [],
+      retirement401kProvider: deductions.retirement401kProvider != null ? String(deductions.retirement401kProvider) : null,
+      benefits: Array.isArray(deductions.benefits) ? deductions.benefits.map((b: any) => ({ id: String(b.id || this.createLocalId('benefit')), label: String(b.label || ''), provider: String(b.provider || ''), employeeAmount: this.num(b.employeeAmount || 0), employerAmount: this.num(b.employerAmount || 0) })) : [],
     };
     this.dependentsText = Array.isArray(data.dependents)
       ? data.dependents
@@ -1164,6 +1171,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
       medicarePercent: null,
       retirement401kPercent: 0,
       retirement401kMatchPercent: null,
+      retirement401kProvider: null,
       benefits: [],
     };
   }

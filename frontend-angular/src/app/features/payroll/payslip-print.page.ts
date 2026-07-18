@@ -107,16 +107,16 @@ import {
             <div class="ps-line"><span>State tax</span><strong></strong><em>{{ deductionBreakdown()?.stateTax ?? 0 | currency:moneyCurrency() }}</em></div>
             <div class="ps-line"><span>Social Security</span><strong></strong><em>{{ deductionBreakdown()?.socialSecurity ?? 0 | currency:moneyCurrency() }}</em></div>
             <div class="ps-line"><span>Medicare</span><strong></strong><em>{{ deductionBreakdown()?.medicare ?? 0 | currency:moneyCurrency() }}</em></div>
-            <div class="ps-line" *ngIf="(deductionBreakdown()?.retirement401k ?? 0) > 0"><span>401(k)</span><strong></strong><em>{{ deductionBreakdown()?.retirement401k ?? 0 | currency:moneyCurrency() }}</em></div>
-            <div class="ps-line" *ngFor="let b of deductionBreakdown()?.benefitLines ?? []"><span>{{ b.label }}</span><strong></strong><em>{{ b.amount | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line" *ngIf="(deductionBreakdown()?.retirement401k ?? 0) > 0"><span>401(k){{ retirement401kProvider() ? ' — ' + retirement401kProvider() : '' }}</span><strong></strong><em>{{ deductionBreakdown()?.retirement401k ?? 0 | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line" *ngFor="let b of deductionBreakdown()?.benefitLines ?? []"><span>{{ b.label }}{{ b.provider ? ' — ' + b.provider : '' }}</span><strong></strong><em>{{ b.amount | currency:moneyCurrency() }}</em></div>
             <div class="ps-line ps-line-total"><span>Total deductions</span><strong></strong><em>{{ totalDeductions() | currency:moneyCurrency() }}</em></div>
           </article>
         </section>
 
         <section class="ps-box ps-employer" *ngIf="(deductionBreakdown()?.employerContributionsTotal ?? 0) > 0">
           <h2>Employer Contributions</h2>
-          <div class="ps-line" *ngIf="(deductionBreakdown()?.employer401kMatch ?? 0) > 0"><span>401(k) match</span><strong></strong><em>{{ deductionBreakdown()?.employer401kMatch ?? 0 | currency:moneyCurrency() }}</em></div>
-          <div class="ps-line" *ngFor="let b of deductionBreakdown()?.employerBenefitLines ?? []"><span>{{ b.label }}</span><strong></strong><em>{{ b.amount | currency:moneyCurrency() }}</em></div>
+          <div class="ps-line" *ngIf="(deductionBreakdown()?.employer401kMatch ?? 0) > 0"><span>401(k) match{{ retirement401kProvider() ? ' — ' + retirement401kProvider() : '' }}</span><strong></strong><em>{{ deductionBreakdown()?.employer401kMatch ?? 0 | currency:moneyCurrency() }}</em></div>
+          <div class="ps-line" *ngFor="let b of deductionBreakdown()?.employerBenefitLines ?? []"><span>{{ b.label }}{{ b.provider ? ' — ' + b.provider : '' }}</span><strong></strong><em>{{ b.amount | currency:moneyCurrency() }}</em></div>
           <div class="ps-line ps-line-total"><span>Total employer contributions</span><strong></strong><em>{{ deductionBreakdown()?.employerContributionsTotal ?? 0 | currency:moneyCurrency() }}</em></div>
         </section>
 
@@ -242,6 +242,7 @@ export class PayslipPrintPage implements OnDestroy {
   private holidayAwards: Array<{ holiday: OrgHoliday; hours: number; rate: number; gross: number }> = [];
   private orgDeductionDefaults: DeductionElections = DEFAULT_DEDUCTION_ELECTIONS;
   private _deductionBreakdown: DeductionBreakdown | null = null;
+  private _resolvedElections: DeductionElections | null = null;
   private unsubYtdEntries: (() => void) | null = null;
   private ytdEntries = signal<TimeEntry[]>([]);
   private ytdShiftMap = signal<Record<string, Shift>>({});
@@ -293,6 +294,7 @@ export class PayslipPrintPage implements OnDestroy {
       medicarePercent: Number(data.defaultMedicarePercent ?? countryDefaults.medicarePercent),
       retirement401kPercent: 0,
       retirement401kMatchPercent: Number(data.default401kMatchPercent ?? 0),
+      retirement401kProvider: String(data.default401kProvider || ''),
       benefits: [],
     };
     this.recomputeRows();
@@ -313,6 +315,7 @@ export class PayslipPrintPage implements OnDestroy {
       medicarePercent: deductions.medicarePercent ?? null,
       retirement401kPercent: deductions.retirement401kPercent ?? null,
       retirement401kMatchPercent: deductions.retirement401kMatchPercent ?? null,
+      retirement401kProvider: deductions.retirement401kProvider ?? null,
       benefits: Array.isArray(deductions.benefits) ? deductions.benefits : null,
     };
   }
@@ -421,6 +424,7 @@ export class PayslipPrintPage implements OnDestroy {
 
     const periodGross = [...worked, ...leave, ...holidayOff].reduce((sum, r) => sum + r.gross, 0);
     const elections = resolveDeductionElections(this.orgDeductionDefaults, this.employeeDeductionOverrides());
+    this._resolvedElections = elections;
     this._deductionBreakdown = computeDeductions(periodGross, elections);
 
     this.setDocumentTitle();
@@ -488,6 +492,7 @@ export class PayslipPrintPage implements OnDestroy {
   leaveHours() { return this.rows().filter((r) => r.status === 'approved leave').reduce((sum, r) => sum + r.hours, 0); }
   leaveGross() { return Math.round(this.rows().filter((r) => r.status === 'approved leave').reduce((sum, r) => sum + r.gross, 0) * 100) / 100; }
   overtimeMultiplierLabel() { return `${this.overtimePolicy.multiplier}x`; }
+  retirement401kProvider() { return this._resolvedElections?.retirement401kProvider || ''; }
   exceptionCount() { return this.rows().filter((r) => r.status !== 'none' && r.status !== 'approved leave' && r.status !== 'holiday pay').length; }
   moneyCurrency() { return this.ctx.currencyCode() || 'USD'; }
   taxLabel() { return this.ctx.taxProfile() === 'manual' ? 'External' : 'Est.'; }

@@ -66,6 +66,7 @@ interface OrgSettings {
   defaultSocialSecurityPercent: number;
   defaultMedicarePercent: number;
   default401kMatchPercent: number;
+  default401kProvider: string;
   benefitPlans: BenefitLine[];
   breakRequiredAfterHours: number;
   minRequiredBreakMinutes: number;
@@ -102,6 +103,7 @@ const DEFAULT_SETTINGS: OrgSettings = {
   defaultSocialSecurityPercent: 0,
   defaultMedicarePercent: 0,
   default401kMatchPercent: 0,
+  default401kProvider: '',
   benefitPlans: [],
   breakRequiredAfterHours: 6,
   minRequiredBreakMinutes: 30,
@@ -391,7 +393,7 @@ const PLAN_BADGE: Record<string, string> = {
                 <input id="ors-401k-match" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.default401kMatchPercent" placeholder="0">
               </div>
             </div>
-            <div class="vs-form-row vs-form-row--2" style="margin-top:16px;">
+            <div class="vs-form-row vs-form-row--3" style="margin-top:16px;">
               <div>
                 <label class="vs-field-label" for="ors-ss">Social Security %</label>
                 <input id="ors-ss" type="number" class="vs-input" min="0" step="0.01" [(ngModel)]="draft.defaultSocialSecurityPercent" placeholder="0">
@@ -399,6 +401,10 @@ const PLAN_BADGE: Record<string, string> = {
               <div>
                 <label class="vs-field-label" for="ors-medicare">Medicare %</label>
                 <input id="ors-medicare" type="number" class="vs-input" min="0" step="0.01" [(ngModel)]="draft.defaultMedicarePercent" placeholder="0">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-401k-provider">401(k) Provider</label>
+                <input id="ors-401k-provider" class="vs-input" [(ngModel)]="draft.default401kProvider" placeholder="Fidelity, Empower, Vanguard…">
               </div>
             </div>
             <button class="vs-btn-ghost ors-quick-set-btn" type="button" style="margin-top:10px;" *ngIf="draft.countryCode === 'US'" (click)="useUsDeductionDefaults()">
@@ -421,11 +427,17 @@ const PLAN_BADGE: Record<string, string> = {
             </div>
 
             <div class="ors-site-card" *ngFor="let plan of draft.benefitPlans; index as i">
-              <div class="vs-form-row vs-form-row--3">
+              <div class="vs-form-row vs-form-row--2">
                 <div>
                   <label class="vs-field-label">Plan Name *</label>
                   <input class="vs-input" [(ngModel)]="plan.label" placeholder="Health Insurance">
                 </div>
+                <div>
+                  <label class="vs-field-label">Provider / Carrier</label>
+                  <input class="vs-input" [(ngModel)]="plan.provider" placeholder="Blue Cross Blue Shield, VSP, Delta Dental…">
+                </div>
+              </div>
+              <div class="vs-form-row vs-form-row--2" style="margin-top:12px;">
                 <div>
                   <label class="vs-field-label">Employee Cost / Paycheck</label>
                   <input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="plan.employeeAmount" placeholder="50.00">
@@ -1019,7 +1031,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
       ...this.draft,
       benefitPlans: [
         ...this.draft.benefitPlans,
-        { id: this.createLocalId('benefit'), label: '', employeeAmount: 0, employerAmount: 0 },
+        { id: this.createLocalId('benefit'), label: '', provider: '', employeeAmount: 0, employerAmount: 0 },
       ],
     };
   }
@@ -1197,6 +1209,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         .map((p) => ({
           id: String(p.id || this.createLocalId('benefit')).trim(),
           label: String(p.label || '').trim(),
+          provider: String(p.provider || '').trim(),
           employeeAmount: Math.max(0, Number(p.employeeAmount || 0)),
           employerAmount: Math.max(0, Number(p.employerAmount || 0)),
         }))
@@ -1233,6 +1246,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         defaultSocialSecurityPercent: Math.max(0, Number(this.draft.defaultSocialSecurityPercent || 0)),
         defaultMedicarePercent: Math.max(0, Number(this.draft.defaultMedicarePercent || 0)),
         default401kMatchPercent: Math.max(0, Number(this.draft.default401kMatchPercent || 0)),
+        default401kProvider: String(this.draft.default401kProvider || '').trim(),
         benefitPlans: normalizedBenefitPlans,
         gpsAttendanceEnabled: this.hasGpsAttendance() ? this.draft.gpsAttendanceEnabled : false,
         sites: this.canManageSites() ? normalizedSites : [],

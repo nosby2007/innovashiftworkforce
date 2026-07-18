@@ -301,6 +301,16 @@ describe('computeDeductions', () => {
     expect(b.totalDeductions).toBe(0);
     expect(b.netPay).toBe(0);
   });
+
+  it('carries the third-party provider name through on both employee and employer benefit lines', () => {
+    const elections: DeductionElections = {
+      ...DEFAULT_DEDUCTION_ELECTIONS,
+      benefits: [{ id: 'b1', label: 'Health Insurance', provider: 'Blue Cross Blue Shield', employeeAmount: 50, employerAmount: 200 }],
+    };
+    const b = computeDeductions(1000, elections);
+    expect(b.benefitLines[0].provider).toBe('Blue Cross Blue Shield');
+    expect(b.employerBenefitLines[0].provider).toBe('Blue Cross Blue Shield');
+  });
 });
 
 describe('resolveDeductionElections', () => {

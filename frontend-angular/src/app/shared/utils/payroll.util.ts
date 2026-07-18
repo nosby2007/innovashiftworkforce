@@ -329,6 +329,7 @@ export function payrollHolidayOffGross(holiday: OrgHoliday, rate: number, worked
 export interface BenefitLine {
   id: string;
   label: string;
+  provider?: string; // third-party carrier/administrator, e.g. "Blue Cross Blue Shield", "VSP"
   employeeAmount: number; // flat $ deducted per paycheck
   employerAmount: number; // flat $ employer contributes per paycheck (informational)
 }
@@ -347,6 +348,7 @@ export interface DeductionElections {
   medicarePercent: number;
   retirement401kPercent: number;
   retirement401kMatchPercent: number;
+  retirement401kProvider?: string; // third-party plan administrator, e.g. "Fidelity", "Empower Retirement"
   benefits: BenefitLine[];
 }
 
@@ -395,12 +397,12 @@ export interface DeductionBreakdown {
   medicare: number;
   retirement401k: number;
   benefitsTotal: number;
-  benefitLines: Array<{ id: string; label: string; amount: number }>;
+  benefitLines: Array<{ id: string; label: string; provider?: string; amount: number }>;
   totalDeductions: number;
   netPay: number;
   employer401kMatch: number;
   employerBenefitsTotal: number;
-  employerBenefitLines: Array<{ id: string; label: string; amount: number }>;
+  employerBenefitLines: Array<{ id: string; label: string; provider?: string; amount: number }>;
   employerContributionsTotal: number;
 }
 
@@ -411,6 +413,7 @@ export interface DeductionOverrides {
   medicarePercent?: number | null;
   retirement401kPercent?: number | null;
   retirement401kMatchPercent?: number | null;
+  retirement401kProvider?: string | null;
   benefits?: BenefitLine[] | null;
 }
 
@@ -429,6 +432,7 @@ export function resolveDeductionElections(orgDefaults: DeductionElections, overr
     medicarePercent: overrides?.medicarePercent ?? orgDefaults.medicarePercent,
     retirement401kPercent: overrides?.retirement401kPercent ?? 0,
     retirement401kMatchPercent: overrides?.retirement401kMatchPercent ?? orgDefaults.retirement401kMatchPercent,
+    retirement401kProvider: overrides?.retirement401kProvider ?? orgDefaults.retirement401kProvider,
     benefits: overrides?.benefits ?? [],
   };
 }
@@ -446,6 +450,7 @@ export function computeDeductions(gross: number, elections: DeductionElections):
   const benefitLines = (elections.benefits || []).map((b) => ({
     id: b.id,
     label: b.label,
+    provider: b.provider || undefined,
     amount: Math.round(Math.max(0, Number(b.employeeAmount || 0)) * 100) / 100,
   }));
   const benefitsTotal = Math.round(benefitLines.reduce((sum, b) => sum + b.amount, 0) * 100) / 100;
@@ -455,7 +460,7 @@ export function computeDeductions(gross: number, elections: DeductionElections):
 
   const employer401kMatch = pct(elections.retirement401kMatchPercent);
   const employerBenefitLines = (elections.benefits || [])
-    .map((b) => ({ id: b.id, label: b.label, amount: Math.round(Math.max(0, Number(b.employerAmount || 0)) * 100) / 100 }))
+    .map((b) => ({ id: b.id, label: b.label, provider: b.provider || undefined, amount: Math.round(Math.max(0, Number(b.employerAmount || 0)) * 100) / 100 }))
     .filter((b) => b.amount > 0);
   const employerBenefitsTotal = Math.round(employerBenefitLines.reduce((sum, b) => sum + b.amount, 0) * 100) / 100;
   const employerContributionsTotal = Math.round((employer401kMatch + employerBenefitsTotal) * 100) / 100;

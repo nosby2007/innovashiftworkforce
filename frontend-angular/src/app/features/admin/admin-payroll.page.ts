@@ -396,6 +396,7 @@ export class AdminPayrollPage implements OnDestroy {
         medicarePercent: Number(data.defaultMedicarePercent ?? countryDefaults.medicarePercent),
         retirement401kPercent: 0,
         retirement401kMatchPercent: Number(data.default401kMatchPercent ?? 0),
+        retirement401kProvider: String(data.default401kProvider || ''),
         benefits: [],
       };
     } catch {
@@ -423,6 +424,7 @@ export class AdminPayrollPage implements OnDestroy {
       medicarePercent: deductions.medicarePercent ?? null,
       retirement401kPercent: deductions.retirement401kPercent ?? null,
       retirement401kMatchPercent: deductions.retirement401kMatchPercent ?? null,
+      retirement401kProvider: deductions.retirement401kProvider ?? null,
       benefits: Array.isArray(deductions.benefits) ? deductions.benefits : null,
     };
   }
