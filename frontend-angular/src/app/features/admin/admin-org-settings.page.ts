@@ -23,7 +23,7 @@ import {
   CADENCE_OPTIONS,
   DEFAULT_ACCRUAL_POLICY,
 } from '../../core/tenancy/org-accrual.model';
-import { OrgHoliday, BenefitLine } from '../../shared/utils/payroll.util';
+import { OrgHoliday, BenefitLine, defaultDeductionElectionsForCountry } from '../../shared/utils/payroll.util';
 import * as L from 'leaflet';
 
 interface OrgSite {
@@ -94,10 +94,13 @@ const DEFAULT_SETTINGS: OrgSettings = {
   overtimeWeeklyThresholdHours: 40,
   holidayWorkMultiplier: 1.5,
   holidays: [],
-  defaultFederalTaxPercent: 10,
-  defaultStateTaxPercent: 4,
-  defaultSocialSecurityPercent: 6.2,
-  defaultMedicarePercent: 1.45,
+  // Real US federal/state/FICA figures only get applied for US orgs — see
+  // ngOnInit(), which fills these in via defaultDeductionElectionsForCountry
+  // the first time an org's settings are loaded with none saved yet.
+  defaultFederalTaxPercent: 0,
+  defaultStateTaxPercent: 0,
+  defaultSocialSecurityPercent: 0,
+  defaultMedicarePercent: 0,
   default401kMatchPercent: 0,
   benefitPlans: [],
   breakRequiredAfterHours: 6,
@@ -366,17 +369,22 @@ const PLAN_BADGE: Record<string, string> = {
             <mat-icon class="ors-section-icon">account_balance_wallet</mat-icon>
           </div>
           <div class="vs-panel-body ors-form">
-            <div class="vs-muted" style="margin-bottom:8px;">
+            <div class="vs-muted" style="margin-bottom:8px;" *ngIf="draft.countryCode === 'US'; else nonUsDeductionsNote">
               Federal/state tax are flat estimated percentages, not real bracket-based withholding — set to whatever your accountant or external payroll provider estimates. Social Security and Medicare default to the actual US federal rates.
             </div>
+            <ng-template #nonUsDeductionsNote>
+              <div class="vs-muted" style="margin-bottom:8px;">
+                These are general-purpose percentage fields — Social Security/Medicare are US-specific and don't apply outside the US. Set whatever rates match your own country's statutory deductions (or leave at 0 and handle payroll tax externally).
+              </div>
+            </ng-template>
             <div class="vs-form-row vs-form-row--3">
               <div>
                 <label class="vs-field-label" for="ors-fed-tax">Federal Tax %</label>
-                <input id="ors-fed-tax" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.defaultFederalTaxPercent" placeholder="10">
+                <input id="ors-fed-tax" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.defaultFederalTaxPercent" placeholder="0">
               </div>
               <div>
                 <label class="vs-field-label" for="ors-state-tax">State Tax %</label>
-                <input id="ors-state-tax" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.defaultStateTaxPercent" placeholder="4">
+                <input id="ors-state-tax" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.defaultStateTaxPercent" placeholder="0">
               </div>
               <div>
                 <label class="vs-field-label" for="ors-401k-match">401(k) Employer Match %</label>
@@ -386,13 +394,16 @@ const PLAN_BADGE: Record<string, string> = {
             <div class="vs-form-row vs-form-row--2" style="margin-top:16px;">
               <div>
                 <label class="vs-field-label" for="ors-ss">Social Security %</label>
-                <input id="ors-ss" type="number" class="vs-input" min="0" step="0.01" [(ngModel)]="draft.defaultSocialSecurityPercent" placeholder="6.2">
+                <input id="ors-ss" type="number" class="vs-input" min="0" step="0.01" [(ngModel)]="draft.defaultSocialSecurityPercent" placeholder="0">
               </div>
               <div>
                 <label class="vs-field-label" for="ors-medicare">Medicare %</label>
-                <input id="ors-medicare" type="number" class="vs-input" min="0" step="0.01" [(ngModel)]="draft.defaultMedicarePercent" placeholder="1.45">
+                <input id="ors-medicare" type="number" class="vs-input" min="0" step="0.01" [(ngModel)]="draft.defaultMedicarePercent" placeholder="0">
               </div>
             </div>
+            <button class="vs-btn-ghost ors-quick-set-btn" type="button" style="margin-top:10px;" *ngIf="draft.countryCode === 'US'" (click)="useUsDeductionDefaults()">
+              Use US rates (Federal 10% / State 4% / SS 6.2% / Medicare 1.45%)
+            </button>
 
             <div class="ors-site-actions" style="justify-content:space-between; margin-top:16px;">
               <strong>Benefit Plans</strong>
@@ -894,6 +905,16 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
       if (snap.exists()) {
         const data = snap.data() as Partial<OrgSettings>;
         const loaded: OrgSettings = { ...DEFAULT_SETTINGS, ...data };
+        // Real federal/state/FICA figures only make sense for a US org —
+        // only apply them the first time (nothing saved yet for these fields).
+        if (data.defaultFederalTaxPercent == null && data.defaultStateTaxPercent == null
+          && data.defaultSocialSecurityPercent == null && data.defaultMedicarePercent == null) {
+          const countryDefaults = defaultDeductionElectionsForCountry(loaded.countryCode);
+          loaded.defaultFederalTaxPercent = countryDefaults.federalTaxPercent;
+          loaded.defaultStateTaxPercent = countryDefaults.stateTaxPercent;
+          loaded.defaultSocialSecurityPercent = countryDefaults.socialSecurityPercent;
+          loaded.defaultMedicarePercent = countryDefaults.medicarePercent;
+        }
         this.settings.set(loaded);
         this.draft = { ...loaded };
         this.ctx.setContext({
@@ -983,6 +1004,14 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     };
     this.selectedSiteIndex = Math.max(0, Math.min(this.selectedSiteIndex, this.draft.sites.length - 1));
     this.refreshMapFromSelectedSite();
+  }
+
+  useUsDeductionDefaults() {
+    const defaults = defaultDeductionElectionsForCountry('US');
+    this.draft.defaultFederalTaxPercent = defaults.federalTaxPercent;
+    this.draft.defaultStateTaxPercent = defaults.stateTaxPercent;
+    this.draft.defaultSocialSecurityPercent = defaults.socialSecurityPercent;
+    this.draft.defaultMedicarePercent = defaults.medicarePercent;
   }
 
   addBenefitPlan() {

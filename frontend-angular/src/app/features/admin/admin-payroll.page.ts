@@ -17,6 +17,7 @@ import {
   computeEmployeeGross, workedDateSet, payrollHolidayOffHours, payrollHolidayOffGross,
   DEFAULT_OVERTIME_POLICY, OvertimePolicy, OrgHoliday, EmployeeGrossBreakdown,
   computeDeductions, resolveDeductionElections, DEFAULT_DEDUCTION_ELECTIONS, DeductionElections, DeductionOverrides,
+  defaultDeductionElectionsForCountry,
 } from '../../shared/utils/payroll.util';
 import { PayFrequency } from '../../core/tenancy/org-finance.model';
 import { toCsv, downloadTextFile } from '../../shared/utils/csv.util';
@@ -387,11 +388,12 @@ export class AdminPayrollPage implements OnDestroy {
       };
       this.holidayWorkMultiplier = Math.max(1, Number(data.holidayWorkMultiplier || 1.5));
       this.holidays = Array.isArray(data.holidays) ? data.holidays : [];
+      const countryDefaults = defaultDeductionElectionsForCountry(data.countryCode);
       this.orgDeductionDefaults = {
-        federalTaxPercent: Number(data.defaultFederalTaxPercent ?? DEFAULT_DEDUCTION_ELECTIONS.federalTaxPercent),
-        stateTaxPercent: Number(data.defaultStateTaxPercent ?? DEFAULT_DEDUCTION_ELECTIONS.stateTaxPercent),
-        socialSecurityPercent: Number(data.defaultSocialSecurityPercent ?? DEFAULT_DEDUCTION_ELECTIONS.socialSecurityPercent),
-        medicarePercent: Number(data.defaultMedicarePercent ?? DEFAULT_DEDUCTION_ELECTIONS.medicarePercent),
+        federalTaxPercent: Number(data.defaultFederalTaxPercent ?? countryDefaults.federalTaxPercent),
+        stateTaxPercent: Number(data.defaultStateTaxPercent ?? countryDefaults.stateTaxPercent),
+        socialSecurityPercent: Number(data.defaultSocialSecurityPercent ?? countryDefaults.socialSecurityPercent),
+        medicarePercent: Number(data.defaultMedicarePercent ?? countryDefaults.medicarePercent),
         retirement401kPercent: 0,
         retirement401kMatchPercent: Number(data.default401kMatchPercent ?? 0),
         benefits: [],

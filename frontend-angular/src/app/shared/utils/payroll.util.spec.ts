@@ -17,6 +17,7 @@ import {
   DEFAULT_DEDUCTION_ELECTIONS,
   DeductionElections,
   resolveDeductionElections,
+  defaultDeductionElectionsForCountry,
 } from './payroll.util';
 import { TimeEntry } from '../models/time-entry.model';
 import { Shift } from '../models/shift.model';
@@ -327,5 +328,29 @@ describe('resolveDeductionElections', () => {
     });
     expect(resolved.retirement401kPercent).toBe(6);
     expect(resolved.benefits).toHaveLength(1);
+  });
+});
+
+describe('defaultDeductionElectionsForCountry', () => {
+  it('prefills real US federal/state/FICA defaults for a US organization', () => {
+    const us = defaultDeductionElectionsForCountry('US');
+    expect(us.federalTaxPercent).toBe(10);
+    expect(us.stateTaxPercent).toBe(4);
+    expect(us.socialSecurityPercent).toBe(6.2);
+    expect(us.medicarePercent).toBe(1.45);
+  });
+
+  it('starts every other country at zero — the company sets its own rates', () => {
+    for (const code of ['CA', 'CM', 'NG', 'GH', 'KE', 'ZA', 'AE', '', null, undefined]) {
+      const resolved = defaultDeductionElectionsForCountry(code as any);
+      expect(resolved.federalTaxPercent).toBe(0);
+      expect(resolved.stateTaxPercent).toBe(0);
+      expect(resolved.socialSecurityPercent).toBe(0);
+      expect(resolved.medicarePercent).toBe(0);
+    }
+  });
+
+  it('is case-insensitive on the country code', () => {
+    expect(defaultDeductionElectionsForCountry('us').socialSecurityPercent).toBe(6.2);
   });
 });

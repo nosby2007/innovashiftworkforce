@@ -350,15 +350,43 @@ export interface DeductionElections {
   benefits: BenefitLine[];
 }
 
+/**
+ * Country-neutral starting point: no assumed tax/FICA rates at all. Real
+ * defaults (Federal/State %, and the fixed US Social Security/Medicare
+ * rates) only make sense for a US organization — see
+ * `defaultDeductionElectionsForCountry`. Everywhere else, the company sets
+ * its own numbers for whatever local statutory deductions apply.
+ */
 export const DEFAULT_DEDUCTION_ELECTIONS: DeductionElections = {
-  federalTaxPercent: 10,
-  stateTaxPercent: 4,
-  socialSecurityPercent: 6.2,
-  medicarePercent: 1.45,
+  federalTaxPercent: 0,
+  stateTaxPercent: 0,
+  socialSecurityPercent: 0,
+  medicarePercent: 0,
   retirement401kPercent: 0,
   retirement401kMatchPercent: 0,
   benefits: [],
 };
+
+/**
+ * A brand-new organization's starting deduction defaults, before an admin
+ * has customized anything. Only US orgs get real prefilled numbers (a
+ * reasonable federal/state withholding estimate plus the actual fixed FICA
+ * rates) — those figures don't apply anywhere else, so every other country
+ * starts at zero and the company sets its own statutory deduction rates.
+ */
+export function defaultDeductionElectionsForCountry(countryCode: string | null | undefined): DeductionElections {
+  const isUS = String(countryCode || '').trim().toUpperCase() === 'US';
+  if (!isUS) return { ...DEFAULT_DEDUCTION_ELECTIONS };
+  return {
+    federalTaxPercent: 10,
+    stateTaxPercent: 4,
+    socialSecurityPercent: 6.2,
+    medicarePercent: 1.45,
+    retirement401kPercent: 0,
+    retirement401kMatchPercent: 0,
+    benefits: [],
+  };
+}
 
 export interface DeductionBreakdown {
   federalTax: number;

@@ -19,7 +19,7 @@ import { TimeEntry } from '../../shared/models/time-entry.model';
 import { tsToDate, formatDateTime } from '../../shared/utils/date.util';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
-import { BenefitLine } from '../../shared/utils/payroll.util';
+import { BenefitLine, defaultDeductionElectionsForCountry } from '../../shared/utils/payroll.util';
 
 interface TsRow {
   entry: TimeEntry;
@@ -658,7 +658,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
   profileDraft: EmployeeProfileDraft = this.emptyProfileDraft();
   dependentsText = '';
   orgBenefitPlans = signal<BenefitLine[]>([]);
-  orgDeductionDefaults = { federalTaxPercent: 10, stateTaxPercent: 4, socialSecurityPercent: 6.2, medicarePercent: 1.45, retirement401kMatchPercent: 0 };
+  orgDeductionDefaults = { federalTaxPercent: 0, stateTaxPercent: 0, socialSecurityPercent: 0, medicarePercent: 0, retirement401kMatchPercent: 0 };
   selectedBenefitPlanId = '';
   timeOffRequests = signal<TimeOffRequest[]>([]);
   employeeDocuments = signal<EmployeeDocumentRecord[]>([]);
@@ -735,11 +735,12 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
     try {
       const snap = await getDoc(doc(getFirestore(), 'orgs', this.orgId));
       const data: any = snap.exists() ? snap.data() : {};
+      const countryDefaults = defaultDeductionElectionsForCountry(data.countryCode);
       this.orgDeductionDefaults = {
-        federalTaxPercent: Number(data.defaultFederalTaxPercent ?? 10),
-        stateTaxPercent: Number(data.defaultStateTaxPercent ?? 4),
-        socialSecurityPercent: Number(data.defaultSocialSecurityPercent ?? 6.2),
-        medicarePercent: Number(data.defaultMedicarePercent ?? 1.45),
+        federalTaxPercent: Number(data.defaultFederalTaxPercent ?? countryDefaults.federalTaxPercent),
+        stateTaxPercent: Number(data.defaultStateTaxPercent ?? countryDefaults.stateTaxPercent),
+        socialSecurityPercent: Number(data.defaultSocialSecurityPercent ?? countryDefaults.socialSecurityPercent),
+        medicarePercent: Number(data.defaultMedicarePercent ?? countryDefaults.medicarePercent),
         retirement401kMatchPercent: Number(data.default401kMatchPercent ?? 0),
       };
       this.orgBenefitPlans.set(Array.isArray(data.benefitPlans) ? data.benefitPlans : []);
