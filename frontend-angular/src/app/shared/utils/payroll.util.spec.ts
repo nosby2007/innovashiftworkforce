@@ -18,6 +18,7 @@ import {
   DeductionElections,
   resolveDeductionElections,
   defaultDeductionElectionsForCountry,
+  countPayPeriods,
 } from './payroll.util';
 import { TimeEntry } from '../models/time-entry.model';
 import { Shift } from '../models/shift.model';
@@ -65,6 +66,28 @@ describe('currentPayrollPeriod', () => {
     const withDefault = currentPayrollPeriod(undefined, anchor);
     const explicit = currentPayrollPeriod('biweekly', anchor);
     expect(dateInputValue(withDefault.start)).toBe(dateInputValue(explicit.start));
+  });
+});
+
+describe('countPayPeriods (scales flat per-paycheck deductions across a wider window like YTD)', () => {
+  it('counts exactly one period when the range matches a single biweekly period', () => {
+    expect(countPayPeriods('biweekly', '2026-07-13', '2026-07-26')).toBe(1);
+  });
+
+  it('counts two periods when the range spans into the next biweekly period', () => {
+    expect(countPayPeriods('biweekly', '2026-07-13', '2026-08-09')).toBe(2);
+  });
+
+  it('counts multiple weekly periods across a month', () => {
+    expect(countPayPeriods('weekly', '2026-01-01', '2026-01-31')).toBeGreaterThanOrEqual(4);
+  });
+
+  it('counts one period per calendar month for a monthly frequency', () => {
+    expect(countPayPeriods('monthly', '2026-01-01', '2026-06-30')).toBe(6);
+  });
+
+  it('returns 0 for a malformed range', () => {
+    expect(countPayPeriods('biweekly', '', '2026-07-26')).toBe(0);
   });
 });
 
