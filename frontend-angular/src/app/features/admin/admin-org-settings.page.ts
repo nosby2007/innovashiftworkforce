@@ -23,6 +23,7 @@ import {
   CADENCE_OPTIONS,
   DEFAULT_ACCRUAL_POLICY,
 } from '../../core/tenancy/org-accrual.model';
+import { OrgHoliday } from '../../shared/utils/payroll.util';
 import * as L from 'leaflet';
 
 interface OrgSite {
@@ -55,6 +56,11 @@ interface OrgSettings {
   payrollTaxNotes: string;
   maxEmployees: number;
   defaultPayRate: number;
+  overtimeEnabled: boolean;
+  overtimeMultiplier: number;
+  overtimeWeeklyThresholdHours: number;
+  holidayWorkMultiplier: number;
+  holidays: OrgHoliday[];
   breakRequiredAfterHours: number;
   minRequiredBreakMinutes: number;
   gpsAttendanceEnabled: boolean;
@@ -77,6 +83,11 @@ const DEFAULT_SETTINGS: OrgSettings = {
   taxProfile: 'us_federal_state',
   payrollTaxNotes: '',
   defaultPayRate: 40,
+  overtimeEnabled: true,
+  overtimeMultiplier: 1.5,
+  overtimeWeeklyThresholdHours: 40,
+  holidayWorkMultiplier: 1.5,
+  holidays: [],
   breakRequiredAfterHours: 6,
   minRequiredBreakMinutes: 30,
   gpsAttendanceEnabled: false,
@@ -246,6 +257,88 @@ const PLAN_BADGE: Record<string, string> = {
               <div>
                 <label class="vs-field-label" for="ors-tax-notes">Payroll Tax Notes</label>
                 <textarea id="ors-tax-notes" class="vs-input" rows="3" [(ngModel)]="draft.payrollTaxNotes" placeholder="Local statutory notes, accountant contact, external payroll provider..."></textarea>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Overtime & Paid Holidays section -->
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Overtime & Paid Holidays</div>
+              <div class="vs-panel-subtitle">Overtime premium and company-paid holidays used when calculating payroll</div>
+            </div>
+            <mat-icon class="ors-section-icon">schedule</mat-icon>
+          </div>
+          <div class="vs-panel-body ors-form">
+            <label class="ors-toggle-row">
+              <input type="checkbox" [(ngModel)]="draft.overtimeEnabled">
+              <div>
+                <div class="ors-toggle-title">Enable overtime pay</div>
+                <div class="vs-muted">When on, hours worked beyond the weekly threshold are paid at the overtime multiplier below.</div>
+              </div>
+            </label>
+
+            <div class="vs-form-row vs-form-row--2" style="margin-top:16px;" *ngIf="draft.overtimeEnabled">
+              <div>
+                <label class="vs-field-label" for="ors-ot-multiplier">Overtime Multiplier</label>
+                <input id="ors-ot-multiplier" type="number" class="vs-input" min="1" step="0.1" [(ngModel)]="draft.overtimeMultiplier" placeholder="1.5">
+                <div class="ors-quick-set">
+                  <button class="vs-btn-ghost ors-quick-set-btn" type="button" (click)="draft.overtimeMultiplier = 1.5">1.5x</button>
+                  <button class="vs-btn-ghost ors-quick-set-btn" type="button" (click)="draft.overtimeMultiplier = 2">2x</button>
+                </div>
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-ot-threshold">Weekly Overtime Threshold (hours)</label>
+                <input id="ors-ot-threshold" type="number" class="vs-input" min="1" [(ngModel)]="draft.overtimeWeeklyThresholdHours" placeholder="40">
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Hours worked beyond this in a Monday–Sunday week are paid as overtime.</div>
+              </div>
+            </div>
+
+            <div class="vs-form-row" style="margin-top:16px;">
+              <div>
+                <label class="vs-field-label" for="ors-holiday-multiplier">Holiday-Worked Multiplier</label>
+                <input id="ors-holiday-multiplier" type="number" class="vs-input" min="1" step="0.1" [(ngModel)]="draft.holidayWorkMultiplier" placeholder="1.5">
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Pay rate multiplier for hours actually worked on a paid holiday below (instead of overtime).</div>
+              </div>
+            </div>
+
+            <div class="ors-site-actions" style="justify-content:space-between; margin-top:16px;">
+              <strong>Paid Holidays</strong>
+              <button class="vs-btn-ghost" (click)="addHoliday()" type="button">
+                <mat-icon>add</mat-icon> Add Holiday
+              </button>
+            </div>
+
+            <div *ngIf="draft.holidays.length === 0" class="ors-empty-site vs-glass">
+              <mat-icon>event_busy</mat-icon>
+              <div>
+                <strong>No paid holidays configured.</strong>
+                <div class="vs-muted">Add a holiday so staff automatically get paid for it, and worked hours on that day use the holiday multiplier.</div>
+              </div>
+            </div>
+
+            <div class="ors-site-card" *ngFor="let holiday of draft.holidays; index as i">
+              <div class="vs-form-row vs-form-row--3">
+                <div>
+                  <label class="vs-field-label">Holiday Name *</label>
+                  <input class="vs-input" [(ngModel)]="holiday.name" placeholder="Independence Day">
+                </div>
+                <div>
+                  <label class="vs-field-label">Date</label>
+                  <input class="vs-input" type="date" [(ngModel)]="holiday.date">
+                </div>
+                <div>
+                  <label class="vs-field-label">Paid Hours</label>
+                  <input class="vs-input" type="number" min="0" step="0.5" [(ngModel)]="holiday.paidHours" placeholder="8">
+                </div>
+              </div>
+              <div class="ors-site-footer">
+                <span class="vs-muted">Staff who don't work this day are paid these hours automatically; staff who do work it get the holiday multiplier instead.</span>
+                <button class="vs-btn-ghost" type="button" (click)="removeHoliday(i)">
+                  <mat-icon>delete</mat-icon> Remove
+                </button>
               </div>
             </div>
           </div>
@@ -629,6 +722,8 @@ const PLAN_BADGE: Record<string, string> = {
       border:1px solid var(--border); border-radius:var(--radius-md); background:rgba(255,255,255,0.02);
     }
     .ors-toggle-title { font-weight:800; color:var(--text); margin-bottom:4px; }
+    .ors-quick-set { display:flex; gap:6px; margin-top:6px; }
+    .ors-quick-set-btn { padding:5px 10px !important; font-size:12px !important; }
     .ors-upgrade-card {
       display:flex; gap:12px; align-items:flex-start; padding:14px 16px;
       border:1px dashed rgba(250,204,21,0.35); border-radius:var(--radius-md);
@@ -800,6 +895,23 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     this.refreshMapFromSelectedSite();
   }
 
+  addHoliday() {
+    this.draft = {
+      ...this.draft,
+      holidays: [
+        ...this.draft.holidays,
+        { id: this.createLocalId('holiday'), name: '', date: '', paidHours: 8 },
+      ],
+    };
+  }
+
+  removeHoliday(index: number) {
+    this.draft = {
+      ...this.draft,
+      holidays: this.draft.holidays.filter((_, i) => i !== index),
+    };
+  }
+
   cadenceOptions = CADENCE_OPTIONS;
 
   cadenceDescription(cadence: AccrualPolicy['cadence']): string {
@@ -936,6 +1048,15 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         }))
         .filter((site) => site.name);
 
+      const normalizedHolidays: OrgHoliday[] = (this.draft.holidays || [])
+        .map((h) => ({
+          id: String(h.id || this.createLocalId('holiday')).trim(),
+          name: String(h.name || '').trim(),
+          date: String(h.date || '').trim(),
+          paidHours: Math.max(0, Number(h.paidHours || 0)),
+        }))
+        .filter((h) => h.name && h.date);
+
       const normalizedAccrualPolicy: AccrualPolicy = {
         enabled: !!this.draft.accrualPolicy?.enabled,
         cadence: this.draft.accrualPolicy?.cadence || 'monthly',
@@ -957,6 +1078,11 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         payFrequency: this.draft.payFrequency || 'biweekly',
         taxProfile: this.draft.taxProfile || 'manual',
         payrollTaxNotes: String(this.draft.payrollTaxNotes || '').trim(),
+        overtimeEnabled: this.draft.overtimeEnabled !== false,
+        overtimeMultiplier: Math.max(1, Number(this.draft.overtimeMultiplier || 1.5)),
+        overtimeWeeklyThresholdHours: Math.max(1, Number(this.draft.overtimeWeeklyThresholdHours || 40)),
+        holidayWorkMultiplier: Math.max(1, Number(this.draft.holidayWorkMultiplier || 1.5)),
+        holidays: normalizedHolidays,
         gpsAttendanceEnabled: this.hasGpsAttendance() ? this.draft.gpsAttendanceEnabled : false,
         sites: this.canManageSites() ? normalizedSites : [],
         accrualPolicy: normalizedAccrualPolicy,
@@ -972,8 +1098,8 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         orgId: this.orgId,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy });
-      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy };
+      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays });
+      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays };
       this.ctx.setContext({
         orgId: this.ctx.orgId(),
         uid: this.ctx.uid(),

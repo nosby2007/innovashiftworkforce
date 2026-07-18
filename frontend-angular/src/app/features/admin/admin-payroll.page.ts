@@ -1,7 +1,7 @@
 import { Component, NgZone, OnDestroy, signal } from '@angular/core';
 import { CommonModule, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { doc, getFirestore, onSnapshot, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, getFirestore, onSnapshot, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
 import { MatIconModule } from '@angular/material/icon';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { PrintLauncherService } from '../../core/ui/print-launcher.service';
@@ -12,7 +12,11 @@ import { TimeEntry } from '../../shared/models/time-entry.model';
 import { Shift } from '../../shared/models/shift.model';
 import { AccrualsRepo, TimeOffRequest } from '../../core/repos/accruals.repo';
 import { formatDateTime } from '../../shared/utils/date.util';
-import { currentPayrollPeriod, dateInputValue, payrollDeductions, payrollGross, payrollHours, payrollLeaveGross, payrollLeaveHours, payrollNet, payrollRate } from '../../shared/utils/payroll.util';
+import {
+  currentPayrollPeriod, dateInputValue, payrollDeductions, payrollLeaveGross, payrollLeaveHours, payrollNet,
+  computeEmployeeGross, workedDateSet, payrollHolidayOffHours, payrollHolidayOffGross,
+  DEFAULT_OVERTIME_POLICY, OvertimePolicy, OrgHoliday, EmployeeGrossBreakdown,
+} from '../../shared/utils/payroll.util';
 import { PayFrequency } from '../../core/tenancy/org-finance.model';
 import { toCsv, downloadTextFile } from '../../shared/utils/csv.util';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
@@ -329,6 +333,13 @@ export class AdminPayrollPage implements OnDestroy {
   private unsubLeave: (() => void) | null = null;
   private unsubRun: (() => void) | null = null;
 
+  orgDefaultPayRate = 0;
+  overtimePolicy: OvertimePolicy = DEFAULT_OVERTIME_POLICY;
+  holidayWorkMultiplier = 1.5;
+  holidays: OrgHoliday[] = [];
+  private breakdownsByUser = new Map<string, EmployeeGrossBreakdown>();
+  private holidayAwards: Array<{ userId: string; holiday: OrgHoliday; hours: number; rate: number; gross: number }> = [];
+
   constructor(
     private zone: NgZone,
     private ctx: OrgContextService,
@@ -356,7 +367,34 @@ export class AdminPayrollPage implements OnDestroy {
         this.recomputeRows();
       });
     }
+    void this.loadPayrollPolicy(orgId);
     this.reloadEntries();
+  }
+
+  private async loadPayrollPolicy(orgId: string) {
+    try {
+      const snap = await getDoc(doc(getFirestore(), 'orgs', orgId));
+      const data: any = snap.exists() ? snap.data() : {};
+      this.orgDefaultPayRate = Number(data.defaultPayRate || 0);
+      this.overtimePolicy = {
+        enabled: data.overtimeEnabled !== false,
+        multiplier: Math.max(1, Number(data.overtimeMultiplier || 1.5)),
+        weeklyThresholdHours: Math.max(1, Number(data.overtimeWeeklyThresholdHours || 40)),
+      };
+      this.holidayWorkMultiplier = Math.max(1, Number(data.holidayWorkMultiplier || 1.5));
+      this.holidays = Array.isArray(data.holidays) ? data.holidays : [];
+    } catch {
+      this.orgDefaultPayRate = 0;
+      this.overtimePolicy = DEFAULT_OVERTIME_POLICY;
+      this.holidayWorkMultiplier = 1.5;
+      this.holidays = [];
+    }
+    this.recomputeRows();
+  }
+
+  private employeeRate(uid: string): number {
+    const user: any = this.users().find((u) => u.uid === uid);
+    return Number(user?.payroll?.payRate ?? user?.payRate ?? this.orgDefaultPayRate ?? 0);
   }
 
   reloadEntries() {
@@ -381,41 +419,43 @@ export class AdminPayrollPage implements OnDestroy {
 
   private recomputeRows() {
     const grouped = new Map<string, PayrollRow>();
+    const getRow = (uid: string): PayrollRow => grouped.get(uid) || {
+      userId: uid,
+      employee: this.userLabel(uid),
+      employeeNumber: this.employeeNumber(uid),
+      entries: 0,
+      hours: 0,
+      gross: 0,
+      deductions: 0,
+      net: 0,
+      exceptions: 0,
+    };
+
+    const entriesByUser = new Map<string, TimeEntry[]>();
     for (const entry of this.entries()) {
       const uid = entry.userId || 'unknown';
-      const existing = grouped.get(uid) || {
-        userId: uid,
-        employee: this.userLabel(uid),
-        employeeNumber: this.employeeNumber(uid),
-        entries: 0,
-        hours: 0,
-        gross: 0,
-        deductions: 0,
-        net: 0,
-        exceptions: 0,
-      };
-      const gross = payrollGross(entry, this.shiftMap[entry.shiftId]);
-      existing.entries += 1;
-      existing.hours += payrollHours(entry);
-      existing.gross += gross;
-      existing.deductions += payrollDeductions(gross);
-      existing.net += payrollNet(gross);
-      if ((entry.exceptionStatus || 'none') !== 'none' || !entry.checkOutAt) existing.exceptions += 1;
+      const list = entriesByUser.get(uid);
+      if (list) list.push(entry); else entriesByUser.set(uid, [entry]);
+    }
+
+    const holidayDates = new Set(this.holidays.map((h) => h.date));
+    this.breakdownsByUser = new Map<string, EmployeeGrossBreakdown>();
+    for (const [uid, userEntries] of entriesByUser) {
+      const breakdown = computeEmployeeGross(userEntries, this.shiftMap, this.orgDefaultPayRate, this.overtimePolicy, holidayDates, this.holidayWorkMultiplier);
+      this.breakdownsByUser.set(uid, breakdown);
+      const existing = getRow(uid);
+      existing.entries += userEntries.length;
+      existing.hours += breakdown.hours;
+      existing.gross += breakdown.gross;
+      existing.deductions += payrollDeductions(breakdown.gross);
+      existing.net += payrollNet(breakdown.gross);
+      existing.exceptions += userEntries.filter((e) => (e.exceptionStatus || 'none') !== 'none' || !e.checkOutAt).length;
       grouped.set(uid, existing);
     }
+
     for (const request of this.leaveRequests().filter((r) => this.isPayrollLeave(r))) {
       const uid = request.userId || 'unknown';
-      const existing = grouped.get(uid) || {
-        userId: uid,
-        employee: this.userLabel(uid),
-        employeeNumber: this.employeeNumber(uid),
-        entries: 0,
-        hours: 0,
-        gross: 0,
-        deductions: 0,
-        net: 0,
-        exceptions: 0,
-      };
+      const existing = getRow(uid);
       const hours = payrollLeaveHours(request, this.fromDate, this.toDate);
       const gross = payrollLeaveGross(request, this.fromDate, this.toDate);
       existing.entries += 1;
@@ -425,6 +465,29 @@ export class AdminPayrollPage implements OnDestroy {
       existing.net += payrollNet(gross);
       grouped.set(uid, existing);
     }
+
+    this.holidayAwards = [];
+    const holidaysInPeriod = this.holidays.filter((h) => h.date >= this.fromDate && h.date <= this.toDate);
+    if (holidaysInPeriod.length > 0) {
+      for (const user of this.users().filter((u) => u.active !== false)) {
+        const workedDates = workedDateSet(entriesByUser.get(user.uid) || []);
+        for (const holiday of holidaysInPeriod) {
+          const hours = payrollHolidayOffHours(holiday, workedDates);
+          if (hours <= 0) continue;
+          const rate = this.employeeRate(user.uid);
+          const gross = payrollHolidayOffGross(holiday, rate, workedDates);
+          this.holidayAwards.push({ userId: user.uid, holiday, hours, rate, gross });
+          const existing = getRow(user.uid);
+          existing.entries += 1;
+          existing.hours += hours;
+          existing.gross += gross;
+          existing.deductions += payrollDeductions(gross);
+          existing.net += payrollNet(gross);
+          grouped.set(user.uid, existing);
+        }
+      }
+    }
+
     this.rows = Array.from(grouped.values()).map((r) => ({
       ...r,
       hours: Math.round(r.hours * 100) / 100,
@@ -483,22 +546,30 @@ export class AdminPayrollPage implements OnDestroy {
     return rows.length > 0 && rows.every((row) => this.selected.has(row.userId));
   }
 
+  private static readonly LINE_TYPE_SUFFIX: Record<string, string> = {
+    overtime: ' (Overtime)',
+    holiday_worked: ' (Holiday)',
+    regular: '',
+  };
+
   detailRows() {
-    const worked = this.entries().map((entry) => {
-      const shift = this.shiftMap[entry.shiftId];
-      const rate = payrollRate(entry, shift);
-      return {
-        employee: this.userLabel(entry.userId),
-        date: formatDateTime(entry.checkInAt).split(',')[0] || '-',
-        shiftTitle: shift?.title || 'Assigned shift',
-        checkIn: formatDateTime(entry.checkInAt),
-        checkOut: entry.checkOutAt ? formatDateTime(entry.checkOutAt) : 'Open',
-        hours: payrollHours(entry),
-        rate,
-        gross: payrollGross(entry, shift),
-        status: entry.exceptionStatus || 'none',
-      };
-    });
+    const worked: Array<{ employee: string; date: string; shiftTitle: string; checkIn: string; checkOut: string; hours: number; rate: number; gross: number; status: string }> = [];
+    for (const [uid, breakdown] of this.breakdownsByUser) {
+      for (const line of breakdown.lines) {
+        worked.push({
+          employee: this.userLabel(uid),
+          date: line.date,
+          shiftTitle: `${line.shiftTitle}${AdminPayrollPage.LINE_TYPE_SUFFIX[line.type] || ''}`,
+          checkIn: formatDateTime(line.checkInAt),
+          checkOut: line.checkOutAt ? formatDateTime(line.checkOutAt) : 'Open',
+          hours: line.hours,
+          rate: line.rate,
+          gross: line.gross,
+          status: line.status,
+        });
+      }
+    }
+
     const leave = this.leaveRequests()
       .filter((request) => this.isPayrollLeave(request))
       .map((request) => {
@@ -516,7 +587,20 @@ export class AdminPayrollPage implements OnDestroy {
           status: 'approved leave',
         };
       });
-    return [...worked, ...leave];
+
+    const holidayOff = this.holidayAwards.map((award) => ({
+      employee: this.userLabel(award.userId),
+      date: award.holiday.date,
+      shiftTitle: `${award.holiday.name} (Holiday Pay)`,
+      checkIn: award.holiday.date,
+      checkOut: '-',
+      hours: award.hours,
+      rate: award.rate,
+      gross: award.gross,
+      status: 'holiday pay',
+    }));
+
+    return [...worked, ...leave, ...holidayOff];
   }
 
   private isPayrollLeave(request: TimeOffRequest): boolean {

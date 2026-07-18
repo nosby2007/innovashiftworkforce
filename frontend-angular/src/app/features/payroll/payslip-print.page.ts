@@ -11,7 +11,12 @@ import { AccrualsRepo, TimeOffRequest } from '../../core/repos/accruals.repo';
 import { TimeEntry } from '../../shared/models/time-entry.model';
 import { Shift } from '../../shared/models/shift.model';
 import { formatDateTime } from '../../shared/utils/date.util';
-import { currentPayrollPeriod, dateInputValue, payrollDeductions, payrollGross, payrollHours, payrollNet, payrollRate } from '../../shared/utils/payroll.util';
+import {
+  currentPayrollPeriod, dateInputValue, payrollDeductions, payrollNet,
+  payrollLeaveHours, payrollLeaveGross,
+  computeEmployeeGross, workedDateSet, payrollHolidayOffHours, payrollHolidayOffGross,
+  DEFAULT_OVERTIME_POLICY, OvertimePolicy, OrgHoliday, EmployeeGrossBreakdown,
+} from '../../shared/utils/payroll.util';
 
 @Component({
   standalone: true,
@@ -33,6 +38,8 @@ import { currentPayrollPeriod, dateInputValue, payrollDeductions, payrollGross, 
           <div class="ps-meta">
             <span>Pay period</span>
             <strong>{{ fromDate }} to {{ toDate }}</strong>
+            <span>Pay date</span>
+            <strong>{{ toDate }}</strong>
             <span>Generated</span>
             <strong>{{ generatedAt }}</strong>
           </div>
@@ -79,9 +86,12 @@ import { currentPayrollPeriod, dateInputValue, payrollDeductions, payrollGross, 
         <section class="ps-two">
           <article class="ps-box">
             <h2>Earnings</h2>
-            <div class="ps-line"><span>Regular hours</span><strong>{{ totalHours().toFixed(2) }} h</strong><em>{{ totalGross() | currency:moneyCurrency() }}</em></div>
-            <div class="ps-line"><span>Overtime hours</span><strong>{{ overtimeHours().toFixed(2) }} h</strong><em>{{ overtimeGross() | currency:moneyCurrency() }}</em></div>
-            <div class="ps-line ps-line-total"><span>Total gross</span><strong></strong><em>{{ totalGross() | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line"><span>Regular hours</span><strong>{{ regularHours().toFixed(2) }} h</strong><em>{{ regularGross() | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line" *ngIf="overtimeHours() > 0"><span>Overtime hours ({{ overtimeMultiplierLabel() }})</span><strong>{{ overtimeHours().toFixed(2) }} h</strong><em>{{ overtimeGross() | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line" *ngIf="holidayWorkedHours() > 0"><span>Holiday-worked hours</span><strong>{{ holidayWorkedHours().toFixed(2) }} h</strong><em>{{ holidayWorkedGross() | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line" *ngIf="holidayOffHours() > 0"><span>Holiday pay</span><strong>{{ holidayOffHours().toFixed(2) }} h</strong><em>{{ holidayOffGross() | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line" *ngIf="leaveHours() > 0"><span>Paid time off</span><strong>{{ leaveHours().toFixed(2) }} h</strong><em>{{ leaveGross() | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line ps-line-total"><span>Total gross</span><strong>{{ totalHours().toFixed(2) }} h</strong><em>{{ totalGross() | currency:moneyCurrency() }}</em></div>
           </article>
 
           <article class="ps-box">
@@ -201,6 +211,13 @@ export class PayslipPrintPage implements OnDestroy {
   private unsubLeave: (() => void) | null = null;
   private ctxEffect: EffectRef;
 
+  private orgDefaultPayRate = 0;
+  private overtimePolicy: OvertimePolicy = DEFAULT_OVERTIME_POLICY;
+  private holidayWorkMultiplier = 1.5;
+  private holidays: OrgHoliday[] = [];
+  private breakdown: EmployeeGrossBreakdown | null = null;
+  private holidayAwards: Array<{ holiday: OrgHoliday; hours: number; rate: number; gross: number }> = [];
+
   constructor(
     private ctx: OrgContextService,
     private route: ActivatedRoute,
@@ -221,16 +238,30 @@ export class PayslipPrintPage implements OnDestroy {
       this.targetUid = isAdminRoute
         ? (this.route.snapshot.queryParamMap.get('uid') || this.ctx.uid())
         : this.ctx.uid();
-      void this.loadOrgName();
+      void this.loadOrgSettings();
       this.bind();
     });
   }
 
-  private async loadOrgName() {
+  private async loadOrgSettings() {
     if (!this.orgId) return;
     const snap = await getDoc(doc(getFirestore(), `orgs/${this.orgId}`)).catch(() => null);
     const data: any = snap?.exists() ? snap.data() : {};
     this.orgName = String(data?.name || this.orgId || '').trim();
+    this.orgDefaultPayRate = Number(data.defaultPayRate || 0);
+    this.overtimePolicy = {
+      enabled: data.overtimeEnabled !== false,
+      multiplier: Math.max(1, Number(data.overtimeMultiplier || 1.5)),
+      weeklyThresholdHours: Math.max(1, Number(data.overtimeWeeklyThresholdHours || 40)),
+    };
+    this.holidayWorkMultiplier = Math.max(1, Number(data.holidayWorkMultiplier || 1.5));
+    this.holidays = Array.isArray(data.holidays) ? data.holidays : [];
+    this.recomputeRows();
+  }
+
+  private employeeRate(): number {
+    const user: any = this.users().find((u) => u.uid === this.targetUid);
+    return Number(user?.payroll?.payRate ?? user?.payRate ?? this.orgDefaultPayRate ?? 0);
   }
 
   private bind() {
@@ -255,10 +286,45 @@ export class PayslipPrintPage implements OnDestroy {
     });
   }
 
+  private static readonly LINE_TYPE_SUFFIX: Record<string, string> = {
+    overtime: ' (Overtime)',
+    holiday_worked: ' (Holiday)',
+    regular: '',
+  };
+
   private recomputeRows() {
-    const worked = this.entries().map((entry) => this.toRow(entry));
+    const holidayDates = new Set(this.holidays.map((h) => h.date));
+    this.breakdown = computeEmployeeGross(this.entries(), this.shiftMap(), this.orgDefaultPayRate, this.overtimePolicy, holidayDates, this.holidayWorkMultiplier);
+
+    const worked = this.breakdown.lines.map((line) => ({
+      date: line.date,
+      shiftTitle: `${line.shiftTitle}${PayslipPrintPage.LINE_TYPE_SUFFIX[line.type] || ''}`,
+      checkIn: formatDateTime(line.checkInAt),
+      checkOut: line.checkOutAt ? formatDateTime(line.checkOutAt) : 'Open',
+      hours: line.hours,
+      rate: line.rate,
+      gross: line.gross,
+      status: line.status,
+    }));
+
     const leave = this.leaveRequests().filter((request) => this.isPayrollLeave(request)).map((request) => this.leaveToRow(request));
-    this.rows.set([...worked, ...leave].sort((a, b) => a.date.localeCompare(b.date)));
+
+    this.holidayAwards = [];
+    const holidaysInPeriod = this.holidays.filter((h) => h.date >= this.fromDate && h.date <= this.toDate);
+    const holidayOff: Array<{ date: string; shiftTitle: string; checkIn: string; checkOut: string; hours: number; rate: number; gross: number; status: string }> = [];
+    if (holidaysInPeriod.length > 0) {
+      const workedDates = workedDateSet(this.entries());
+      const rate = this.employeeRate();
+      for (const holiday of holidaysInPeriod) {
+        const hours = payrollHolidayOffHours(holiday, workedDates);
+        if (hours <= 0) continue;
+        const gross = payrollHolidayOffGross(holiday, rate, workedDates);
+        this.holidayAwards.push({ holiday, hours, rate, gross });
+        holidayOff.push({ date: holiday.date, shiftTitle: `${holiday.name} (Holiday Pay)`, checkIn: holiday.date, checkOut: '-', hours, rate, gross, status: 'holiday pay' });
+      }
+    }
+
+    this.rows.set([...worked, ...leave, ...holidayOff].sort((a, b) => a.date.localeCompare(b.date)));
     this.setDocumentTitle();
     this.tryAutoPrint();
   }
@@ -274,24 +340,8 @@ export class PayslipPrintPage implements OnDestroy {
     setTimeout(() => window.print(), 350);
   }
 
-  private toRow(entry: TimeEntry) {
-    const shift = this.shiftMap()[entry.shiftId];
-    const hours = payrollHours(entry);
-    const rate = payrollRate(entry, shift);
-    return {
-      date: formatDateTime(entry.checkInAt).split(',')[0] || '-',
-      shiftTitle: shift?.title || 'Assigned shift',
-      checkIn: formatDateTime(entry.checkInAt),
-      checkOut: entry.checkOutAt ? formatDateTime(entry.checkOutAt) : 'Open',
-      hours,
-      rate,
-      gross: payrollGross(entry, shift),
-      status: entry.exceptionStatus || 'none',
-    };
-  }
-
   private leaveToRow(request: TimeOffRequest) {
-    const hours = Number(request.hours || 0);
+    const hours = payrollLeaveHours(request, this.fromDate, this.toDate);
     const rate = Number(request.payRate || 0);
     return {
       date: request.startDate || '-',
@@ -300,7 +350,7 @@ export class PayslipPrintPage implements OnDestroy {
       checkOut: request.endDate,
       hours,
       rate,
-      gross: Math.round(hours * rate * 100) / 100,
+      gross: payrollLeaveGross(request, this.fromDate, this.toDate),
       status: 'approved leave',
     };
   }
@@ -309,9 +359,7 @@ export class PayslipPrintPage implements OnDestroy {
     if (request.status !== 'approved') return false;
     if (request.requestType === 'unpaid') return false;
     if (request.paid === false) return false;
-    const start = request.startDate || '';
-    const end = request.endDate || start;
-    return start <= this.toDate && end >= this.fromDate;
+    return payrollLeaveHours(request, this.fromDate, this.toDate) > 0;
   }
 
   employeeName(): string {
@@ -328,9 +376,21 @@ export class PayslipPrintPage implements OnDestroy {
   totalGross() { return Math.round(this.rows().reduce((sum, r) => sum + r.gross, 0) * 100) / 100; }
   totalDeductions() { return payrollDeductions(this.totalGross()); }
   totalNet() { return payrollNet(this.totalGross()); }
-  overtimeHours() { return Math.max(0, this.totalHours() - 80); }
-  overtimeGross() { return 0; }
-  exceptionCount() { return this.rows().filter((r) => r.status !== 'none').length; }
+  private linesByType(type: 'regular' | 'overtime' | 'holiday_worked') {
+    return (this.breakdown?.lines ?? []).filter((l) => l.type === type);
+  }
+  regularHours() { return this.breakdown?.regularHours ?? 0; }
+  regularGross() { return Math.round(this.linesByType('regular').reduce((sum, l) => sum + l.gross, 0) * 100) / 100; }
+  overtimeHours() { return this.breakdown?.overtimeHours ?? 0; }
+  overtimeGross() { return Math.round(this.linesByType('overtime').reduce((sum, l) => sum + l.gross, 0) * 100) / 100; }
+  holidayWorkedHours() { return this.breakdown?.holidayWorkedHours ?? 0; }
+  holidayWorkedGross() { return Math.round(this.linesByType('holiday_worked').reduce((sum, l) => sum + l.gross, 0) * 100) / 100; }
+  holidayOffHours() { return this.holidayAwards.reduce((sum, a) => sum + a.hours, 0); }
+  holidayOffGross() { return Math.round(this.holidayAwards.reduce((sum, a) => sum + a.gross, 0) * 100) / 100; }
+  leaveHours() { return this.rows().filter((r) => r.status === 'approved leave').reduce((sum, r) => sum + r.hours, 0); }
+  leaveGross() { return Math.round(this.rows().filter((r) => r.status === 'approved leave').reduce((sum, r) => sum + r.gross, 0) * 100) / 100; }
+  overtimeMultiplierLabel() { return `${this.overtimePolicy.multiplier}x`; }
+  exceptionCount() { return this.rows().filter((r) => r.status !== 'none' && r.status !== 'approved leave' && r.status !== 'holiday pay').length; }
   moneyCurrency() { return this.ctx.currencyCode() || 'USD'; }
   taxLabel() { return this.ctx.taxProfile() === 'manual' ? 'External' : 'Est.'; }
 
