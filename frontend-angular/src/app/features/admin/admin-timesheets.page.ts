@@ -1,6 +1,7 @@
 import { Component, OnDestroy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Timestamp } from 'firebase/firestore';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
@@ -149,8 +150,9 @@ import { MatIconModule } from '@angular/material/icon';
                 <td><strong>{{ r.hours }}</strong></td>
                 <td>
                   <span class="vs-badge"
-                        [class.vs-badge--success]="!r.exceptionStatus || r.exceptionStatus==='none'"
-                        [class.vs-badge--warning]="r.exceptionStatus && r.exceptionStatus!=='none'">
+                        [class.vs-badge--success]="!r.exceptionStatus || r.exceptionStatus==='none' || r.exceptionStatus==='approved'"
+                        [class.vs-badge--warning]="r.exceptionStatus==='pending'"
+                        [class.vs-badge--neutral]="r.exceptionStatus==='rejected'">
                     {{ (r.exceptionStatus || 'none') | titlecase }}
                   </span>
                 </td>
@@ -300,6 +302,7 @@ export class AdminTimesheetsPage implements OnDestroy {
     private adminCmd: AdminCommands,
     private toast: ToastService,
     private printLauncher: PrintLauncherService,
+    private route: ActivatedRoute,
   ) {
     const bind = () => {
       const orgId = this.ctx.orgId();
@@ -327,6 +330,16 @@ export class AdminTimesheetsPage implements OnDestroy {
     sunday.setDate(monday.getDate() + 6);
     this.fromDate = monday.toISOString().slice(0,10);
     this.toDate = sunday.toISOString().slice(0,10);
+
+    // Deep-linked from Payroll's "Review" action: preselect the employee
+    // and payroll period so the flagged entries are immediately visible.
+    const params = this.route.snapshot.queryParamMap;
+    const uid = params.get('uid');
+    const from = params.get('from');
+    const to = params.get('to');
+    if (uid) this.selectedUid = uid;
+    if (from) this.fromDate = from;
+    if (to) this.toDate = to;
   }
 
   private async refreshRows() {

@@ -143,6 +143,21 @@ service cloud.firestore {
           isSuperAdmin() ||
           (isOrgMember(orgId) && isAdmin())
         );
+
+        // Bank/direct-deposit details — narrower than the parent user doc
+        // (which isOrgAdminLike() can read): only the employee themselves
+        // can read or write their own bank info, and only admin/hr (not
+        // manager/scheduler) can additionally read it for payroll setup.
+        match /private/{docId} {
+          allow read: if signedIn() && (
+            isSuperAdmin() ||
+            (isOrgMember(orgId) && (uid() == targetUid || isAdminOrHR()))
+          );
+          allow write: if signedIn() && (
+            isSuperAdmin() ||
+            (isOrgMember(orgId) && uid() == targetUid)
+          );
+        }
       }
 
       // ── Shifts ───────────────────────────────────
