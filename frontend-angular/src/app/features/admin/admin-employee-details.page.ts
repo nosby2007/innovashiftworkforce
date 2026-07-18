@@ -20,6 +20,7 @@ import { tsToDate, formatDateTime } from '../../shared/utils/date.util';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
 import { BenefitLine, defaultDeductionElectionsForCountry } from '../../shared/utils/payroll.util';
+import { DirectDepositRepo, DirectDepositInfo, maskLast4 } from '../../core/repos/direct-deposit.repo';
 
 interface TsRow {
   entry: TimeEntry;
@@ -221,6 +222,27 @@ type EmployeeProfileDraft = {
                   <div><span>Sick balance</span><strong>{{ accrualBalance().sickBalance.toFixed(2) }}</strong></div>
                 </ng-container>
               </div>
+            </article>
+
+            <article class="empd-admin-card" *ngIf="isAdminOrHr()">
+              <h3><mat-icon>account_balance</mat-icon> Direct Deposit</h3>
+              <div *ngIf="directDeposit() as dd; else noDirectDeposit">
+                <div class="empd-dd-row">
+                  <div>
+                    <strong>{{ dd.bankName }}</strong>
+                    <span>{{ dd.accountType === 'savings' ? 'Savings' : 'Checking' }} · {{ ddRevealed ? dd.accountNumber : maskedDdAccountNumber() }}</span>
+                  </div>
+                  <button class="vs-btn-ghost" type="button" (click)="ddRevealed = !ddRevealed">
+                    <mat-icon>{{ ddRevealed ? 'visibility_off' : 'visibility' }}</mat-icon> {{ ddRevealed ? 'Hide' : 'Reveal' }}
+                  </button>
+                </div>
+                <div class="empd-dd-row" *ngIf="ddRevealed">
+                  <span class="vs-muted">Routing number: {{ dd.routingNumber }}</span>
+                </div>
+              </div>
+              <ng-template #noDirectDeposit>
+                <div class="empd-benefit-empty">No direct deposit account on file. The employee can add one from their own profile.</div>
+              </ng-template>
             </article>
 
             <article class="empd-admin-card" *ngIf="isAdminOrHr()">
@@ -563,6 +585,9 @@ type EmployeeProfileDraft = {
     .empd-benefit-add { display:flex; gap:8px; align-items:center; }
     .empd-benefit-add .vs-select { min-width:160px; }
     .empd-benefit-empty { border:1px dashed var(--border); border-radius:12px; padding:14px; color:var(--text-muted); font-size:13px; }
+    .empd-dd-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 0; }
+    .empd-dd-row strong { display:block; color:var(--text); }
+    .empd-dd-row span { display:block; margin-top:3px; color:var(--text-muted); font-size:13px; }
     .empd-benefit-row { display:grid; grid-template-columns:1.4fr 1.4fr 1fr 1fr auto; gap:8px; align-items:center; margin-bottom:8px; }
     @media (max-width:900px) { .empd-benefit-row { grid-template-columns:1fr 1fr; } }
     .empd-text-lines textarea { min-height:96px; resize:vertical; }
@@ -664,6 +689,8 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
   orgBenefitPlans = signal<BenefitLine[]>([]);
   orgDeductionDefaults = { federalTaxPercent: 0, stateTaxPercent: 0, socialSecurityPercent: 0, medicarePercent: 0, retirement401kMatchPercent: 0, retirement401kProvider: '' };
   selectedBenefitPlanId = '';
+  private directDepositSig: DirectDepositInfo | null = null;
+  ddRevealed = false;
   timeOffRequests = signal<TimeOffRequest[]>([]);
   employeeDocuments = signal<EmployeeDocumentRecord[]>([]);
   documentReviewBusy = false;
@@ -703,6 +730,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
   private unsubTimeOff: (() => void) | null = null;
   private unsubAccrual: (() => void) | null = null;
   private unsubDocs: (() => void) | null = null;
+  private unsubDirectDeposit: (() => void) | null = null;
   private routeSub: any;
 
   constructor(
@@ -717,6 +745,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
     private adminCmd: AdminCommands,
     private schedulerCmd: SchedulerCommands,
     private toast: ToastService,
+    private directDepositRepo: DirectDepositRepo,
   ) {
     const now = new Date();
     const monday = new Date(now);
@@ -784,6 +813,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
     this.unsubTimeOff?.();
     this.unsubAccrual?.();
     this.unsubDocs?.();
+    this.unsubDirectDeposit?.();
     if (this.routeSub?.unsubscribe) this.routeSub.unsubscribe();
   }
 
@@ -1205,6 +1235,9 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
     this.unsubTimeOff?.();
     this.unsubAccrual?.();
     this.unsubDocs?.();
+    this.unsubDirectDeposit?.();
+    this.directDepositSig = null;
+    this.ddRevealed = false;
     this.user.set(null);
     this.shifts.set([]);
     this.tsRows.set([]);
@@ -1236,7 +1269,18 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
       this.unsubDocs = this.docsRepo.watchForUser(this.orgId, this.userId, (items) => {
         this.employeeDocuments.set(items);
       });
+      this.unsubDirectDeposit = this.directDepositRepo.watch(this.orgId, this.userId, (info) => {
+        this.directDepositSig = info;
+      });
     }
+  }
+
+  directDeposit(): DirectDepositInfo | null {
+    return this.directDepositSig;
+  }
+
+  maskedDdAccountNumber(): string {
+    return maskLast4(this.directDepositSig?.accountNumber || '');
   }
 
   // Payroll, PTO requests, and employee documents are admin/hr-only —

@@ -12,6 +12,7 @@ import { ToastService } from '../../core/ui/toast.service';
 import { AppLockService } from '../../core/app-lock/app-lock.service';
 import { ConnectivityService } from '../../core/connectivity/connectivity.service';
 import { TwoFactorService } from '../../core/auth/two-factor.service';
+import { DirectDepositRepo, DirectDepositInfo, BankAccountType, maskLast4 } from '../../core/repos/direct-deposit.repo';
 import type { TotpSecret } from 'firebase/auth';
 
 type DependentDraft = {
@@ -266,6 +267,66 @@ const EMPTY_DEPENDENT: DependentDraft = {
           </div>
         </section>
 
+        <section class="vs-glass-strong prof-card" id="direct-deposit">
+          <div class="prof-card-head">
+            <div>
+              <h2>Direct Deposit</h2>
+              <p>Bank details used so your pay can be deposited. Only you and payroll admin/HR can see this.</p>
+            </div>
+            <mat-icon>account_balance</mat-icon>
+          </div>
+
+          <div class="prof-dd-summary" *ngIf="directDeposit() && !editingDirectDeposit">
+            <div>
+              <strong>{{ directDeposit()!.bankName }}</strong>
+              <span>{{ directDeposit()!.accountType === 'savings' ? 'Savings' : 'Checking' }} · {{ maskedAccountNumber() }}</span>
+            </div>
+            <button class="vs-btn-ghost" type="button" (click)="startEditDirectDeposit()">
+              <mat-icon>edit</mat-icon> Update
+            </button>
+          </div>
+
+          <div class="prof-dd-empty" *ngIf="!directDeposit() && !editingDirectDeposit">
+            <p>No direct deposit account on file yet.</p>
+            <button class="vs-btn-primary" type="button" (click)="startEditDirectDeposit()">
+              <mat-icon>add</mat-icon> Add Bank Account
+            </button>
+          </div>
+
+          <div class="prof-form-grid" *ngIf="editingDirectDeposit">
+            <label>
+              <span>Bank name</span>
+              <input class="vs-input" [(ngModel)]="ddDraft.bankName" placeholder="e.g. Chase, Wells Fargo">
+            </label>
+            <label>
+              <span>Account type</span>
+              <select class="vs-select" [(ngModel)]="ddDraft.accountType">
+                <option value="checking">Checking</option>
+                <option value="savings">Savings</option>
+              </select>
+            </label>
+            <label>
+              <span>Routing number</span>
+              <input class="vs-input" [(ngModel)]="ddDraft.routingNumber" placeholder="9-digit routing number" autocomplete="off">
+            </label>
+            <label>
+              <span>Account number</span>
+              <input class="vs-input" type="password" [(ngModel)]="ddDraft.accountNumber" placeholder="Account number" autocomplete="off">
+            </label>
+            <label>
+              <span>Confirm account number</span>
+              <input class="vs-input" type="password" [(ngModel)]="ddDraft.confirmAccountNumber" placeholder="Re-enter account number" autocomplete="off">
+            </label>
+          </div>
+          <p class="prof-note" *ngIf="editingDirectDeposit">This is stored for payroll's reference and is not shared beyond you and payroll admin/HR. InnovaShift does not move funds itself — your organization sets up the actual transfer with this information.</p>
+          <div class="prof-dd-actions" *ngIf="editingDirectDeposit">
+            <button class="vs-btn-ghost" type="button" (click)="cancelEditDirectDeposit()" [disabled]="ddSaving">Cancel</button>
+            <button class="vs-btn-primary" type="button" (click)="saveDirectDeposit()" [disabled]="ddSaving">
+              {{ ddSaving ? 'Saving...' : 'Save Bank Account' }}
+            </button>
+          </div>
+        </section>
+
         <section class="vs-glass-strong prof-card">
           <div class="prof-card-head">
             <div>
@@ -470,6 +531,12 @@ const EMPTY_DEPENDENT: DependentDraft = {
     .prof-dependent-row { display:grid; grid-template-columns:1.1fr .85fr .55fr auto auto; gap:10px; align-items:center; }
     .prof-remove { min-width:42px; padding-inline:10px !important; }
     .prof-empty-line { padding:14px; border:1px dashed var(--border); border-radius:8px; color:var(--text-muted); }
+    .prof-dd-summary { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:18px 20px; }
+    .prof-dd-summary strong { display:block; color:var(--text); }
+    .prof-dd-summary span { display:block; margin-top:4px; color:var(--text-muted); font-size:13px; }
+    .prof-dd-empty { padding:18px 20px; display:flex; align-items:center; justify-content:space-between; gap:14px; color:var(--text-muted); }
+    .prof-dd-empty p { margin:0; }
+    .prof-dd-actions { display:flex; justify-content:flex-end; gap:10px; padding:0 20px 18px; }
     .prof-pref-grid { padding:18px 20px; display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; align-items:center; }
     .prof-switch { min-height:52px; border:1px solid var(--border); border-radius:8px; padding:12px 14px; display:flex; align-items:center; gap:10px; background:var(--panel); }
     .prof-switch span { margin:0; color:var(--text); }
@@ -514,7 +581,13 @@ export class StaffProfilePage implements OnDestroy {
   private tfaPendingSecret: TotpSecret | null = null;
   private tfaIntent: 'enroll' | 'disable' | null = null;
   private unsub: (() => void) | null = null;
+  private unsubDirectDeposit: (() => void) | null = null;
   private source: any = {};
+
+  private directDepositSig: DirectDepositInfo | null = null;
+  editingDirectDeposit = false;
+  ddSaving = false;
+  ddDraft: { bankName: string; accountType: BankAccountType; routingNumber: string; accountNumber: string; confirmAccountNumber: string } = this.emptyDdDraft();
 
   timezones = [
     'America/New_York',
@@ -539,12 +612,71 @@ export class StaffProfilePage implements OnDestroy {
     private appLock: AppLockService,
     private connectivity: ConnectivityService,
     private twoFactor: TwoFactorService,
+    private directDepositRepo: DirectDepositRepo,
   ) {
     this.orgId = this.ctx.orgId();
     this.uid = this.ctx.uid();
     this.bind();
     void this.loadAppLockState();
     this.loadTfaState();
+    if (this.orgId && this.uid) {
+      this.unsubDirectDeposit = this.directDepositRepo.watch(this.orgId, this.uid, (info) => {
+        this.directDepositSig = info;
+      });
+    }
+  }
+
+  directDeposit(): DirectDepositInfo | null {
+    return this.directDepositSig;
+  }
+
+  maskedAccountNumber(): string {
+    return maskLast4(this.directDepositSig?.accountNumber || '');
+  }
+
+  private emptyDdDraft() {
+    return { bankName: '', accountType: 'checking' as BankAccountType, routingNumber: '', accountNumber: '', confirmAccountNumber: '' };
+  }
+
+  startEditDirectDeposit() {
+    this.ddDraft = this.emptyDdDraft();
+    this.editingDirectDeposit = true;
+  }
+
+  cancelEditDirectDeposit() {
+    this.editingDirectDeposit = false;
+    this.ddDraft = this.emptyDdDraft();
+  }
+
+  async saveDirectDeposit() {
+    if (!this.orgId || !this.uid || this.ddSaving) return;
+    const bankName = this.ddDraft.bankName.trim();
+    const routingNumber = this.ddDraft.routingNumber.trim();
+    const accountNumber = this.ddDraft.accountNumber.trim();
+    if (!bankName || !routingNumber || !accountNumber) {
+      this.toast.error('Bank name, routing number, and account number are required.');
+      return;
+    }
+    if (accountNumber !== this.ddDraft.confirmAccountNumber.trim()) {
+      this.toast.error('Account number and confirmation do not match.');
+      return;
+    }
+    this.ddSaving = true;
+    try {
+      await this.directDepositRepo.save(this.orgId, this.uid, {
+        bankName,
+        accountType: this.ddDraft.accountType,
+        routingNumber,
+        accountNumber,
+      });
+      this.toast.success('Direct deposit account saved.');
+      this.editingDirectDeposit = false;
+      this.ddDraft = this.emptyDdDraft();
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Failed to save direct deposit account.');
+    } finally {
+      this.ddSaving = false;
+    }
   }
 
   private async loadAppLockState() {
@@ -669,6 +801,7 @@ export class StaffProfilePage implements OnDestroy {
 
   ngOnDestroy() {
     this.unsub?.();
+    this.unsubDirectDeposit?.();
   }
 
   initials(): string {

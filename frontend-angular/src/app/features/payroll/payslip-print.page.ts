@@ -21,6 +21,7 @@ import {
   defaultDeductionElectionsForCountry,
 } from '../../shared/utils/payroll.util';
 import { PayFrequency } from '../../core/tenancy/org-finance.model';
+import { DirectDepositRepo, DirectDepositInfo, maskLast4 } from '../../core/repos/direct-deposit.repo';
 
 @Component({
   standalone: true,
@@ -119,6 +120,12 @@ import { PayFrequency } from '../../core/tenancy/org-finance.model';
           <div class="ps-line" *ngIf="(deductionBreakdown()?.employer401kMatch ?? 0) > 0"><span>401(k) match{{ retirement401kProvider() ? ' — ' + retirement401kProvider() : '' }}</span><strong></strong><em>{{ deductionBreakdown()?.employer401kMatch ?? 0 | currency:moneyCurrency() }}</em></div>
           <div class="ps-line" *ngFor="let b of deductionBreakdown()?.employerBenefitLines ?? []"><span>{{ b.label }}{{ b.provider ? ' — ' + b.provider : '' }}</span><strong></strong><em>{{ b.amount | currency:moneyCurrency() }}</em></div>
           <div class="ps-line ps-line-total"><span>Total employer contributions</span><strong></strong><em>{{ deductionBreakdown()?.employerContributionsTotal ?? 0 | currency:moneyCurrency() }}</em></div>
+        </section>
+
+        <section class="ps-box" *ngIf="directDeposit() as dd">
+          <h2>Direct Deposit</h2>
+          <div class="ps-line"><span>{{ dd.bankName }} — {{ dd.accountType === 'savings' ? 'Savings' : 'Checking' }}</span><strong></strong><em>{{ maskedDdAccount() }}</em></div>
+          <div class="ps-line ps-line-total"><span>Amount</span><strong></strong><em>{{ totalNet() | currency:moneyCurrency() }}</em></div>
         </section>
 
         <section class="ps-box">
@@ -249,6 +256,9 @@ export class PayslipPrintPage implements OnDestroy {
   private ytdShiftMap = signal<Record<string, Shift>>({});
   ytdNetPay = 0;
 
+  private unsubDirectDeposit: (() => void) | null = null;
+  private directDepositSig: DirectDepositInfo | null = null;
+
   constructor(
     private ctx: OrgContextService,
     private route: ActivatedRoute,
@@ -257,6 +267,7 @@ export class PayslipPrintPage implements OnDestroy {
     private shiftsRepo: ShiftsRepo,
     private usersRepo: UsersRepo,
     private accruals: AccrualsRepo,
+    private directDepositRepo: DirectDepositRepo,
   ) {
     const period = currentPayrollPeriod();
     this.fromDate = this.route.snapshot.queryParamMap.get('from') || dateInputValue(period.start);
@@ -325,11 +336,24 @@ export class PayslipPrintPage implements OnDestroy {
     return this._deductionBreakdown;
   }
 
+  directDeposit(): DirectDepositInfo | null {
+    return this.directDepositSig;
+  }
+
+  maskedDdAccount(): string {
+    return maskLast4(this.directDepositSig?.accountNumber || '');
+  }
+
   private bind() {
     this.unsubEntries?.();
     this.unsubLeave?.();
+    this.unsubDirectDeposit?.();
+    this.directDepositSig = null;
     this.rows.set([]);
     if (!this.orgId || !this.targetUid || !this.fromDate || !this.toDate) return;
+    this.unsubDirectDeposit = this.directDepositRepo.watch(this.orgId, this.targetUid, (info) => {
+      this.directDepositSig = info;
+    });
     if (!this.unsubUsers) {
       this.unsubUsers = this.usersRepo.watchOrgUsers(this.orgId, (items) => {
         this.users.set(items);
@@ -533,6 +557,7 @@ export class PayslipPrintPage implements OnDestroy {
     this.unsubEntries?.();
     this.unsubLeave?.();
     this.unsubYtdEntries?.();
+    this.unsubDirectDeposit?.();
     this.ctxEffect.destroy();
   }
 }
