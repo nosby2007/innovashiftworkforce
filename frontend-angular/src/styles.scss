@@ -20,26 +20,26 @@ body {
   ============================================================ */
 :root {
   /* Brand */
-  --primary:        #1d4ed8;
-  --primary-hover:  #1e40af;
-  --primary-glow:   rgba(29, 78, 216, 0.16);
+  --primary:        #4f46e5;
+  --primary-hover:  #4338ca;
+  --primary-glow:   rgba(79, 70, 229, 0.16);
 
-  --accent:         #0891b2;
-  --accent-2:       #0f766e;
-  --accent-glow:    rgba(8, 145, 178, 0.14);
+  --accent:         #7c3aed;
+  --accent-2:       #6d28d9;
+  --accent-glow:    rgba(124, 58, 237, 0.14);
 
   --success:        #22c55e;
   --warning:        #f59e0b;
   --danger:         #ef4444;
 
   /* Backgrounds */
-  --bg-deep:        #dbeafe;
+  --bg-deep:        #e0e7ff;
   --bg-base:        #f6f8fc;
   --bg-surface:     #ffffff;
   --bg-elevated:    #f9fbff;
 
   /* App gradient */
-  --app-bg: linear-gradient(160deg, #edf4ff 0%, #f8fbff 50%, #eef7fb 100%);
+  --app-bg: linear-gradient(160deg, #eef2ff 0%, #f5f3ff 50%, #faf9ff 100%);
 
   /* Glass panels */
   --panel:          rgba(255, 255, 255, 0.92);
@@ -307,7 +307,7 @@ body.theme-contrast {
   font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
   white-space: nowrap;
 }
-.vs-badge--primary { background: rgba(37,99,235,0.16); color: #93c5fd; border: 1px solid rgba(37,99,235,0.35); }
+.vs-badge--primary { background: rgba(79,70,229,0.16); color: #a5b4fc; border: 1px solid rgba(79,70,229,0.35); }
 .vs-badge--success { background: rgba(34,197,94,0.15);  color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
 .vs-badge--warning { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.25); }
 .vs-badge--danger  { background: rgba(239,68,68,0.15);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); }
@@ -362,8 +362,8 @@ body.theme-contrast {
 }
 
 .vs-btn-secondary:hover:not([disabled]) {
-  background: rgba(29,78,216,0.08) !important;
-  border-color: rgba(37,99,235,0.42) !important;
+  background: rgba(79,70,229,0.08) !important;
+  border-color: rgba(79,70,229,0.42) !important;
   color: var(--primary-hover) !important;
 }
 
@@ -409,7 +409,7 @@ body.theme-contrast {
 }
 .vs-row:hover td.mat-mdc-cell { background: var(--panel) !important; }
 .vs-row.is-selected td.mat-mdc-cell {
-  background: linear-gradient(90deg, rgba(37,99,235,0.20) 0%, rgba(20,184,166,0.14) 100%) !important;
+  background: linear-gradient(90deg, rgba(79,70,229,0.20) 0%, rgba(124,58,237,0.14) 100%) !important;
 }
 .vs-empty td { padding: 24px !important; color: var(--text-muted) !important; font-style: italic; }
 .vs-right { text-align: right !important; }
@@ -429,7 +429,7 @@ table.vs-table th {
 }
 table.vs-table td { padding: 13px 14px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; font-size: 13.5px; }
 tr.vs-row:hover td { background: var(--panel); }
-tr.vs-row.is-selected td { background: linear-gradient(90deg, rgba(37,99,235,0.20), rgba(20,184,166,0.12)); }
+tr.vs-row.is-selected td { background: linear-gradient(90deg, rgba(79,70,229,0.20), rgba(124,58,237,0.12)); }
 
 /* ============================================================
    FORMS

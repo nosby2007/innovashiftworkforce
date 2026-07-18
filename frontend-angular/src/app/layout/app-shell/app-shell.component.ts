@@ -374,12 +374,12 @@ const ROUTE_TITLES: Record<string, string> = {
     }
     .l-nav-item.is-active {
       color: var(--text);
-      background: linear-gradient(135deg, rgba(37,99,235,0.18), rgba(20,184,166,0.10));
-      border-color: rgba(37,99,235,0.34);
+      background: linear-gradient(135deg, rgba(79,70,229,0.18), rgba(124,58,237,0.10));
+      border-color: rgba(79,70,229,0.34);
       font-weight: 700;
     }
     .l-nav-item.is-active .l-nav-icon {
-      color: #93c5fd;
+      color: var(--primary);
     }
     .l-nav-item--admin-bridge {
       margin-top: 8px;
