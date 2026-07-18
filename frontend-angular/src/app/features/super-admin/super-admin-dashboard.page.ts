@@ -1,10 +1,10 @@
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { OrgDirectoryRepo, OrgDirectoryItem } from '../../core/repos/org-directory.repo';
-import { SuperAdminService } from './super-admin.service';
+import { SuperAdminService, ContactRequestItem } from './super-admin.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
@@ -138,7 +138,7 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
       </div>
 
       <div *ngIf="activeTab() === 'overview'">
-        <app-super-admin-demo-requests></app-super-admin-demo-requests>
+        <app-super-admin-demo-requests (convert)="onConvertRequest($event)"></app-super-admin-demo-requests>
 
         <div class="vs-grid-3 sa-kpis">
           <div class="vs-stat-card vs-stat--primary">
@@ -1111,6 +1111,8 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
   `]
 })
 export class SuperAdminDashboardPage implements OnInit, OnDestroy {
+  @ViewChild(SuperAdminDemoRequestsComponent) demoRequestsCmp?: SuperAdminDemoRequestsComponent;
+
   orgs = signal<OrgDirectoryItem[]>([]);
   orgsTableCtrl = new TableListController<OrgDirectoryItem>(this.orgs, {
     pageSize: 25,
@@ -1156,6 +1158,8 @@ export class SuperAdminDashboardPage implements OnInit, OnDestroy {
   bootstrapAdminEmail = '';
   bootstrapAdminDisplayName = '';
   bootstrapAdminJobRole = 'Manager';
+  /** Set by onConvertRequest(); createOrg() marks this demo request "converted" (with the new orgId) once the org is actually created. */
+  pendingConversionRequestId: string | null = null;
 
   lookupEmail = '';
   busyLookup = signal(false);
@@ -1397,9 +1401,11 @@ export class SuperAdminDashboardPage implements OnInit, OnDestroy {
     this.orgMsg.set(null);
     this.orgInviteLink.set(null);
     this.busyOrg.set(true);
+    const createdOrgId = this.newOrgId.trim();
+    const conversionRequestId = this.pendingConversionRequestId;
     try {
       const res: any = await this.sa.createOrg({
-        orgId: this.newOrgId.trim(),
+        orgId: createdOrgId,
         name: this.newOrgName.trim(),
         plan: this.newOrgPlan,
         countryCode: this.newOrgCountryCode,
@@ -1417,6 +1423,18 @@ export class SuperAdminDashboardPage implements OnInit, OnDestroy {
         this.orgInviteLink.set(res.bootstrapAdminPasswordResetLink || null);
       } else {
         this.orgMsg.set(`Organization "${this.newOrgName}" created with plan: ${this.newOrgPlan}.`);
+      }
+
+      if (conversionRequestId) {
+        this.pendingConversionRequestId = null;
+        try {
+          await this.sa.updateContactRequestStatus(conversionRequestId, 'converted', createdOrgId);
+          await this.demoRequestsCmp?.load();
+        } catch (e: any) {
+          // The org itself was created successfully — this is just the
+          // lead-tracking link, so surface it as a heads-up, not a failure.
+          this.toast.errorFrom(e, 'Organization created, but could not mark the demo request as converted.');
+        }
       }
 
       this.newOrgId = '';
@@ -1438,6 +1456,33 @@ export class SuperAdminDashboardPage implements OnInit, OnDestroy {
     } finally {
       this.busyOrg.set(false);
     }
+  }
+
+  /**
+   * Prefills the Create Organization form from a demo request — the actual
+   * org creation (plan, jurisdiction, etc.) stays a deliberate action the
+   * super admin reviews and submits themselves via createOrg(), which marks
+   * the request "converted" once the org actually exists.
+   */
+  onConvertRequest(req: ContactRequestItem) {
+    this.newOrgId = this.slugifyOrgId(req.organization);
+    this.newOrgName = req.organization;
+    this.newOrgPlan = 'free';
+    this.bootstrapAdminEmail = req.email;
+    this.bootstrapAdminDisplayName = req.name;
+    this.bootstrapAdminJobRole = 'Manager';
+    this.pendingConversionRequestId = req.id;
+    this.activeTab.set('organization');
+    this.orgMsg.set(`Prefilled from ${req.name}'s demo request — review the plan and details below, then click "Create Organization" to convert it.`);
+  }
+
+  private slugifyOrgId(name: string): string {
+    const base = name
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 30) || 'ORG';
+    return `${base}_${Math.floor(1000 + Math.random() * 9000)}`;
   }
 
   async copyOrgInviteLink() {

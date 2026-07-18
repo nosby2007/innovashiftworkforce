@@ -13,6 +13,7 @@ export const updateContactRequestStatus = onCall(async (req) => {
 
   const requestId = String(req.data?.requestId || '').trim();
   const status = String(req.data?.status || '').trim();
+  const convertedOrgId = req.data?.convertedOrgId ? String(req.data.convertedOrgId).trim() : null;
   if (!requestId) throw new HttpsError('invalid-argument', 'requestId is required.');
   if (!ALLOWED_STATUSES.has(status)) throw new HttpsError('invalid-argument', 'Invalid status.');
 
@@ -24,6 +25,10 @@ export const updateContactRequestStatus = onCall(async (req) => {
     status,
     updatedAt: Timestamp.now(),
     reviewedBy: caller.uid,
+    // Traceability from a lead back to the org it turned into — only set
+    // when the caller actually created one (via Convert to Organization),
+    // never inferred.
+    ...(convertedOrgId ? { convertedOrgId } : {}),
   }, { merge: true });
 
   return { ok: true };

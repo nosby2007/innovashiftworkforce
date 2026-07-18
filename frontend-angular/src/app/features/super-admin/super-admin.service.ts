@@ -131,9 +131,9 @@ export class SuperAdminService {
     return Array.isArray(res.data?.items) ? res.data.items as ContactRequestItem[] : [];
   }
 
-  async updateContactRequestStatus(requestId: string, status: ContactRequestStatus) {
+  async updateContactRequestStatus(requestId: string, status: ContactRequestStatus, convertedOrgId?: string) {
     const call = this.fn('updateContactRequestStatus');
-    const res = await call({ requestId, status });
+    const res = await call({ requestId, status, convertedOrgId });
     return res.data;
   }
 }
@@ -151,6 +151,7 @@ export interface ContactRequestItem {
   createdAt: any;
   updatedAt?: any;
   reviewedBy?: string | null;
+  convertedOrgId?: string | null;
 }
 
 export interface NewEmployeeInput {

@@ -1,4 +1,4 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, EventEmitter, Output, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { SuperAdminService, ContactRequestItem, ContactRequestStatus } from './super-admin.service';
@@ -52,13 +52,16 @@ import { formatDateTime } from '../../shared/utils/date.util';
             <a [href]="'mailto:' + r.email">{{ r.email }}</a> · {{ r.size }} employees · {{ fmt(r.createdAt) }}
           </div>
           <div class="sdr-message" *ngIf="r.message">{{ r.message }}</div>
+          <div class="sdr-converted" *ngIf="r.convertedOrgId">
+            <mat-icon>business</mat-icon> Converted to organization <strong>{{ r.convertedOrgId }}</strong>
+          </div>
         </div>
         <div class="sdr-actions">
           <button class="vs-btn-ghost sdr-btn" type="button" (click)="setStatus(r, 'contacted')" [disabled]="busyId() === r.id || r.status === 'contacted'">
             Contacted
           </button>
-          <button class="vs-btn-primary sdr-btn" type="button" (click)="setStatus(r, 'converted')" [disabled]="busyId() === r.id || r.status === 'converted'">
-            Converted
+          <button class="vs-btn-primary sdr-btn" type="button" (click)="convert.emit(r)" [disabled]="!!r.convertedOrgId" title="Prefills the Create Organization form so you can review plan/details before creating it">
+            <mat-icon>add_business</mat-icon> Convert to Organization
           </button>
           <button class="vs-btn-ghost sdr-btn" type="button" (click)="setStatus(r, 'dismissed')" [disabled]="busyId() === r.id || r.status === 'dismissed'">
             Dismiss
@@ -79,11 +82,16 @@ import { formatDateTime } from '../../shared/utils/date.util';
     .sdr-meta { margin-top: 4px; font-size: 12px; color: var(--text-muted); }
     .sdr-meta a { color: inherit; }
     .sdr-message { margin-top: 6px; font-size: 12.5px; color: var(--text); background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
-    .sdr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    .sdr-btn { padding: 6px 12px !important; font-size: 12px !important; }
+    .sdr-converted { margin-top: 6px; display: flex; align-items: center; gap: 6px; font-size: 12px; color: #16a34a; }
+    .sdr-converted mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .sdr-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .sdr-btn { padding: 6px 12px !important; font-size: 12px !important; display: inline-flex; align-items: center; gap: 4px; }
+    .sdr-btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
   `],
 })
 export class SuperAdminDemoRequestsComponent {
+  @Output() convert = new EventEmitter<ContactRequestItem>();
+
   requests = signal<ContactRequestItem[]>([]);
   loading = signal(false);
   busyId = signal<string | null>(null);
