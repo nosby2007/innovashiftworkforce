@@ -8,6 +8,7 @@ import { APP_ROUTES } from './app.routes';
 import { ThemeService } from './core/theme/theme.service';
 import { SessionBootstrapService } from './core/auth/session-bootstrap.service';
 import { GlobalErrorHandler } from './core/error-handling/global-error-handler';
+import { AppUpdateService } from './core/pwa/app-update.service';
 
 // Material modules you want globally
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -60,6 +61,12 @@ export const appConfig: ApplicationConfig = {
       multi: true,
       deps: [SessionBootstrapService],
       useFactory: (session: SessionBootstrapService) => () => session.start(),
+    },
+    {
+      provide: APP_INITIALIZER,
+      multi: true,
+      deps: [AppUpdateService],
+      useFactory: (appUpdate: AppUpdateService) => () => appUpdate.init(),
     },
   ],
 };
