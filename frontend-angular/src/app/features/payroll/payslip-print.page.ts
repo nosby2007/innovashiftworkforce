@@ -12,7 +12,7 @@ import { TimeEntry } from '../../shared/models/time-entry.model';
 import { Shift } from '../../shared/models/shift.model';
 import { formatDateTime } from '../../shared/utils/date.util';
 import {
-  currentPayrollPeriod, dateInputValue,
+  currentPayrollPeriod, dateInputValue, countPayPeriods,
   payrollLeaveHours, payrollLeaveGross,
   computeEmployeeGross, workedDateSet, payrollHolidayOffHours, payrollHolidayOffGross,
   DEFAULT_OVERTIME_POLICY, OvertimePolicy, OrgHoliday, EmployeeGrossBreakdown,
@@ -20,6 +20,7 @@ import {
   DeductionElections, DeductionOverrides, DeductionBreakdown,
   defaultDeductionElectionsForCountry,
 } from '../../shared/utils/payroll.util';
+import { PayFrequency } from '../../core/tenancy/org-finance.model';
 
 @Component({
   standalone: true,
@@ -330,7 +331,15 @@ export class PayslipPrintPage implements OnDestroy {
     this.rows.set([]);
     if (!this.orgId || !this.targetUid || !this.fromDate || !this.toDate) return;
     if (!this.unsubUsers) {
-      this.unsubUsers = this.usersRepo.watchOrgUsers(this.orgId, (items) => this.users.set(items));
+      this.unsubUsers = this.usersRepo.watchOrgUsers(this.orgId, (items) => {
+        this.users.set(items);
+        // employeeRate()/employeeDeductionOverrides() read from users() — if
+        // this listener resolves after entries/leave already recomputed,
+        // custom rates/deductions would otherwise stay stale until some
+        // unrelated update.
+        this.recomputeRows();
+        this.recomputeYtd();
+      });
     }
     const start = Timestamp.fromDate(new Date(`${this.fromDate}T00:00:00`));
     const end = Timestamp.fromDate(new Date(`${this.toDate}T23:59:59`));
@@ -379,7 +388,16 @@ export class PayslipPrintPage implements OnDestroy {
     }
 
     const elections = resolveDeductionElections(this.orgDeductionDefaults, this.employeeDeductionOverrides());
-    this.ytdNetPay = computeDeductions(ytdGross, elections).netPay;
+    // Percentage-based deductions (federal/state/SS/medicare/401k) scale
+    // correctly when applied straight to YTD gross. Flat per-paycheck
+    // benefit amounts don't — computeDeductions() always represents a
+    // single paycheck's worth, so those must be multiplied by how many
+    // pay periods actually occurred in the YTD window instead.
+    const perPeriod = computeDeductions(ytdGross, elections);
+    const periods = countPayPeriods((this.ctx.payFrequency() as PayFrequency) || 'biweekly', yearStart, this.toDate);
+    const ytdBenefitsTotal = Math.round(perPeriod.benefitsTotal * Math.max(1, periods) * 100) / 100;
+    const ytdTotalDeductions = Math.round((perPeriod.federalTax + perPeriod.stateTax + perPeriod.socialSecurity + perPeriod.medicare + perPeriod.retirement401k + ytdBenefitsTotal) * 100) / 100;
+    this.ytdNetPay = Math.round((ytdGross - ytdTotalDeductions) * 100) / 100;
   }
 
   private static readonly LINE_TYPE_SUFFIX: Record<string, string> = {

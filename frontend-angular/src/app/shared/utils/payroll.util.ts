@@ -54,6 +54,32 @@ export function currentPayrollPeriod(payFrequency: PayFrequency = 'biweekly', an
   }
 }
 
+/**
+ * Counts how many of the org's pay periods start within
+ * [rangeStart, rangeEnd] ('YYYY-MM-DD'). Used to scale flat per-paycheck
+ * deductions (e.g. a $50/paycheck benefit) across a wider window like
+ * year-to-date, since those don't scale with gross the way percentage-based
+ * deductions do — computeDeductions() only ever represents one paycheck.
+ */
+export function countPayPeriods(payFrequency: PayFrequency, rangeStart: string, rangeEnd: string): number {
+  const [ys, ms, ds] = rangeStart.split('-').map(Number);
+  const [ye, me, de] = rangeEnd.split('-').map(Number);
+  if (!ys || !ms || !ds || !ye || !me || !de) return 0;
+  const end = new Date(ye, me - 1, de);
+  let anchor = new Date(ys, ms - 1, ds);
+  let count = 0;
+  for (let guard = 0; guard < 400; guard++) {
+    const period = currentPayrollPeriod(payFrequency, anchor);
+    if (period.start.getTime() > end.getTime()) break;
+    count++;
+    const next = new Date(period.end);
+    next.setDate(next.getDate() + 1);
+    if (next.getTime() <= anchor.getTime()) break; // safety against a non-advancing period
+    anchor = next;
+  }
+  return count;
+}
+
 export function dateInputValue(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
