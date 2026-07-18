@@ -156,6 +156,7 @@ import { MatIconModule } from '@angular/material/icon';
                 </td>
                 <td class="ts-right">
                   <button class="vs-btn-ghost ts-fix-btn" (click)="startFix(r)">Fix</button>
+                  <button class="vs-btn-ghost ts-fix-btn ts-delete-btn" [disabled]="deleteBusyId === r.entryId" (click)="deleteEntry(r)">Delete</button>
                 </td>
               </tr>
             </tbody>
@@ -206,6 +207,7 @@ import { MatIconModule } from '@angular/material/icon';
     .ts-pending-chip { padding:5px 9px !important; font-size:12px !important; }
     .ts-fix-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:10px; }
     .ts-fix-btn { padding:6px 10px !important; font-size:12px !important; }
+    .ts-delete-btn { margin-left:6px; color:var(--danger, #dc2626) !important; }
 
     .ts-table-shell {
       border: 1px solid var(--border);
@@ -287,6 +289,7 @@ export class AdminTimesheetsPage implements OnDestroy {
   fixCheckInLocal = '';
   fixCheckOutLocal = '';
   fixBusy = false;
+  deleteBusyId: string | null = null;
   private lastFilterKey = '';
 
   constructor(
@@ -468,6 +471,24 @@ exportCsv() {
       this.toast.errorFrom(e, 'Reject failed.');
     } finally {
       this.fixBusy = false;
+    }
+  }
+
+  async deleteEntry(row: any) {
+    if (!row.entryId || this.deleteBusyId) return;
+    const ok = window.confirm(`Delete this time entry for "${row.shiftTitle}"? This cannot be undone.`);
+    if (!ok) return;
+    const reason = String(window.prompt('Why is this time entry being deleted?') || '').trim();
+    if (!reason) return;
+    this.deleteBusyId = row.entryId;
+    try {
+      await this.adminCmd.deleteTimeEntry(row.entryId, reason);
+      if (this.fixEntryId === row.entryId) this.cancelFix();
+      this.toast.success('Time entry deleted.');
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Delete failed.');
+    } finally {
+      this.deleteBusyId = null;
     }
   }
 
