@@ -83,6 +83,22 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'get_staff_availability',
+      description: 'List staff-submitted availability (date + time window they can work) within a date range, optionally scoped to a job role. Use this before proposing who to assign to an open shift, especially for PRN/on-call/flexible staff who have no fixed schedule — prefer assigning someone whose submitted availability actually covers the shift\'s time window.',
+      parameters: {
+        type: 'object',
+        properties: {
+          startDate: { type: 'string', description: 'Start of the range, YYYY-MM-DD.' },
+          endDate: { type: 'string', description: 'End of the range, YYYY-MM-DD.' },
+          jobRole: { type: 'string', description: 'Filter by job role (e.g. "RN", "CNA"). Optional.' },
+        },
+        required: ['startDate', 'endDate'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'propose_create_shift',
       description: 'Propose creating a new shift. This does NOT create it — it is shown to the admin for one-click confirmation.',
       parameters: {
@@ -289,6 +305,34 @@ async function runGetTimesheetSummary(db: FirebaseFirestore.Firestore, orgId: st
   };
 }
 
+async function runGetStaffAvailability(db: FirebaseFirestore.Firestore, orgId: string, input: any) {
+  const startDate = String(input?.startDate || '').trim();
+  const endDate = String(input?.endDate || '').trim();
+  if (!startDate || !endDate) {
+    return { error: 'startDate and endDate are required (YYYY-MM-DD).' };
+  }
+  let q: FirebaseFirestore.Query = db.collection('orgs').doc(orgId).collection('availability')
+    .where('date', '>=', startDate)
+    .where('date', '<=', endDate);
+  const snap = await q.orderBy('date', 'asc').limit(500).get();
+
+  const wantedJobRole = input?.jobRole ? String(input.jobRole).trim().toLowerCase() : null;
+  return snap.docs
+    .map((d) => {
+      const x = d.data() as Record<string, unknown>;
+      return {
+        userId: x.userId ?? null,
+        userDisplayName: x.userDisplayName ?? null,
+        jobRole: x.jobRole ?? null,
+        date: x.date ?? null,
+        startTime: x.startTime ?? null,
+        endTime: x.endTime ?? null,
+        note: x.note ?? null,
+      };
+    })
+    .filter((e) => !wantedJobRole || String(e.jobRole || '').toLowerCase() === wantedJobRole);
+}
+
 interface ChatTurn {
   role: 'user' | 'assistant';
   text: string;
@@ -321,8 +365,9 @@ export const aiAssistantChat = onCall({ secrets: [openaiApiKey] }, async (req) =
     'You are the InnovaShift AI Copilot, an assistant embedded in a healthcare workforce scheduling app.',
     `You are helping an admin/manager (role: ${ctx.role ?? 'admin'}) manage organization ${orgId}.`,
     `Today's date is ${todayIso}.`,
-    'Use the get_shifts, get_org_users, and get_timesheet_summary tools to look up real data before answering — never guess or invent shift IDs, names, counts, hours, or dollar amounts.',
+    'Use the get_shifts, get_org_users, get_timesheet_summary, and get_staff_availability tools to look up real data before answering — never guess or invent shift IDs, names, counts, hours, or dollar amounts.',
     'get_timesheet_summary figures (gross/deductions/net) are the same flat-rate estimate shown on the Payroll page — a rough placeholder, not a real tax/withholding calculation. When you report a dollar figure from it, call it an estimate.',
+    'Before proposing who to assign to an open shift, call get_staff_availability for that shift\'s date and check whether a candidate\'s submitted availability actually covers the shift\'s time window — this matters most for PRN/on-call/flexible staff who have no fixed schedule. If nobody has submitted matching availability, say so rather than guessing, and suggest the admin check the Marketplace or ask staff to submit availability.',
     'When the admin asks you to create, assign, publish, or unassign a shift, use the matching propose_* tool. These tools do NOT execute anything — they only stage a proposal that the admin must explicitly confirm in the UI. Always tell the user the action is pending their confirmation, never say it is done.',
     'Be concise. Prefer short, direct answers over long explanations.',
   ].join('\n');
@@ -403,6 +448,9 @@ export const aiAssistantChat = onCall({ secrets: [openaiApiKey] }, async (req) =
         } else if (tc.function.name === 'get_timesheet_summary') {
           const summary = await runGetTimesheetSummary(db, orgId, input);
           messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(summary) });
+        } else if (tc.function.name === 'get_staff_availability') {
+          const items = await runGetStaffAvailability(db, orgId, input);
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(items) });
         } else {
           messages.push({ role: 'tool', tool_call_id: tc.id, content: 'Unknown tool.' });
         }

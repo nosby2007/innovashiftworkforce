@@ -84,7 +84,8 @@ const ROLE_BADGE: Record<string, string> = {
 
       <div *ngIf="orgId && !loading() && filteredUsers().length > 0" class="emp-grid">
         <div *ngFor="let u of filteredUsers()" class="emp-card vs-glass">
-          <div class="emp-card-avatar" [style.background]="avatarColor(u.uid)">{{ initials(u) }}</div>
+          <img *ngIf="u.photoURL" [src]="u.photoURL" alt="" class="emp-card-avatar-img">
+          <div *ngIf="!u.photoURL" class="emp-card-avatar" [style.background]="avatarColor(u.uid)">{{ initials(u) }}</div>
           <div class="emp-card-body">
             <div class="emp-card-name">{{ u.displayName || 'Unnamed user' }}</div>
             <div class="emp-card-email">{{ u.email || 'Email not set' }}</div>
@@ -316,6 +317,13 @@ const ROLE_BADGE: Record<string, string> = {
       color: #fff;
       flex-shrink: 0;
       letter-spacing: 0.05em;
+    }
+    .emp-card-avatar-img {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      object-fit: cover;
+      flex-shrink: 0;
     }
     .emp-card-body { flex: 1; min-width: 0; }
     .emp-card-name {
