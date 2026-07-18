@@ -153,7 +153,7 @@ export type ShiftSwapCandidate = {
               <mat-icon>calendar_month</mat-icon>
               <span>Build my schedule</span>
             </button>
-            <button class="staff-action" (click)="go('/app/schedule')">
+            <button class="staff-action" (click)="go('/app/availability')">
               <mat-icon>event_available</mat-icon>
               <span>Change my availability</span>
             </button>

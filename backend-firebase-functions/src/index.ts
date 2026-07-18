@@ -26,6 +26,7 @@ import { checkIn, checkOut, breakOut, breakIn } from './callable/checkInOut';
 import { markMessageRead } from './callable/markMessageRead';
 import { approveTimeCorrection } from './callable/approveTimeCorrection';
 import { requestTimeCorrection } from './callable/requestTimeCorrection';
+import { deleteTimeEntry } from './callable/deleteTimeEntry';
 import { sendMessage } from './callable/sendMessage';
 import { adminSetUserClaims } from './callable/adminSetUserClaims';
 import { adminInviteUser } from './callable/adminInviteUser';
@@ -79,6 +80,7 @@ export {
   markMessageRead,
   approveTimeCorrection,
   requestTimeCorrection,
+  deleteTimeEntry,
   sendMessage,
   adminSetUserClaims,
   adminInviteUser,
