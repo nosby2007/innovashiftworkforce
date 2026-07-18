@@ -216,6 +216,25 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // ── Staff Availability (PRN/flexible scheduling) ────
+      // Staff submit and fully own their own entries; admin-like roles and
+      // the AI Copilot (via Admin SDK, bypasses rules) read across the org
+      // to see who's available when filling shifts.
+      match /availability/{entryId} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
+        );
+        allow create: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && uid() == request.resource.data.userId)
+        );
+        allow update, delete: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && uid() == resource.data.userId)
+        );
+      }
+
       // ── Accrual Balances (Cloud Function writes only, staff readable) ────
       match /accrualBalances/{targetUid} {
         allow read: if signedIn() && (

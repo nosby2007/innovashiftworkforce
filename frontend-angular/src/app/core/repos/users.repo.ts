@@ -9,6 +9,7 @@ export interface OrgUser {
   jobRole?: string | null;      // RN, CNA, ...
   accessRole?: string | null;   // staff, manager, scheduler, admin, hr
   active?: boolean;
+  photoURL?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
