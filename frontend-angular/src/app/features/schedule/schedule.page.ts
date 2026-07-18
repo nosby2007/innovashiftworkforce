@@ -113,8 +113,8 @@ const STATUS_BADGE: Record<string, string> = {
             <button (click)="go('/app/accruals')">Time-off</button>
             <button (click)="go('/app/dashboard')">Swap shifts</button>
             <button (click)="go('/app/marketplace')">Open shift</button>
-            <button (click)="assignedToMeOnly = true; resetAndLoad()">Self-schedule</button>
-            <button (click)="clearFilters()">Change availability</button>
+            <button (click)="go('/app/availability')">My availability</button>
+            <button (click)="clearFilters()">Browse all shifts</button>
           </details>
           <button class="sched-icon" (click)="picker.open()" aria-label="Pick date"><mat-icon>tune</mat-icon></button>
           <button class="sched-icon" (click)="resetAndLoad()" aria-label="Refresh"><mat-icon>refresh</mat-icon></button>
