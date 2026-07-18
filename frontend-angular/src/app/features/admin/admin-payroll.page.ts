@@ -13,9 +13,10 @@ import { Shift } from '../../shared/models/shift.model';
 import { AccrualsRepo, TimeOffRequest } from '../../core/repos/accruals.repo';
 import { formatDateTime } from '../../shared/utils/date.util';
 import {
-  currentPayrollPeriod, dateInputValue, payrollDeductions, payrollLeaveGross, payrollLeaveHours, payrollNet,
+  currentPayrollPeriod, dateInputValue, payrollLeaveGross, payrollLeaveHours,
   computeEmployeeGross, workedDateSet, payrollHolidayOffHours, payrollHolidayOffGross,
   DEFAULT_OVERTIME_POLICY, OvertimePolicy, OrgHoliday, EmployeeGrossBreakdown,
+  computeDeductions, resolveDeductionElections, DEFAULT_DEDUCTION_ELECTIONS, DeductionElections, DeductionOverrides,
 } from '../../shared/utils/payroll.util';
 import { PayFrequency } from '../../core/tenancy/org-finance.model';
 import { toCsv, downloadTextFile } from '../../shared/utils/csv.util';
@@ -64,6 +65,7 @@ type PayrollRow = {
         <article><span>Employees</span><strong>{{ rows.length }}</strong></article>
         <article><span>Total Hours</span><strong>{{ totalHours().toFixed(2) }}</strong></article>
         <article><span>Gross Payroll</span><strong>{{ totalGross() | currency:moneyCurrency() }}</strong></article>
+        <article><span>Employer Contributions</span><strong>{{ totalEmployerContributions() | currency:moneyCurrency() }}</strong></article>
         <article [class.is-warn]="totalExceptions() > 0"><span>Exceptions</span><strong>{{ totalExceptions() }}</strong></article>
       </section>
 
@@ -231,7 +233,7 @@ type PayrollRow = {
     .pay-admin-period div { display:flex; align-items:center; gap:8px; }
     .pay-admin-period input { height:38px; border:1px solid rgba(255,255,255,.34); border-radius:6px; background:#fff; color:#111827; padding:0 9px; }
     .pay-admin-alert { display:flex; gap:10px; padding:14px 16px; color:#92400e; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; font-weight:800; }
-    .pay-admin-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:16px; }
+    .pay-admin-kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:16px; }
     .pay-admin-kpis article, .pay-admin-card { border:1px solid rgba(15,23,42,.12); border-radius:8px; background:rgba(255,255,255,.94); box-shadow:0 12px 28px rgba(15,23,42,.07); }
     .pay-admin-kpis article { padding:16px; }
     .pay-admin-kpis span { color:#64748b; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
@@ -337,8 +339,10 @@ export class AdminPayrollPage implements OnDestroy {
   overtimePolicy: OvertimePolicy = DEFAULT_OVERTIME_POLICY;
   holidayWorkMultiplier = 1.5;
   holidays: OrgHoliday[] = [];
+  orgDeductionDefaults: DeductionElections = DEFAULT_DEDUCTION_ELECTIONS;
   private breakdownsByUser = new Map<string, EmployeeGrossBreakdown>();
   private holidayAwards: Array<{ userId: string; holiday: OrgHoliday; hours: number; rate: number; gross: number }> = [];
+  private employerContributionsByUser = new Map<string, number>();
 
   constructor(
     private zone: NgZone,
@@ -383,11 +387,21 @@ export class AdminPayrollPage implements OnDestroy {
       };
       this.holidayWorkMultiplier = Math.max(1, Number(data.holidayWorkMultiplier || 1.5));
       this.holidays = Array.isArray(data.holidays) ? data.holidays : [];
+      this.orgDeductionDefaults = {
+        federalTaxPercent: Number(data.defaultFederalTaxPercent ?? DEFAULT_DEDUCTION_ELECTIONS.federalTaxPercent),
+        stateTaxPercent: Number(data.defaultStateTaxPercent ?? DEFAULT_DEDUCTION_ELECTIONS.stateTaxPercent),
+        socialSecurityPercent: Number(data.defaultSocialSecurityPercent ?? DEFAULT_DEDUCTION_ELECTIONS.socialSecurityPercent),
+        medicarePercent: Number(data.defaultMedicarePercent ?? DEFAULT_DEDUCTION_ELECTIONS.medicarePercent),
+        retirement401kPercent: 0,
+        retirement401kMatchPercent: Number(data.default401kMatchPercent ?? 0),
+        benefits: [],
+      };
     } catch {
       this.orgDefaultPayRate = 0;
       this.overtimePolicy = DEFAULT_OVERTIME_POLICY;
       this.holidayWorkMultiplier = 1.5;
       this.holidays = [];
+      this.orgDeductionDefaults = DEFAULT_DEDUCTION_ELECTIONS;
     }
     this.recomputeRows();
   }
@@ -395,6 +409,20 @@ export class AdminPayrollPage implements OnDestroy {
   private employeeRate(uid: string): number {
     const user: any = this.users().find((u) => u.uid === uid);
     return Number(user?.payroll?.payRate ?? user?.payRate ?? this.orgDefaultPayRate ?? 0);
+  }
+
+  private employeeDeductionOverrides(uid: string): DeductionOverrides {
+    const user: any = this.users().find((u) => u.uid === uid);
+    const deductions = user?.payroll?.deductions || {};
+    return {
+      federalTaxPercent: deductions.federalTaxPercent ?? null,
+      stateTaxPercent: deductions.stateTaxPercent ?? null,
+      socialSecurityPercent: deductions.socialSecurityPercent ?? null,
+      medicarePercent: deductions.medicarePercent ?? null,
+      retirement401kPercent: deductions.retirement401kPercent ?? null,
+      retirement401kMatchPercent: deductions.retirement401kMatchPercent ?? null,
+      benefits: Array.isArray(deductions.benefits) ? deductions.benefits : null,
+    };
   }
 
   reloadEntries() {
@@ -447,8 +475,6 @@ export class AdminPayrollPage implements OnDestroy {
       existing.entries += userEntries.length;
       existing.hours += breakdown.hours;
       existing.gross += breakdown.gross;
-      existing.deductions += payrollDeductions(breakdown.gross);
-      existing.net += payrollNet(breakdown.gross);
       existing.exceptions += userEntries.filter((e) => (e.exceptionStatus || 'none') !== 'none' || !e.checkOutAt).length;
       grouped.set(uid, existing);
     }
@@ -461,8 +487,6 @@ export class AdminPayrollPage implements OnDestroy {
       existing.entries += 1;
       existing.hours += hours;
       existing.gross += gross;
-      existing.deductions += payrollDeductions(gross);
-      existing.net += payrollNet(gross);
       grouped.set(uid, existing);
     }
 
@@ -481,11 +505,21 @@ export class AdminPayrollPage implements OnDestroy {
           existing.entries += 1;
           existing.hours += hours;
           existing.gross += gross;
-          existing.deductions += payrollDeductions(gross);
-          existing.net += payrollNet(gross);
           grouped.set(user.uid, existing);
         }
       }
+    }
+
+    // Tax/benefit deductions apply once per paycheck against total gross,
+    // not per line item — computed here after all gross sources are summed.
+    this.employerContributionsByUser = new Map<string, number>();
+    for (const [uid, row] of grouped) {
+      const elections = resolveDeductionElections(this.orgDeductionDefaults, this.employeeDeductionOverrides(uid));
+      const deductionBreakdown = computeDeductions(row.gross, elections);
+      row.deductions = deductionBreakdown.totalDeductions;
+      row.net = deductionBreakdown.netPay;
+      this.employerContributionsByUser.set(uid, deductionBreakdown.employerContributionsTotal);
+      grouped.set(uid, row);
     }
 
     this.rows = Array.from(grouped.values()).map((r) => ({
@@ -615,6 +649,7 @@ export class AdminPayrollPage implements OnDestroy {
   totalDeductions() { return Math.round(this.rows.reduce((sum, r) => sum + r.deductions, 0) * 100) / 100; }
   totalNet() { return Math.round(this.rows.reduce((sum, r) => sum + r.net, 0) * 100) / 100; }
   totalExceptions() { return this.rows.reduce((sum, r) => sum + r.exceptions, 0); }
+  totalEmployerContributions() { return Math.round(Array.from(this.employerContributionsByUser.values()).reduce((sum, v) => sum + v, 0) * 100) / 100; }
   exceptionStatusCount(status: string) { return this.entries().filter((e) => e.exceptionStatus === status).length; }
   openPunchCount() { return this.entries().filter((e) => !e.checkOutAt).length; }
   payrollStatus() { return this.totalExceptions() ? 'Review required' : 'Ready'; }

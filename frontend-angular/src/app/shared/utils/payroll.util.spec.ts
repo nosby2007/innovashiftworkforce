@@ -13,6 +13,10 @@ import {
   DEFAULT_OVERTIME_POLICY,
   OvertimePolicy,
   OrgHoliday,
+  computeDeductions,
+  DEFAULT_DEDUCTION_ELECTIONS,
+  DeductionElections,
+  resolveDeductionElections,
 } from './payroll.util';
 import { TimeEntry } from '../models/time-entry.model';
 import { Shift } from '../models/shift.model';
@@ -238,5 +242,90 @@ describe('payrollHolidayOffHours / payrollHolidayOffGross', () => {
   it('awards nothing when the employee worked the holiday instead (paid via the premium path)', () => {
     expect(payrollHolidayOffHours(holiday, new Set(['2026-07-04']))).toBe(0);
     expect(payrollHolidayOffGross(holiday, 20, new Set(['2026-07-04']))).toBe(0);
+  });
+});
+
+describe('computeDeductions', () => {
+  it('applies each percentage to gross and nets them out', () => {
+    const elections: DeductionElections = {
+      federalTaxPercent: 10, stateTaxPercent: 4, socialSecurityPercent: 6.2, medicarePercent: 1.45,
+      retirement401kPercent: 5, retirement401kMatchPercent: 3, benefits: [],
+    };
+    const b = computeDeductions(1000, elections);
+    expect(b.federalTax).toBe(100);
+    expect(b.stateTax).toBe(40);
+    expect(b.socialSecurity).toBe(62);
+    expect(b.medicare).toBe(14.5);
+    expect(b.retirement401k).toBe(50);
+    expect(b.totalDeductions).toBe(100 + 40 + 62 + 14.5 + 50);
+    expect(b.netPay).toBe(1000 - b.totalDeductions);
+  });
+
+  it('sums flat-dollar benefit lines into the employee total, separate from percentage deductions', () => {
+    const elections: DeductionElections = {
+      ...DEFAULT_DEDUCTION_ELECTIONS,
+      federalTaxPercent: 0, stateTaxPercent: 0, socialSecurityPercent: 0, medicarePercent: 0, retirement401kPercent: 0,
+      benefits: [
+        { id: 'b1', label: 'Vision', employeeAmount: 5, employerAmount: 2 },
+        { id: 'b2', label: 'Health', employeeAmount: 50, employerAmount: 200 },
+      ],
+    };
+    const b = computeDeductions(1000, elections);
+    expect(b.benefitsTotal).toBe(55);
+    expect(b.totalDeductions).toBe(55);
+    expect(b.netPay).toBe(945);
+    expect(b.benefitLines).toEqual([
+      { id: 'b1', label: 'Vision', amount: 5 },
+      { id: 'b2', label: 'Health', amount: 50 },
+    ]);
+  });
+
+  it('computes employer contributions (401k match + employer benefit share) independent of employee deductions', () => {
+    const elections: DeductionElections = {
+      ...DEFAULT_DEDUCTION_ELECTIONS,
+      federalTaxPercent: 0, stateTaxPercent: 0, socialSecurityPercent: 0, medicarePercent: 0,
+      retirement401kPercent: 5, retirement401kMatchPercent: 3,
+      benefits: [{ id: 'b1', label: 'Health', employeeAmount: 50, employerAmount: 200 }],
+    };
+    const b = computeDeductions(1000, elections);
+    expect(b.employer401kMatch).toBe(30);
+    expect(b.employerBenefitsTotal).toBe(200);
+    expect(b.employerContributionsTotal).toBe(230);
+    // Employer contributions never reduce the employee's own net pay.
+    expect(b.netPay).toBe(1000 - b.retirement401k - b.benefitsTotal);
+  });
+
+  it('never produces negative deductions from a negative or missing gross', () => {
+    const b = computeDeductions(0, DEFAULT_DEDUCTION_ELECTIONS);
+    expect(b.totalDeductions).toBe(0);
+    expect(b.netPay).toBe(0);
+  });
+});
+
+describe('resolveDeductionElections', () => {
+  const orgDefaults: DeductionElections = { federalTaxPercent: 10, stateTaxPercent: 4, socialSecurityPercent: 6.2, medicarePercent: 1.45, retirement401kPercent: 0, retirement401kMatchPercent: 2, benefits: [] };
+
+  it('falls back to org defaults when the employee has no overrides', () => {
+    const resolved = resolveDeductionElections(orgDefaults, null);
+    expect(resolved.federalTaxPercent).toBe(10);
+    expect(resolved.stateTaxPercent).toBe(4);
+    expect(resolved.retirement401kMatchPercent).toBe(2);
+    expect(resolved.retirement401kPercent).toBe(0);
+    expect(resolved.benefits).toEqual([]);
+  });
+
+  it('uses the employee override even when it is explicitly 0, not the org default', () => {
+    const resolved = resolveDeductionElections(orgDefaults, { stateTaxPercent: 0 });
+    expect(resolved.stateTaxPercent).toBe(0);
+    expect(resolved.federalTaxPercent).toBe(10); // still falls back — not overridden
+  });
+
+  it('uses the employee\'s own 401(k) contribution % and benefits, which have no org default', () => {
+    const resolved = resolveDeductionElections(orgDefaults, {
+      retirement401kPercent: 6,
+      benefits: [{ id: 'b1', label: 'Vision', employeeAmount: 5, employerAmount: 2 }],
+    });
+    expect(resolved.retirement401kPercent).toBe(6);
+    expect(resolved.benefits).toHaveLength(1);
   });
 });

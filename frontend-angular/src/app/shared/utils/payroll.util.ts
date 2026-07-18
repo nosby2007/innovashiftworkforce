@@ -323,3 +323,118 @@ export function payrollHolidayOffHours(holiday: OrgHoliday, workedDates: Set<str
 export function payrollHolidayOffGross(holiday: OrgHoliday, rate: number, workedDates: Set<string>): number {
   return Math.round(payrollHolidayOffHours(holiday, workedDates) * Number(rate || 0) * 100) / 100;
 }
+
+// ─── Taxes, retirement, and benefit deductions ──────────────────────────────
+
+export interface BenefitLine {
+  id: string;
+  label: string;
+  employeeAmount: number; // flat $ deducted per paycheck
+  employerAmount: number; // flat $ employer contributes per paycheck (informational)
+}
+
+/**
+ * An employee's per-paycheck deduction elections. Federal/state tax are
+ * flat estimated percentages (not real bracket/W-4-based withholding —
+ * that varies by jurisdiction and requires tax tables this app doesn't
+ * maintain). Social Security and Medicare default to the actual fixed
+ * US federal rates since those aren't bracket-based.
+ */
+export interface DeductionElections {
+  federalTaxPercent: number;
+  stateTaxPercent: number;
+  socialSecurityPercent: number;
+  medicarePercent: number;
+  retirement401kPercent: number;
+  retirement401kMatchPercent: number;
+  benefits: BenefitLine[];
+}
+
+export const DEFAULT_DEDUCTION_ELECTIONS: DeductionElections = {
+  federalTaxPercent: 10,
+  stateTaxPercent: 4,
+  socialSecurityPercent: 6.2,
+  medicarePercent: 1.45,
+  retirement401kPercent: 0,
+  retirement401kMatchPercent: 0,
+  benefits: [],
+};
+
+export interface DeductionBreakdown {
+  federalTax: number;
+  stateTax: number;
+  socialSecurity: number;
+  medicare: number;
+  retirement401k: number;
+  benefitsTotal: number;
+  benefitLines: Array<{ id: string; label: string; amount: number }>;
+  totalDeductions: number;
+  netPay: number;
+  employer401kMatch: number;
+  employerBenefitsTotal: number;
+  employerBenefitLines: Array<{ id: string; label: string; amount: number }>;
+  employerContributionsTotal: number;
+}
+
+export interface DeductionOverrides {
+  federalTaxPercent?: number | null;
+  stateTaxPercent?: number | null;
+  socialSecurityPercent?: number | null;
+  medicarePercent?: number | null;
+  retirement401kPercent?: number | null;
+  retirement401kMatchPercent?: number | null;
+  benefits?: BenefitLine[] | null;
+}
+
+/**
+ * Resolves an employee's actual deduction elections: an override field of
+ * `null`/`undefined` falls back to the org default (0 is a valid override,
+ * e.g. "no state tax withholding", so this must use ?? not ||). Benefits and
+ * the employee's own 401(k) contribution % have no org-level default —
+ * they're either configured on the employee or they're not.
+ */
+export function resolveDeductionElections(orgDefaults: DeductionElections, overrides: DeductionOverrides | null | undefined): DeductionElections {
+  return {
+    federalTaxPercent: overrides?.federalTaxPercent ?? orgDefaults.federalTaxPercent,
+    stateTaxPercent: overrides?.stateTaxPercent ?? orgDefaults.stateTaxPercent,
+    socialSecurityPercent: overrides?.socialSecurityPercent ?? orgDefaults.socialSecurityPercent,
+    medicarePercent: overrides?.medicarePercent ?? orgDefaults.medicarePercent,
+    retirement401kPercent: overrides?.retirement401kPercent ?? 0,
+    retirement401kMatchPercent: overrides?.retirement401kMatchPercent ?? orgDefaults.retirement401kMatchPercent,
+    benefits: overrides?.benefits ?? [],
+  };
+}
+
+export function computeDeductions(gross: number, elections: DeductionElections): DeductionBreakdown {
+  const g = Math.max(0, Number(gross || 0));
+  const pct = (p: number) => Math.round(g * Math.max(0, Number(p || 0)) / 100 * 100) / 100;
+
+  const federalTax = pct(elections.federalTaxPercent);
+  const stateTax = pct(elections.stateTaxPercent);
+  const socialSecurity = pct(elections.socialSecurityPercent);
+  const medicare = pct(elections.medicarePercent);
+  const retirement401k = pct(elections.retirement401kPercent);
+
+  const benefitLines = (elections.benefits || []).map((b) => ({
+    id: b.id,
+    label: b.label,
+    amount: Math.round(Math.max(0, Number(b.employeeAmount || 0)) * 100) / 100,
+  }));
+  const benefitsTotal = Math.round(benefitLines.reduce((sum, b) => sum + b.amount, 0) * 100) / 100;
+
+  const totalDeductions = Math.round((federalTax + stateTax + socialSecurity + medicare + retirement401k + benefitsTotal) * 100) / 100;
+  const netPay = Math.round((g - totalDeductions) * 100) / 100;
+
+  const employer401kMatch = pct(elections.retirement401kMatchPercent);
+  const employerBenefitLines = (elections.benefits || [])
+    .map((b) => ({ id: b.id, label: b.label, amount: Math.round(Math.max(0, Number(b.employerAmount || 0)) * 100) / 100 }))
+    .filter((b) => b.amount > 0);
+  const employerBenefitsTotal = Math.round(employerBenefitLines.reduce((sum, b) => sum + b.amount, 0) * 100) / 100;
+  const employerContributionsTotal = Math.round((employer401kMatch + employerBenefitsTotal) * 100) / 100;
+
+  return {
+    federalTax, stateTax, socialSecurity, medicare, retirement401k,
+    benefitsTotal, benefitLines, totalDeductions, netPay,
+    employer401kMatch, employerBenefitsTotal, employerBenefitLines, employerContributionsTotal,
+  };
+}

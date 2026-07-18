@@ -12,10 +12,12 @@ import { TimeEntry } from '../../shared/models/time-entry.model';
 import { Shift } from '../../shared/models/shift.model';
 import { formatDateTime } from '../../shared/utils/date.util';
 import {
-  currentPayrollPeriod, dateInputValue, payrollDeductions, payrollNet,
+  currentPayrollPeriod, dateInputValue,
   payrollLeaveHours, payrollLeaveGross,
   computeEmployeeGross, workedDateSet, payrollHolidayOffHours, payrollHolidayOffGross,
   DEFAULT_OVERTIME_POLICY, OvertimePolicy, OrgHoliday, EmployeeGrossBreakdown,
+  computeDeductions, resolveDeductionElections, DEFAULT_DEDUCTION_ELECTIONS,
+  DeductionElections, DeductionOverrides, DeductionBreakdown,
 } from '../../shared/utils/payroll.util';
 
 @Component({
@@ -77,9 +79,13 @@ import {
             <span>Deductions</span>
             <strong>{{ totalDeductions() | currency:moneyCurrency() }}</strong>
           </article>
-          <article>
+          <article class="ps-summary-net">
             <span>Net Pay</span>
             <strong>{{ totalNet() | currency:moneyCurrency() }}</strong>
+          </article>
+          <article class="ps-summary-net">
+            <span>Net Pay YTD</span>
+            <strong>{{ ytdNetPay | currency:moneyCurrency() }}</strong>
           </article>
         </section>
 
@@ -95,11 +101,22 @@ import {
           </article>
 
           <article class="ps-box">
-            <h2>Deductions</h2>
-            <div class="ps-line"><span>Estimated statutory deductions</span><strong>{{ taxLabel() }}</strong><em>{{ totalDeductions() | currency:moneyCurrency() }}</em></div>
-            <div class="ps-line"><span>Other deductions</span><strong>-</strong><em>{{ 0 | currency:moneyCurrency() }}</em></div>
+            <h2>Deductions <span class="ps-box-hint">({{ taxLabel() }})</span></h2>
+            <div class="ps-line"><span>Federal tax</span><strong></strong><em>{{ deductionBreakdown()?.federalTax ?? 0 | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line"><span>State tax</span><strong></strong><em>{{ deductionBreakdown()?.stateTax ?? 0 | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line"><span>Social Security</span><strong></strong><em>{{ deductionBreakdown()?.socialSecurity ?? 0 | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line"><span>Medicare</span><strong></strong><em>{{ deductionBreakdown()?.medicare ?? 0 | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line" *ngIf="(deductionBreakdown()?.retirement401k ?? 0) > 0"><span>401(k)</span><strong></strong><em>{{ deductionBreakdown()?.retirement401k ?? 0 | currency:moneyCurrency() }}</em></div>
+            <div class="ps-line" *ngFor="let b of deductionBreakdown()?.benefitLines ?? []"><span>{{ b.label }}</span><strong></strong><em>{{ b.amount | currency:moneyCurrency() }}</em></div>
             <div class="ps-line ps-line-total"><span>Total deductions</span><strong></strong><em>{{ totalDeductions() | currency:moneyCurrency() }}</em></div>
           </article>
+        </section>
+
+        <section class="ps-box ps-employer" *ngIf="(deductionBreakdown()?.employerContributionsTotal ?? 0) > 0">
+          <h2>Employer Contributions</h2>
+          <div class="ps-line" *ngIf="(deductionBreakdown()?.employer401kMatch ?? 0) > 0"><span>401(k) match</span><strong></strong><em>{{ deductionBreakdown()?.employer401kMatch ?? 0 | currency:moneyCurrency() }}</em></div>
+          <div class="ps-line" *ngFor="let b of deductionBreakdown()?.employerBenefitLines ?? []"><span>{{ b.label }}</span><strong></strong><em>{{ b.amount | currency:moneyCurrency() }}</em></div>
+          <div class="ps-line ps-line-total"><span>Total employer contributions</span><strong></strong><em>{{ deductionBreakdown()?.employerContributionsTotal ?? 0 | currency:moneyCurrency() }}</em></div>
         </section>
 
         <section class="ps-box">
@@ -162,13 +179,18 @@ import {
     .ps-employee div { padding:14px 16px; border-right:1px solid #e5e7eb; }
     .ps-employee span, .ps-summary span { display:block; color:#64748b; font-size:11px; text-transform:uppercase; font-weight:800; letter-spacing:.04em; }
     .ps-employee strong { display:block; margin-top:5px; color:#0f172a; font-size:13px; }
-    .ps-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; padding:18px 24px; background:#f8fafc; border-bottom:1px solid #d1d5db; }
+    .ps-summary { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; padding:18px 24px; background:#f8fafc; border-bottom:1px solid #d1d5db; }
     .ps-summary article { background:#fff; border:1px solid #e5e7eb; border-radius:6px; padding:14px; }
     .ps-summary strong { display:block; margin-top:8px; color:#0f172a; font-size:24px; }
+    .ps-summary-net { background:#ecfdf5 !important; border-color:#a7f3d0 !important; }
+    .ps-summary-net strong { color:#047857 !important; }
+    @media (max-width:900px) { .ps-summary { grid-template-columns:repeat(2,1fr); } }
     .ps-two { display:grid; grid-template-columns:1fr 1fr; gap:18px; padding:22px 24px 0; }
     .ps-box { margin:0 24px 22px; border:1px solid #d1d5db; border-radius:6px; overflow:hidden; }
     .ps-two .ps-box { margin:0; }
     .ps-box h2 { margin:0; padding:12px 14px; background:#eef3ef; color:#0f172a; font-size:15px; border-bottom:1px solid #d1d5db; }
+    .ps-box-hint { font-size:11px; font-weight:600; color:#64748b; text-transform:none; letter-spacing:0; }
+    .ps-employer { margin:0 24px 22px; }
     .ps-line { display:grid; grid-template-columns:1fr 90px 100px; gap:10px; padding:11px 14px; border-bottom:1px solid #e5e7eb; color:#475569; font-size:13px; }
     .ps-line strong, .ps-line em { color:#0f172a; font-style:normal; text-align:right; }
     .ps-line-total { background:#ecfdf5; font-weight:900; }
@@ -217,6 +239,12 @@ export class PayslipPrintPage implements OnDestroy {
   private holidays: OrgHoliday[] = [];
   private breakdown: EmployeeGrossBreakdown | null = null;
   private holidayAwards: Array<{ holiday: OrgHoliday; hours: number; rate: number; gross: number }> = [];
+  private orgDeductionDefaults: DeductionElections = DEFAULT_DEDUCTION_ELECTIONS;
+  private _deductionBreakdown: DeductionBreakdown | null = null;
+  private unsubYtdEntries: (() => void) | null = null;
+  private ytdEntries = signal<TimeEntry[]>([]);
+  private ytdShiftMap = signal<Record<string, Shift>>({});
+  ytdNetPay = 0;
 
   constructor(
     private ctx: OrgContextService,
@@ -256,12 +284,39 @@ export class PayslipPrintPage implements OnDestroy {
     };
     this.holidayWorkMultiplier = Math.max(1, Number(data.holidayWorkMultiplier || 1.5));
     this.holidays = Array.isArray(data.holidays) ? data.holidays : [];
+    this.orgDeductionDefaults = {
+      federalTaxPercent: Number(data.defaultFederalTaxPercent ?? DEFAULT_DEDUCTION_ELECTIONS.federalTaxPercent),
+      stateTaxPercent: Number(data.defaultStateTaxPercent ?? DEFAULT_DEDUCTION_ELECTIONS.stateTaxPercent),
+      socialSecurityPercent: Number(data.defaultSocialSecurityPercent ?? DEFAULT_DEDUCTION_ELECTIONS.socialSecurityPercent),
+      medicarePercent: Number(data.defaultMedicarePercent ?? DEFAULT_DEDUCTION_ELECTIONS.medicarePercent),
+      retirement401kPercent: 0,
+      retirement401kMatchPercent: Number(data.default401kMatchPercent ?? 0),
+      benefits: [],
+    };
     this.recomputeRows();
   }
 
   private employeeRate(): number {
     const user: any = this.users().find((u) => u.uid === this.targetUid);
     return Number(user?.payroll?.payRate ?? user?.payRate ?? this.orgDefaultPayRate ?? 0);
+  }
+
+  private employeeDeductionOverrides(): DeductionOverrides {
+    const user: any = this.users().find((u) => u.uid === this.targetUid);
+    const deductions = user?.payroll?.deductions || {};
+    return {
+      federalTaxPercent: deductions.federalTaxPercent ?? null,
+      stateTaxPercent: deductions.stateTaxPercent ?? null,
+      socialSecurityPercent: deductions.socialSecurityPercent ?? null,
+      medicarePercent: deductions.medicarePercent ?? null,
+      retirement401kPercent: deductions.retirement401kPercent ?? null,
+      retirement401kMatchPercent: deductions.retirement401kMatchPercent ?? null,
+      benefits: Array.isArray(deductions.benefits) ? deductions.benefits : null,
+    };
+  }
+
+  deductionBreakdown(): DeductionBreakdown | null {
+    return this._deductionBreakdown;
   }
 
   private bind() {
@@ -283,7 +338,43 @@ export class PayslipPrintPage implements OnDestroy {
     this.unsubLeave = this.accruals.watchRequests(this.orgId, this.targetUid, (items) => {
       this.leaveRequests.set(items);
       this.recomputeRows();
+      this.recomputeYtd();
     });
+
+    this.unsubYtdEntries?.();
+    const yearStart = Timestamp.fromDate(new Date(`${this.fromDate.slice(0, 4)}-01-01T00:00:00`));
+    this.unsubYtdEntries = this.timeRepo.watchEntriesRange(this.orgId, this.targetUid, yearStart, end, async (items) => {
+      this.ytdEntries.set(items);
+      const shiftIds = Array.from(new Set(items.map((e) => e.shiftId))).filter(Boolean);
+      this.ytdShiftMap.set(shiftIds.length ? await this.shiftsRepo.getManyByIds(this.orgId!, shiftIds) : {});
+      this.recomputeYtd();
+    });
+  }
+
+  /**
+   * Re-runs the same gross/leave/holiday calculation over [Jan 1 of the
+   * period's year, periodEnd] instead of just the selected period, purely to
+   * show "Net Pay YTD" — a much wider data window than the printed period.
+   */
+  private recomputeYtd() {
+    const holidayDates = new Set(this.holidays.map((h) => h.date));
+    const ytdBreakdown = computeEmployeeGross(this.ytdEntries(), this.ytdShiftMap(), this.orgDefaultPayRate, this.overtimePolicy, holidayDates, this.holidayWorkMultiplier);
+
+    const yearStart = `${this.fromDate.slice(0, 4)}-01-01`;
+    let ytdGross = ytdBreakdown.gross;
+    for (const request of this.leaveRequests()) {
+      if (request.status !== 'approved' || request.requestType === 'unpaid' || request.paid === false) continue;
+      ytdGross += payrollLeaveGross(request, yearStart, this.toDate);
+    }
+
+    const workedDates = workedDateSet(this.ytdEntries());
+    const rate = this.employeeRate();
+    for (const holiday of this.holidays.filter((h) => h.date >= yearStart && h.date <= this.toDate)) {
+      ytdGross += payrollHolidayOffGross(holiday, rate, workedDates);
+    }
+
+    const elections = resolveDeductionElections(this.orgDeductionDefaults, this.employeeDeductionOverrides());
+    this.ytdNetPay = computeDeductions(ytdGross, elections).netPay;
   }
 
   private static readonly LINE_TYPE_SUFFIX: Record<string, string> = {
@@ -325,6 +416,11 @@ export class PayslipPrintPage implements OnDestroy {
     }
 
     this.rows.set([...worked, ...leave, ...holidayOff].sort((a, b) => a.date.localeCompare(b.date)));
+
+    const periodGross = [...worked, ...leave, ...holidayOff].reduce((sum, r) => sum + r.gross, 0);
+    const elections = resolveDeductionElections(this.orgDeductionDefaults, this.employeeDeductionOverrides());
+    this._deductionBreakdown = computeDeductions(periodGross, elections);
+
     this.setDocumentTitle();
     this.tryAutoPrint();
   }
@@ -374,8 +470,8 @@ export class PayslipPrintPage implements OnDestroy {
 
   totalHours() { return this.rows().reduce((sum, r) => sum + r.hours, 0); }
   totalGross() { return Math.round(this.rows().reduce((sum, r) => sum + r.gross, 0) * 100) / 100; }
-  totalDeductions() { return payrollDeductions(this.totalGross()); }
-  totalNet() { return payrollNet(this.totalGross()); }
+  totalDeductions() { return this._deductionBreakdown?.totalDeductions ?? 0; }
+  totalNet() { return this._deductionBreakdown?.netPay ?? 0; }
   private linesByType(type: 'regular' | 'overtime' | 'holiday_worked') {
     return (this.breakdown?.lines ?? []).filter((l) => l.type === type);
   }
@@ -411,6 +507,7 @@ export class PayslipPrintPage implements OnDestroy {
     this.unsubUsers?.();
     this.unsubEntries?.();
     this.unsubLeave?.();
+    this.unsubYtdEntries?.();
     this.ctxEffect.destroy();
   }
 }
