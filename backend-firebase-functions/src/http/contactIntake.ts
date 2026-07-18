@@ -3,6 +3,13 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { createHash } from 'node:crypto';
 
 import { initFirebase } from '../infra/firebase';
+import { externalNotify, sendgridApiKey } from '../infra/external-notify';
+
+// So a demo request is never just sitting invisibly in Firestore waiting for
+// someone to happen to check the console — this fires immediately and
+// doesn't depend on any admin being online. Configurable without a
+// redeploy-of-logic via env var.
+const DEMO_REQUEST_NOTIFY_EMAIL = process.env.DEMO_REQUEST_NOTIFY_EMAIL || 'contact@innovacarereview.com';
 
 function normalizeText(value: unknown, maxLength: number) {
   return String(value ?? '').trim().slice(0, maxLength);
@@ -16,7 +23,7 @@ function hashText(input: string) {
   return createHash('sha256').update(input).digest('hex');
 }
 
-export const contactIntake = onRequest(async (req, res) => {
+export const contactIntake = onRequest({ secrets: [sendgridApiKey] }, async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.set('Access-Control-Allow-Headers', 'Content-Type');
@@ -120,6 +127,35 @@ export const contactIntake = onRequest(async (req, res) => {
     updatedAt: now,
     userAgent: normalizeText(req.get('user-agent'), 300) || null,
     ipAddress: ip,
+  });
+
+  // Awaited (not fire-and-forget) so both emails actually complete before
+  // the response is sent — Cloud Functions doesn't guarantee unawaited work
+  // survives past the response, and the whole point here is that this
+  // request gets handled even if nobody happens to be watching the
+  // dashboard. Either send failing doesn't affect the caller's success
+  // response — the Firestore doc is already the durable record either way.
+  await Promise.allSettled([
+    externalNotify({
+      channel: 'email',
+      to: DEMO_REQUEST_NOTIFY_EMAIL,
+      subject: `New demo request — ${organization}`,
+      message: `${name} (${email}) at ${organization} requested a demo.\n\nTeam size: ${size}\n${message ? `Message: ${message}\n` : ''}\nRequest id: ${requestRef.id}`,
+      meta: { requestId: requestRef.id, organization, size },
+    }),
+    externalNotify({
+      channel: 'email',
+      to: email,
+      subject: 'We received your demo request',
+      message: `Hi ${name},\n\nThanks for your interest in InnovaShift Workforce for ${organization}. Our team will reach out within one business day to schedule your demo.\n\nIn the meantime, feel free to reply to this email with any questions.`,
+      meta: { requestId: requestRef.id },
+    }),
+  ]).then((outcomes) => {
+    outcomes.forEach((outcome, i) => {
+      if (outcome.status === 'rejected') {
+        console.error(`[contactIntake] notification ${i === 0 ? 'to team' : 'to requester'} failed`, outcome.reason);
+      }
+    });
   });
 
   res.json({ ok: true, id: requestRef.id });

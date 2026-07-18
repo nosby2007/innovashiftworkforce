@@ -41,6 +41,7 @@ export const superAdminCreateUsers = onCall({ secrets: [sendgridApiKey] }, async
 
   const orgCache = new Map<string, FirebaseFirestore.DocumentSnapshot>();
   const results: RowResult[] = [];
+  const notifyPromises: Promise<unknown>[] = [];
 
   for (const raw of rows as any[]) {
     const email = String(raw?.email || '').trim().toLowerCase();
@@ -136,9 +137,11 @@ export const superAdminCreateUsers = onCall({ secrets: [sendgridApiKey] }, async
         jobRole,
       });
 
-      // Best-effort — a notification hiccup shouldn't fail an otherwise
-      // successful account creation.
-      externalNotify({
+      // Best-effort (a notification hiccup shouldn't fail an otherwise
+      // successful account creation) but still collected and awaited below
+      // — Cloud Functions doesn't guarantee unawaited work survives past
+      // the callable's return.
+      notifyPromises.push(externalNotify({
         channel: 'email',
         to: email,
         subject: 'Your InnovaShift account is ready',
@@ -149,7 +152,7 @@ export const superAdminCreateUsers = onCall({ secrets: [sendgridApiKey] }, async
           actorUid: caller.uid,
           action: isNewUser ? 'SUPERADMIN_CREATE_USER' : 'SUPERADMIN_ASSIGN_EXISTING_USER',
         },
-      }).catch(() => {});
+      }).catch(() => {}));
 
       results.push({ email, ok: true, uid: targetUid, isNewUser, passwordResetLink });
     } catch (e: any) {
@@ -157,5 +160,6 @@ export const superAdminCreateUsers = onCall({ secrets: [sendgridApiKey] }, async
     }
   }
 
+  await Promise.allSettled(notifyPromises);
   return { results };
 });
