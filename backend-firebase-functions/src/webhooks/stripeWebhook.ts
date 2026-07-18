@@ -3,12 +3,12 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
-import { isSelfServePlan, planForPriceId } from '../infra/stripe-plans';
+import { isSelfServePlan, planForPriceId, stripePriceStarter, stripePricePro } from '../infra/stripe-plans';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
 
-export const stripeWebhook = onRequest({ secrets: [stripeSecretKey, stripeWebhookSecret] }, async (req, res) => {
+export const stripeWebhook = onRequest({ secrets: [stripeSecretKey, stripeWebhookSecret, stripePriceStarter, stripePricePro] }, async (req, res) => {
   const stripe = new Stripe(stripeSecretKey.value() || 'sk_test_mock_secret_key', { apiVersion: '2026-04-22.dahlia' as any });
   const sig = req.headers['stripe-signature'];
 

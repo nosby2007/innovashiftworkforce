@@ -3,11 +3,11 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
-import { isSelfServePlan, priceIdForPlan } from '../infra/stripe-plans';
+import { isSelfServePlan, priceIdForPlan, stripePriceStarter, stripePricePro } from '../infra/stripe-plans';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 
-export const stripeCreateCheckout = onCall({ secrets: [stripeSecretKey] }, async (request) => {
+export const stripeCreateCheckout = onCall({ secrets: [stripeSecretKey, stripePriceStarter, stripePricePro] }, async (request) => {
   const stripe = new Stripe(stripeSecretKey.value() || 'sk_test_mock_secret_key', { apiVersion: '2026-04-22.dahlia' as any });
   const uid = request.auth?.uid;
   if (!uid) {

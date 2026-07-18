@@ -124,22 +124,20 @@ aren't part of this deploy pipeline:
      Dashboard](https://dashboard.stripe.com/products) with two recurring
      **Prices** — one for Starter ($49/mo to match the public pricing page),
      one for Pro ($149/mo).
-  2. Set their price ids (`price_...`) as plain (non-secret) env vars —
-     unlike the API keys above these aren't sensitive (Stripe price ids are
-     safe to have in version control, same category as a publishable key),
-     so they use Firebase Functions v2's `.env` file mechanism instead of
-     Secret Manager: commit
-     `backend-firebase-functions/.env.atlanta-e04aa` (filename matches the
-     project id — Firebase picks it up automatically at deploy time, no CI
-     change needed since it ships with the rest of the checked-out repo)
-     containing:
+  2. Set their price ids (`price_...`) via Secret Manager, same as the API
+     keys above — not because they're sensitive (they aren't), but because
+     it's the only config mechanism this repo's CI deploy pipeline actually
+     delivers: a `.env` file would need to be committed, but the repo's
+     `.gitignore` excludes `.env`/`.env.*` everywhere, so it would never
+     reach the GitHub Actions checkout.
      ```
-     STRIPE_PRICE_STARTER=price_...
-     STRIPE_PRICE_PRO=price_...
+     firebase functions:secrets:set STRIPE_PRICE_STARTER
+     firebase functions:secrets:set STRIPE_PRICE_PRO
      ```
      Until both are set, `stripeCreateCheckout` fails cleanly with a
      "Billing is not configured for the {plan} plan yet" error rather than
-     silently no-oping.
+     silently no-oping. Uses the same **Secret Manager Secret Accessor**
+     role already granted above — nothing extra to add in IAM.
   3. In the Stripe Dashboard, configure the **customer portal**
      (`stripeCreatePortal`'s target) — at minimum enable "Cancel
      subscription" and "Update payment method"; enabling "Switch plan"
