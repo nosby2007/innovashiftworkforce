@@ -340,13 +340,19 @@ const PLAN_BADGE: Record<string, string> = {
                 <span class="vs-muted" style="font-size:12px;">seats included</span>
               </div>
               <div class="ors-plan-item vs-glass ors-plan-upgrade">
-                <div class="vs-stat-label">{{ hasBillingCustomer() ? 'Billing Portal' : 'Billing Setup' }}</div>
-                <div class="ors-plan-val" style="font-size:18px;">{{ hasBillingCustomer() ? 'Manage Subscription' : 'Upgrade Required' }}</div>
-                <button class="vs-btn-primary ors-upgrade-btn" (click)="manageBilling()" [disabled]="billingBusy()">
-                  <mat-icon>{{ billingBusy() ? 'hourglass_empty' : (hasBillingCustomer() ? 'credit_card' : 'workspace_premium') }}</mat-icon> 
-                  {{ billingBusy() ? 'Loading...' : (hasBillingCustomer() ? 'Open Portal' : 'Upgrade First') }}
+                <div class="vs-stat-label">Change Plan</div>
+                <div class="ors-plan-choices">
+                  <button class="vs-btn-ghost ors-plan-choice-btn" type="button" (click)="upgradeToPlan('starter')" [disabled]="billingBusy() || settings().plan === 'starter'">
+                    <mat-icon>{{ billingBusy() ? 'hourglass_empty' : 'bolt' }}</mat-icon> Starter — $49/mo
+                  </button>
+                  <button class="vs-btn-primary ors-plan-choice-btn" type="button" (click)="upgradeToPlan('pro')" [disabled]="billingBusy() || settings().plan === 'pro'">
+                    <mat-icon>{{ billingBusy() ? 'hourglass_empty' : 'workspace_premium' }}</mat-icon> Pro — $149/mo
+                  </button>
+                </div>
+                <button class="vs-btn-ghost ors-upgrade-btn" type="button" (click)="manageBilling()" [disabled]="billingBusy() || !hasBillingCustomer()" *ngIf="hasBillingCustomer()">
+                  <mat-icon>credit_card</mat-icon> Manage Subscription / Billing Portal
                 </button>
-                <span class="vs-muted" style="font-size:12px;" *ngIf="!hasBillingCustomer()">No Stripe customer is attached yet.</span>
+                <span class="vs-muted" style="font-size:12px;">Need Enterprise or a custom plan? <a href="mailto:contact@innovacarereview.com">Contact sales</a>.</span>
               </div>
             </div>
           </div>
@@ -605,6 +611,12 @@ const PLAN_BADGE: Record<string, string> = {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 7px 14px !important; font-size: 13px !important;
     }
+    .ors-plan-choices { display: flex; flex-direction: column; gap: 6px; }
+    .ors-plan-choice-btn {
+      display: inline-flex; align-items: center; gap: 6px; justify-content: center;
+      padding: 8px 14px !important; font-size: 13px !important;
+    }
+    .ors-plan-choice-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
 
     .ors-save-row {
       display: flex; align-items: center; justify-content: flex-end;
@@ -689,6 +701,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   async ngOnInit() {
+    this.handleBillingReturn();
     if (!this.orgId) return;
     try {
       const db = getFirestore();
@@ -986,6 +999,20 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  private handleBillingReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const billing = params.get('billing');
+    if (!billing) return;
+    if (billing === 'success') {
+      this.toast.success('Subscription updated — it may take a moment to reflect below.');
+    } else if (billing === 'cancel') {
+      this.toast.info('Checkout was canceled. No changes were made.');
+    }
+    params.delete('billing');
+    const query = params.toString();
+    history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : ''));
+  }
+
   async manageBilling() {
     if (!this.orgId) return;
     if (!this.hasBillingCustomer()) {
@@ -1009,6 +1036,36 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         return;
       }
       this.toast.errorFrom(e, 'Failed to open Stripe Portal.');
+    } finally {
+      this.billingBusy.set(false);
+    }
+  }
+
+  async upgradeToPlan(planId: 'starter' | 'pro') {
+    if (!this.orgId || this.billingBusy()) return;
+    this.billingBusy.set(true);
+    try {
+      const fns = getFunctions(undefined, 'us-east1');
+      const createCheckout = httpsCallable(fns, 'stripeCreateCheckout');
+      const returnBase = `${window.location.origin}${window.location.pathname}`;
+      const res: any = await createCheckout({
+        orgId: this.orgId,
+        planId,
+        successUrl: `${returnBase}?billing=success`,
+        cancelUrl: `${returnBase}?billing=cancel`,
+      });
+
+      if (res.data?.url) {
+        window.location.href = res.data.url;
+      } else {
+        throw new Error('No checkout URL returned from Stripe');
+      }
+    } catch (e: any) {
+      if (String(e?.code || '').includes('failed-precondition')) {
+        this.toast.error('Billing isn\'t configured for this plan yet. Contact support.');
+        return;
+      }
+      this.toast.errorFrom(e, 'Failed to start checkout.');
     } finally {
       this.billingBusy.set(false);
     }
