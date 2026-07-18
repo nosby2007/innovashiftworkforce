@@ -116,6 +116,36 @@ aren't part of this deploy pipeline:
   is built.
 - **Two-factor authentication** — Firebase Console → Authentication →
   Sign-in method → Advanced → enable Multi-Factor Authentication + TOTP.
+- **Stripe self-serve plan upgrades** (`/admin/org-settings` → Subscription
+  & Plan, org admins upgrading their own org without a super admin) — needs
+  three things beyond `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` (already
+  listed above):
+  1. Create a **Product** in the [Stripe
+     Dashboard](https://dashboard.stripe.com/products) with two recurring
+     **Prices** — one for Starter ($49/mo to match the public pricing page),
+     one for Pro ($149/mo).
+  2. Set their price ids (`price_...`) via Secret Manager, same as the API
+     keys above — not because they're sensitive (they aren't), but because
+     it's the only config mechanism this repo's CI deploy pipeline actually
+     delivers: a `.env` file would need to be committed, but the repo's
+     `.gitignore` excludes `.env`/`.env.*` everywhere, so it would never
+     reach the GitHub Actions checkout.
+     ```
+     firebase functions:secrets:set STRIPE_PRICE_STARTER
+     firebase functions:secrets:set STRIPE_PRICE_PRO
+     ```
+     Until both are set, `stripeCreateCheckout` fails cleanly with a
+     "Billing is not configured for the {plan} plan yet" error rather than
+     silently no-oping. Uses the same **Secret Manager Secret Accessor**
+     role already granted above — nothing extra to add in IAM.
+  3. In the Stripe Dashboard, configure the **customer portal**
+     (`stripeCreatePortal`'s target) — at minimum enable "Cancel
+     subscription" and "Update payment method"; enabling "Switch plan"
+     there too is optional but works out of the box, since the webhook
+     already maps a portal-driven price change back to `starter`/`pro` via
+     `infra/stripe-plans.ts`.
+  Enterprise stays custom pricing sold through the demo-request flow, not
+  Stripe Checkout — its pricing card links to Contact Sales, same as today.
 
 ## Android — deploy to testers (`android-distribute.yml`)
 
