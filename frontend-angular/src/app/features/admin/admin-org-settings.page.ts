@@ -23,6 +23,7 @@ import {
   CADENCE_OPTIONS,
   DEFAULT_ACCRUAL_POLICY,
 } from '../../core/tenancy/org-accrual.model';
+import { OrgHoliday, BenefitLine, defaultDeductionElectionsForCountry } from '../../shared/utils/payroll.util';
 import * as L from 'leaflet';
 
 interface OrgSite {
@@ -55,6 +56,18 @@ interface OrgSettings {
   payrollTaxNotes: string;
   maxEmployees: number;
   defaultPayRate: number;
+  overtimeEnabled: boolean;
+  overtimeMultiplier: number;
+  overtimeWeeklyThresholdHours: number;
+  holidayWorkMultiplier: number;
+  holidays: OrgHoliday[];
+  defaultFederalTaxPercent: number;
+  defaultStateTaxPercent: number;
+  defaultSocialSecurityPercent: number;
+  defaultMedicarePercent: number;
+  default401kMatchPercent: number;
+  default401kProvider: string;
+  benefitPlans: BenefitLine[];
   breakRequiredAfterHours: number;
   minRequiredBreakMinutes: number;
   gpsAttendanceEnabled: boolean;
@@ -77,6 +90,21 @@ const DEFAULT_SETTINGS: OrgSettings = {
   taxProfile: 'us_federal_state',
   payrollTaxNotes: '',
   defaultPayRate: 40,
+  overtimeEnabled: true,
+  overtimeMultiplier: 1.5,
+  overtimeWeeklyThresholdHours: 40,
+  holidayWorkMultiplier: 1.5,
+  holidays: [],
+  // Real US federal/state/FICA figures only get applied for US orgs — see
+  // ngOnInit(), which fills these in via defaultDeductionElectionsForCountry
+  // the first time an org's settings are loaded with none saved yet.
+  defaultFederalTaxPercent: 0,
+  defaultStateTaxPercent: 0,
+  defaultSocialSecurityPercent: 0,
+  defaultMedicarePercent: 0,
+  default401kMatchPercent: 0,
+  default401kProvider: '',
+  benefitPlans: [],
   breakRequiredAfterHours: 6,
   minRequiredBreakMinutes: 30,
   gpsAttendanceEnabled: false,
@@ -246,6 +274,184 @@ const PLAN_BADGE: Record<string, string> = {
               <div>
                 <label class="vs-field-label" for="ors-tax-notes">Payroll Tax Notes</label>
                 <textarea id="ors-tax-notes" class="vs-input" rows="3" [(ngModel)]="draft.payrollTaxNotes" placeholder="Local statutory notes, accountant contact, external payroll provider..."></textarea>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Overtime & Paid Holidays section -->
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Overtime & Paid Holidays</div>
+              <div class="vs-panel-subtitle">Overtime premium and company-paid holidays used when calculating payroll</div>
+            </div>
+            <mat-icon class="ors-section-icon">schedule</mat-icon>
+          </div>
+          <div class="vs-panel-body ors-form">
+            <label class="ors-toggle-row">
+              <input type="checkbox" [(ngModel)]="draft.overtimeEnabled">
+              <div>
+                <div class="ors-toggle-title">Enable overtime pay</div>
+                <div class="vs-muted">When on, hours worked beyond the weekly threshold are paid at the overtime multiplier below.</div>
+              </div>
+            </label>
+
+            <div class="vs-form-row vs-form-row--2" style="margin-top:16px;" *ngIf="draft.overtimeEnabled">
+              <div>
+                <label class="vs-field-label" for="ors-ot-multiplier">Overtime Multiplier</label>
+                <input id="ors-ot-multiplier" type="number" class="vs-input" min="1" step="0.1" [(ngModel)]="draft.overtimeMultiplier" placeholder="1.5">
+                <div class="ors-quick-set">
+                  <button class="vs-btn-ghost ors-quick-set-btn" type="button" (click)="draft.overtimeMultiplier = 1.5">1.5x</button>
+                  <button class="vs-btn-ghost ors-quick-set-btn" type="button" (click)="draft.overtimeMultiplier = 2">2x</button>
+                </div>
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-ot-threshold">Weekly Overtime Threshold (hours)</label>
+                <input id="ors-ot-threshold" type="number" class="vs-input" min="1" [(ngModel)]="draft.overtimeWeeklyThresholdHours" placeholder="40">
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Hours worked beyond this in a Monday–Sunday week are paid as overtime.</div>
+              </div>
+            </div>
+
+            <div class="vs-form-row" style="margin-top:16px;">
+              <div>
+                <label class="vs-field-label" for="ors-holiday-multiplier">Holiday-Worked Multiplier</label>
+                <input id="ors-holiday-multiplier" type="number" class="vs-input" min="1" step="0.1" [(ngModel)]="draft.holidayWorkMultiplier" placeholder="1.5">
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Pay rate multiplier for hours actually worked on a paid holiday below (instead of overtime).</div>
+              </div>
+            </div>
+
+            <div class="ors-site-actions" style="justify-content:space-between; margin-top:16px;">
+              <strong>Paid Holidays</strong>
+              <button class="vs-btn-ghost" (click)="addHoliday()" type="button">
+                <mat-icon>add</mat-icon> Add Holiday
+              </button>
+            </div>
+
+            <div *ngIf="draft.holidays.length === 0" class="ors-empty-site vs-glass">
+              <mat-icon>event_busy</mat-icon>
+              <div>
+                <strong>No paid holidays configured.</strong>
+                <div class="vs-muted">Add a holiday so staff automatically get paid for it, and worked hours on that day use the holiday multiplier.</div>
+              </div>
+            </div>
+
+            <div class="ors-site-card" *ngFor="let holiday of draft.holidays; index as i">
+              <div class="vs-form-row vs-form-row--3">
+                <div>
+                  <label class="vs-field-label">Holiday Name *</label>
+                  <input class="vs-input" [(ngModel)]="holiday.name" placeholder="Independence Day">
+                </div>
+                <div>
+                  <label class="vs-field-label">Date</label>
+                  <input class="vs-input" type="date" [(ngModel)]="holiday.date">
+                </div>
+                <div>
+                  <label class="vs-field-label">Paid Hours</label>
+                  <input class="vs-input" type="number" min="0" step="0.5" [(ngModel)]="holiday.paidHours" placeholder="8">
+                </div>
+              </div>
+              <div class="ors-site-footer">
+                <span class="vs-muted">Staff who don't work this day are paid these hours automatically; staff who do work it get the holiday multiplier instead.</span>
+                <button class="vs-btn-ghost" type="button" (click)="removeHoliday(i)">
+                  <mat-icon>delete</mat-icon> Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Payroll Deductions & Benefits section -->
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Payroll Deductions & Benefits</div>
+              <div class="vs-panel-subtitle">Default withholding rates and reusable benefit plans used when payroll runs for staff who haven't overridden them on their own profile</div>
+            </div>
+            <mat-icon class="ors-section-icon">account_balance_wallet</mat-icon>
+          </div>
+          <div class="vs-panel-body ors-form">
+            <div class="vs-muted" style="margin-bottom:8px;" *ngIf="draft.countryCode === 'US'; else nonUsDeductionsNote">
+              Federal/state tax are flat estimated percentages, not real bracket-based withholding — set to whatever your accountant or external payroll provider estimates. Social Security and Medicare default to the actual US federal rates.
+            </div>
+            <ng-template #nonUsDeductionsNote>
+              <div class="vs-muted" style="margin-bottom:8px;">
+                These are general-purpose percentage fields — Social Security/Medicare are US-specific and don't apply outside the US. Set whatever rates match your own country's statutory deductions (or leave at 0 and handle payroll tax externally).
+              </div>
+            </ng-template>
+            <div class="vs-form-row vs-form-row--3">
+              <div>
+                <label class="vs-field-label" for="ors-fed-tax">Federal Tax %</label>
+                <input id="ors-fed-tax" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.defaultFederalTaxPercent" placeholder="0">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-state-tax">State Tax %</label>
+                <input id="ors-state-tax" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.defaultStateTaxPercent" placeholder="0">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-401k-match">401(k) Employer Match %</label>
+                <input id="ors-401k-match" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.default401kMatchPercent" placeholder="0">
+              </div>
+            </div>
+            <div class="vs-form-row vs-form-row--3" style="margin-top:16px;">
+              <div>
+                <label class="vs-field-label" for="ors-ss">Social Security %</label>
+                <input id="ors-ss" type="number" class="vs-input" min="0" step="0.01" [(ngModel)]="draft.defaultSocialSecurityPercent" placeholder="0">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-medicare">Medicare %</label>
+                <input id="ors-medicare" type="number" class="vs-input" min="0" step="0.01" [(ngModel)]="draft.defaultMedicarePercent" placeholder="0">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-401k-provider">401(k) Provider</label>
+                <input id="ors-401k-provider" class="vs-input" [(ngModel)]="draft.default401kProvider" placeholder="Fidelity, Empower, Vanguard…">
+              </div>
+            </div>
+            <button class="vs-btn-ghost ors-quick-set-btn" type="button" style="margin-top:10px;" *ngIf="draft.countryCode === 'US'" (click)="useUsDeductionDefaults()">
+              Use US rates (Federal 10% / State 4% / SS 6.2% / Medicare 1.45%)
+            </button>
+
+            <div class="ors-site-actions" style="justify-content:space-between; margin-top:16px;">
+              <strong>Benefit Plans</strong>
+              <button class="vs-btn-ghost" (click)="addBenefitPlan()" type="button">
+                <mat-icon>add</mat-icon> Add Benefit Plan
+              </button>
+            </div>
+
+            <div *ngIf="draft.benefitPlans.length === 0" class="ors-empty-site vs-glass">
+              <mat-icon>favorite_border</mat-icon>
+              <div>
+                <strong>No benefit plans configured.</strong>
+                <div class="vs-muted">Add plans like Health, Dental, Vision, or Life Insurance so HR can quickly attach them to an employee's profile with the right amounts pre-filled.</div>
+              </div>
+            </div>
+
+            <div class="ors-site-card" *ngFor="let plan of draft.benefitPlans; index as i">
+              <div class="vs-form-row vs-form-row--2">
+                <div>
+                  <label class="vs-field-label">Plan Name *</label>
+                  <input class="vs-input" [(ngModel)]="plan.label" placeholder="Health Insurance">
+                </div>
+                <div>
+                  <label class="vs-field-label">Provider / Carrier</label>
+                  <input class="vs-input" [(ngModel)]="plan.provider" placeholder="Blue Cross Blue Shield, VSP, Delta Dental…">
+                </div>
+              </div>
+              <div class="vs-form-row vs-form-row--2" style="margin-top:12px;">
+                <div>
+                  <label class="vs-field-label">Employee Cost / Paycheck</label>
+                  <input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="plan.employeeAmount" placeholder="50.00">
+                </div>
+                <div>
+                  <label class="vs-field-label">Employer Contribution / Paycheck</label>
+                  <input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="plan.employerAmount" placeholder="200.00">
+                </div>
+              </div>
+              <div class="ors-site-footer">
+                <span class="vs-muted">Available to attach to any employee from their profile's Payroll & Deductions section.</span>
+                <button class="vs-btn-ghost" type="button" (click)="removeBenefitPlan(i)">
+                  <mat-icon>delete</mat-icon> Remove
+                </button>
               </div>
             </div>
           </div>
@@ -629,6 +835,8 @@ const PLAN_BADGE: Record<string, string> = {
       border:1px solid var(--border); border-radius:var(--radius-md); background:rgba(255,255,255,0.02);
     }
     .ors-toggle-title { font-weight:800; color:var(--text); margin-bottom:4px; }
+    .ors-quick-set { display:flex; gap:6px; margin-top:6px; }
+    .ors-quick-set-btn { padding:5px 10px !important; font-size:12px !important; }
     .ors-upgrade-card {
       display:flex; gap:12px; align-items:flex-start; padding:14px 16px;
       border:1px dashed rgba(250,204,21,0.35); border-radius:var(--radius-md);
@@ -709,6 +917,16 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
       if (snap.exists()) {
         const data = snap.data() as Partial<OrgSettings>;
         const loaded: OrgSettings = { ...DEFAULT_SETTINGS, ...data };
+        // Real federal/state/FICA figures only make sense for a US org —
+        // only apply them the first time (nothing saved yet for these fields).
+        if (data.defaultFederalTaxPercent == null && data.defaultStateTaxPercent == null
+          && data.defaultSocialSecurityPercent == null && data.defaultMedicarePercent == null) {
+          const countryDefaults = defaultDeductionElectionsForCountry(loaded.countryCode);
+          loaded.defaultFederalTaxPercent = countryDefaults.federalTaxPercent;
+          loaded.defaultStateTaxPercent = countryDefaults.stateTaxPercent;
+          loaded.defaultSocialSecurityPercent = countryDefaults.socialSecurityPercent;
+          loaded.defaultMedicarePercent = countryDefaults.medicarePercent;
+        }
         this.settings.set(loaded);
         this.draft = { ...loaded };
         this.ctx.setContext({
@@ -798,6 +1016,48 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     };
     this.selectedSiteIndex = Math.max(0, Math.min(this.selectedSiteIndex, this.draft.sites.length - 1));
     this.refreshMapFromSelectedSite();
+  }
+
+  useUsDeductionDefaults() {
+    const defaults = defaultDeductionElectionsForCountry('US');
+    this.draft.defaultFederalTaxPercent = defaults.federalTaxPercent;
+    this.draft.defaultStateTaxPercent = defaults.stateTaxPercent;
+    this.draft.defaultSocialSecurityPercent = defaults.socialSecurityPercent;
+    this.draft.defaultMedicarePercent = defaults.medicarePercent;
+  }
+
+  addBenefitPlan() {
+    this.draft = {
+      ...this.draft,
+      benefitPlans: [
+        ...this.draft.benefitPlans,
+        { id: this.createLocalId('benefit'), label: '', provider: '', employeeAmount: 0, employerAmount: 0 },
+      ],
+    };
+  }
+
+  removeBenefitPlan(index: number) {
+    this.draft = {
+      ...this.draft,
+      benefitPlans: this.draft.benefitPlans.filter((_, i) => i !== index),
+    };
+  }
+
+  addHoliday() {
+    this.draft = {
+      ...this.draft,
+      holidays: [
+        ...this.draft.holidays,
+        { id: this.createLocalId('holiday'), name: '', date: '', paidHours: 8 },
+      ],
+    };
+  }
+
+  removeHoliday(index: number) {
+    this.draft = {
+      ...this.draft,
+      holidays: this.draft.holidays.filter((_, i) => i !== index),
+    };
   }
 
   cadenceOptions = CADENCE_OPTIONS;
@@ -936,6 +1196,25 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         }))
         .filter((site) => site.name);
 
+      const normalizedHolidays: OrgHoliday[] = (this.draft.holidays || [])
+        .map((h) => ({
+          id: String(h.id || this.createLocalId('holiday')).trim(),
+          name: String(h.name || '').trim(),
+          date: String(h.date || '').trim(),
+          paidHours: Math.max(0, Number(h.paidHours || 0)),
+        }))
+        .filter((h) => h.name && h.date);
+
+      const normalizedBenefitPlans: BenefitLine[] = (this.draft.benefitPlans || [])
+        .map((p) => ({
+          id: String(p.id || this.createLocalId('benefit')).trim(),
+          label: String(p.label || '').trim(),
+          provider: String(p.provider || '').trim(),
+          employeeAmount: Math.max(0, Number(p.employeeAmount || 0)),
+          employerAmount: Math.max(0, Number(p.employerAmount || 0)),
+        }))
+        .filter((p) => p.label);
+
       const normalizedAccrualPolicy: AccrualPolicy = {
         enabled: !!this.draft.accrualPolicy?.enabled,
         cadence: this.draft.accrualPolicy?.cadence || 'monthly',
@@ -957,6 +1236,18 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         payFrequency: this.draft.payFrequency || 'biweekly',
         taxProfile: this.draft.taxProfile || 'manual',
         payrollTaxNotes: String(this.draft.payrollTaxNotes || '').trim(),
+        overtimeEnabled: this.draft.overtimeEnabled !== false,
+        overtimeMultiplier: Math.max(1, Number(this.draft.overtimeMultiplier || 1.5)),
+        overtimeWeeklyThresholdHours: Math.max(1, Number(this.draft.overtimeWeeklyThresholdHours || 40)),
+        holidayWorkMultiplier: Math.max(1, Number(this.draft.holidayWorkMultiplier || 1.5)),
+        holidays: normalizedHolidays,
+        defaultFederalTaxPercent: Math.max(0, Number(this.draft.defaultFederalTaxPercent || 0)),
+        defaultStateTaxPercent: Math.max(0, Number(this.draft.defaultStateTaxPercent || 0)),
+        defaultSocialSecurityPercent: Math.max(0, Number(this.draft.defaultSocialSecurityPercent || 0)),
+        defaultMedicarePercent: Math.max(0, Number(this.draft.defaultMedicarePercent || 0)),
+        default401kMatchPercent: Math.max(0, Number(this.draft.default401kMatchPercent || 0)),
+        default401kProvider: String(this.draft.default401kProvider || '').trim(),
+        benefitPlans: normalizedBenefitPlans,
         gpsAttendanceEnabled: this.hasGpsAttendance() ? this.draft.gpsAttendanceEnabled : false,
         sites: this.canManageSites() ? normalizedSites : [],
         accrualPolicy: normalizedAccrualPolicy,
@@ -972,8 +1263,8 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         orgId: this.orgId,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy });
-      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy };
+      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans });
+      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans };
       this.ctx.setContext({
         orgId: this.ctx.orgId(),
         uid: this.ctx.uid(),
