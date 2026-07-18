@@ -535,7 +535,7 @@ export class PayslipPrintPage implements OnDestroy {
   leaveGross() { return Math.round(this.rows().filter((r) => r.status === 'approved leave').reduce((sum, r) => sum + r.gross, 0) * 100) / 100; }
   overtimeMultiplierLabel() { return `${this.overtimePolicy.multiplier}x`; }
   retirement401kProvider() { return this._resolvedElections?.retirement401kProvider || ''; }
-  exceptionCount() { return this.rows().filter((r) => r.status !== 'none' && r.status !== 'approved leave' && r.status !== 'holiday pay').length; }
+  exceptionCount() { return this.rows().filter((r) => r.status === 'pending').length; }
   moneyCurrency() { return this.ctx.currencyCode() || 'USD'; }
   taxLabel() { return this.ctx.taxProfile() === 'manual' ? 'External' : 'Est.'; }
 

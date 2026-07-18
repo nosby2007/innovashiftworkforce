@@ -1,6 +1,7 @@
 import { Component, NgZone, OnDestroy, signal } from '@angular/core';
 import { CommonModule, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { doc, getDoc, getFirestore, onSnapshot, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
 import { MatIconModule } from '@angular/material/icon';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
@@ -170,7 +171,12 @@ type PayrollRow = {
                 <td>{{ r.deductions | currency:moneyCurrency() }}</td>
                 <td>{{ r.net | currency:moneyCurrency() }}</td>
                 <td>{{ r.exceptions }}</td>
-                <td><em [class.is-warn]="r.exceptions > 0">{{ r.exceptions > 0 ? 'Review' : 'Ready' }}</em></td>
+                <td>
+                  <button *ngIf="r.exceptions > 0" class="pay-row-btn pay-review-btn" type="button" (click)="reviewInTimesheets(r.userId)">
+                    <mat-icon>flag</mat-icon> Review ({{ r.exceptions }})
+                  </button>
+                  <em *ngIf="r.exceptions === 0">Ready</em>
+                </td>
                 <td>
                   <button class="pay-row-btn" (click)="printPayslip(r.userId)">
                     <mat-icon>picture_as_pdf</mat-icon>
@@ -266,6 +272,7 @@ type PayrollRow = {
     .pay-secondary:disabled { opacity:.5; cursor:not-allowed; }
     .pay-row-btn { height:30px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#07533f; display:inline-flex; align-items:center; gap:5px; padding:0 9px; font-weight:800; cursor:pointer; }
     .pay-row-btn mat-icon { font-size:16px; width:16px; height:16px; }
+    .pay-review-btn { border-color:#fed7aa; background:#fff7ed; color:#b45309; white-space:nowrap; }
     .pay-readiness { display:flex; gap:12px; padding:18px 16px; background:#fff7ed; color:#92400e; border-bottom:1px solid #fed7aa; }
     .pay-readiness.is-ready { background:#ecfdf5; color:#047857; border-bottom-color:#a7f3d0; }
     .pay-readiness strong, .pay-readiness span { display:block; }
@@ -353,6 +360,7 @@ export class AdminPayrollPage implements OnDestroy {
     private shiftsRepo: ShiftsRepo,
     private accruals: AccrualsRepo,
     private printLauncher: PrintLauncherService,
+    private router: Router,
   ) {
     const period = currentPayrollPeriod((this.ctx.payFrequency() as PayFrequency) || 'biweekly');
     this.fromDate = dateInputValue(period.start);
@@ -479,7 +487,10 @@ export class AdminPayrollPage implements OnDestroy {
       existing.entries += userEntries.length;
       existing.hours += breakdown.hours;
       existing.gross += breakdown.gross;
-      existing.exceptions += userEntries.filter((e) => (e.exceptionStatus || 'none') !== 'none' || !e.checkOutAt).length;
+      // Only entries actually awaiting a decision (or missing a checkout)
+      // block payroll — 'approved'/'rejected' are resolved history, not
+      // something still requiring admin action.
+      existing.exceptions += userEntries.filter((e) => e.exceptionStatus === 'pending' || !e.checkOutAt).length;
       grouped.set(uid, existing);
     }
 
@@ -671,6 +682,12 @@ export class AdminPayrollPage implements OnDestroy {
       from: this.fromDate,
       to: this.toDate,
     }, 'admin-payslip');
+  }
+
+  reviewInTimesheets(uid: string) {
+    void this.router.navigate(['/admin/timesheets'], {
+      queryParams: { uid, from: this.fromDate, to: this.toDate },
+    });
   }
 
   printSelectedPayslips() {
