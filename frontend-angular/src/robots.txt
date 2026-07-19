@@ -11,4 +11,4 @@ Disallow: /login
 Disallow: /register
 Disallow: /forgot-password
 
-Sitemap: https://www.innovashift-workforce.com/sitemap.xml
+Sitemap: https://innovashiftworkforce.com/sitemap.xml

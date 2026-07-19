@@ -2,7 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { Injectable, inject } from '@angular/core';
 import { Meta, Title } from '@angular/platform-browser';
 
-export const SITE_URL = 'https://www.innovashift-workforce.com';
+export const SITE_URL = 'https://innovashiftworkforce.com';
 export const SITE_NAME = 'InnovaShift Workforce';
 const DEFAULT_OG_IMAGE = 'https://res.cloudinary.com/dtdpx59sc/image/upload/v1778890633/innovashift/ChatGPT_Image_15_mai_2026_20_13_13_10_pkzgj0.png';
 
