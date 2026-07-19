@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { doc, getFirestore, onSnapshot } from 'firebase/firestore';
+import { TranslocoModule } from '@jsverse/transloco';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { EmployeeDocumentRecord, EmployeeDocumentsRepo } from '../../core/repos/employee-documents.repo';
@@ -19,42 +20,42 @@ type Step = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, RouterLink, MatIconModule],
+  imports: [CommonModule, RouterLink, MatIconModule, TranslocoModule],
   template: `
     <div class="onb-page">
       <header class="onb-hero">
         <div>
-          <span>Staff Onboarding</span>
-          <h1>Get Ready for Work</h1>
-          <p>Finish the records your organization needs for scheduling, timekeeping, payroll, and compliance.</p>
+          <span>{{ 'onboarding.kicker' | transloco }}</span>
+          <h1>{{ 'onboarding.title' | transloco }}</h1>
+          <p>{{ 'onboarding.subtitle' | transloco }}</p>
         </div>
         <div class="onb-score">
           <strong>{{ progress() }}%</strong>
-          <small>Complete</small>
+          <small>{{ 'onboarding.complete' | transloco }}</small>
         </div>
       </header>
 
       <div *ngIf="!orgId || !uid" class="onb-alert">
         <mat-icon>warning_amber</mat-icon>
-        Missing organization or user context.
+        {{ 'onboarding.missingOrgContext' | transloco }}
       </div>
 
       <ng-container *ngIf="orgId && uid">
         <section class="onb-summary">
           <article>
-            <span>Profile</span>
+            <span>{{ 'onboarding.profile' | transloco }}</span>
             <strong>{{ profileCompletion().score }}%</strong>
-            <small>{{ profileCompletion().missing.length ? profileCompletion().missing[0] + ' missing' : 'Ready' }}</small>
+            <small>{{ profileCompletion().missing.length ? (profileCompletion().missing[0] + ' missing') : ('onboarding.ready' | transloco) }}</small>
           </article>
           <article>
-            <span>Documents</span>
+            <span>{{ 'onboarding.documents' | transloco }}</span>
             <strong>{{ verifiedDocuments() }}</strong>
-            <small>{{ pendingDocuments() }} pending review</small>
+            <small>{{ 'onboarding.pendingReview' | transloco: { count: pendingDocuments() } }}</small>
           </article>
           <article>
-            <span>Payroll</span>
-            <strong>{{ payrollReady() ? 'Ready' : 'Review' }}</strong>
-            <small>W-4, W-2, and payment basics</small>
+            <span>{{ 'onboarding.payroll' | transloco }}</span>
+            <strong>{{ (payrollReady() ? 'onboarding.ready' : 'onboarding.review') | transloco }}</strong>
+            <small>{{ 'onboarding.payrollHint' | transloco }}</small>
           </article>
         </section>
 
@@ -62,10 +63,10 @@ type Step = {
           <a *ngFor="let step of steps()" [routerLink]="step.link" class="onb-step" [class.is-done]="step.done">
             <span class="onb-step-icon"><mat-icon>{{ step.icon }}</mat-icon></span>
             <div>
-              <strong>{{ step.title }}</strong>
-              <p>{{ step.description }}</p>
+              <strong>{{ step.title | transloco }}</strong>
+              <p>{{ step.description | transloco }}</p>
             </div>
-            <em>{{ step.done ? 'Complete' : step.action }}</em>
+            <em>{{ (step.done ? 'onboarding.complete' : step.action) | transloco }}</em>
           </a>
         </section>
       </ng-container>
@@ -145,12 +146,12 @@ export class StaffOnboardingPage implements OnDestroy {
     const hasIdentity = this.documents().some((item) => item.type === 'identity' && item.status === 'verified');
     const hasTaxDoc = this.documents().some((item) => ['w4', 'w2'].includes(item.type) && item.status !== 'rejected');
     return [
-      { title: 'Complete your profile', description: 'Name, phone, address, emergency contact, department, and work location.', icon: 'account_circle', done: profile.score >= 80, link: '/app/profile', action: 'Update' },
-      { title: 'Submit identity and licenses', description: 'Upload identity, clinical license, certification, or required compliance documents.', icon: 'badge', done: hasIdentity, link: '/app/documents', action: 'Upload' },
-      { title: 'Prepare tax and payroll records', description: 'Confirm W-4/W-2 preferences, dependents, and payroll details.', icon: 'payments', done: this.payrollReady() || hasTaxDoc, link: '/app/profile', action: 'Review' },
-      { title: 'Review your schedule', description: 'Confirm assigned shifts, availability, and marketplace opportunities.', icon: 'calendar_month', done: true, link: '/app/schedule', action: 'Open' },
-      { title: 'Check PTO and accruals', description: 'Review available balances and submit time-off requests when needed.', icon: 'event_available', done: true, link: '/app/accruals', action: 'Open' },
-      { title: 'Read notifications', description: 'Keep approvals, payroll messages, shift changes, and admin alerts current.', icon: 'notifications_active', done: true, link: '/app/notifications', action: 'Open' },
+      { title: 'onboarding.step1Title', description: 'onboarding.step1Desc', icon: 'account_circle', done: profile.score >= 80, link: '/app/profile', action: 'onboarding.step1Action' },
+      { title: 'onboarding.step2Title', description: 'onboarding.step2Desc', icon: 'badge', done: hasIdentity, link: '/app/documents', action: 'onboarding.step2Action' },
+      { title: 'onboarding.step3Title', description: 'onboarding.step3Desc', icon: 'payments', done: this.payrollReady() || hasTaxDoc, link: '/app/profile', action: 'onboarding.step3Action' },
+      { title: 'onboarding.step4Title', description: 'onboarding.step4Desc', icon: 'calendar_month', done: true, link: '/app/schedule', action: 'onboarding.step4Action' },
+      { title: 'onboarding.step5Title', description: 'onboarding.step5Desc', icon: 'event_available', done: true, link: '/app/accruals', action: 'onboarding.step5Action' },
+      { title: 'onboarding.step6Title', description: 'onboarding.step6Desc', icon: 'notifications_active', done: true, link: '/app/notifications', action: 'onboarding.step6Action' },
     ];
   }
 

@@ -9,11 +9,11 @@ export class ThemeService {
   private doc = inject(DOCUMENT);
 
   private readonly themes: ThemeOption[] = [
-    { id: 'ocean', label: 'Recommended', bodyClass: 'theme-ocean', recommended: true, description: 'Clear navy and light surfaces for daily operations.' },
-    { id: 'light', label: 'Light', bodyClass: 'theme-light', description: 'Bright workspace with maximum table readability.' },
-    { id: 'dark', label: 'Navy Night', bodyClass: 'theme-dark', description: 'Accessible dark mode with slate panels.' },
-    { id: 'emerald', label: 'Healthcare Green', bodyClass: 'theme-emerald', description: 'Calm green accent for clinical teams.' },
-    { id: 'contrast', label: 'High Contrast', bodyClass: 'theme-contrast', description: 'Maximum contrast for accessibility.' },
+    { id: 'ocean', label: 'theme.ocean', bodyClass: 'theme-ocean', recommended: true, description: 'theme.oceanDesc' },
+    { id: 'light', label: 'theme.light', bodyClass: 'theme-light', description: 'theme.lightDesc' },
+    { id: 'dark', label: 'theme.dark', bodyClass: 'theme-dark', description: 'theme.darkDesc' },
+    { id: 'emerald', label: 'theme.emerald', bodyClass: 'theme-emerald', description: 'theme.emeraldDesc' },
+    { id: 'contrast', label: 'theme.contrast', bodyClass: 'theme-contrast', description: 'theme.contrastDesc' },
   ];
 
   readonly current = signal<ThemeId>('ocean');

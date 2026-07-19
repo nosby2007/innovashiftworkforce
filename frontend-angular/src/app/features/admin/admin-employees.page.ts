@@ -6,6 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { TranslocoModule } from '@jsverse/transloco';
 import { DrawerComponent } from '../../shared/ui/drawer/drawer.component';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
@@ -13,11 +14,11 @@ import { ToastService } from '../../core/ui/toast.service';
 import { getJobRoleOptions } from '../../shared/utils/job-role-catalog.util';
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: 'Administrator',
-  manager: 'Manager',
-  scheduler: 'Scheduler',
-  hr: 'HR',
-  staff: 'Employee',
+  admin: 'employees.roleLabelAdmin',
+  manager: 'employees.roleLabelManager',
+  scheduler: 'employees.roleLabelScheduler',
+  hr: 'employees.roleLabelHr',
+  staff: 'employees.roleLabelStaff',
 };
 
 const ROLE_BADGE: Record<string, string> = {
@@ -30,20 +31,20 @@ const ROLE_BADGE: Record<string, string> = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, DrawerComponent],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, DrawerComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
         <div class="vs-page-title">
-          <h1 class="vs-title">Employees</h1>
+          <h1 class="vs-title">{{ 'employees.title' | transloco }}</h1>
           <p class="vs-page-subtitle">
-            {{ filteredUsers().length }} of {{ users().length }} members
-            <ng-container *ngIf="orgId"> &mdash; <strong>Organization staff</strong></ng-container>
+            {{ 'employees.memberCount' | transloco: { shown: filteredUsers().length, total: users().length } }}
+            <ng-container *ngIf="orgId"> &mdash; <strong>{{ 'employees.organizationStaff' | transloco }}</strong></ng-container>
           </p>
         </div>
         <div class="vs-page-actions">
           <button class="vs-btn-primary emp-btn" (click)="openInviteDrawer()">
-            <mat-icon>person_add</mat-icon> Invite Employee
+            <mat-icon>person_add</mat-icon> {{ 'employees.inviteEmployee' | transloco }}
           </button>
         </div>
       </div>
@@ -51,21 +52,21 @@ const ROLE_BADGE: Record<string, string> = {
       <div class="emp-filters vs-glass">
         <div class="emp-search-wrap">
           <mat-icon class="emp-search-icon">search</mat-icon>
-          <input class="emp-search" [(ngModel)]="search" placeholder="Search by name, email, or role…" id="emp-search">
+          <input class="emp-search" [(ngModel)]="search" [placeholder]="'employees.searchPlaceholder' | transloco" id="emp-search">
         </div>
         <div class="emp-role-filters">
           <button *ngFor="let r of roleOptions"
                   class="emp-role-chip"
                   [class.emp-role-chip--active]="roleFilter() === r.value"
                   (click)="setRoleFilter(r.value)">
-            {{ r.label }}
+            {{ r.label | transloco }}
           </button>
         </div>
       </div>
 
       <div *ngIf="!orgId" class="emp-no-org vs-glass">
         <mat-icon>warning_amber</mat-icon>
-        No organization context. Please contact your Super Admin.
+        {{ 'employees.noOrgContext' | transloco }}
       </div>
 
       <div *ngIf="orgId && loading()" class="emp-loading">
@@ -77,8 +78,8 @@ const ROLE_BADGE: Record<string, string> = {
       <div *ngIf="orgId && !loading() && filteredUsers().length === 0" class="emp-empty vs-glass">
         <mat-icon>people_outline</mat-icon>
         <div>
-          <strong>No employees found.</strong>
-          <p>{{ search || roleFilter() !== 'all' ? 'Try adjusting your search or filters.' : 'This organization has no members yet.' }}</p>
+          <strong>{{ 'employees.noEmployeesFound' | transloco }}</strong>
+          <p>{{ (search || roleFilter() !== 'all') ? ('employees.adjustSearch' | transloco) : ('employees.noMembersYet' | transloco) }}</p>
         </div>
       </div>
 
@@ -87,70 +88,70 @@ const ROLE_BADGE: Record<string, string> = {
           <img *ngIf="u.photoURL" [src]="u.photoURL" alt="" class="emp-card-avatar-img">
           <div *ngIf="!u.photoURL" class="emp-card-avatar" [style.background]="avatarColor(u.uid)">{{ initials(u) }}</div>
           <div class="emp-card-body">
-            <div class="emp-card-name">{{ u.displayName || 'Unnamed user' }}</div>
-            <div class="emp-card-email">{{ u.email || 'Email not set' }}</div>
+            <div class="emp-card-name">{{ u.displayName || ('employees.unnamedUser' | transloco) }}</div>
+            <div class="emp-card-email">{{ u.email || ('employees.emailNotSet' | transloco) }}</div>
             <div class="emp-card-meta">
-              <span class="vs-badge" [ngClass]="roleBadge(u.accessRole)">{{ roleLabel(u.accessRole) }}</span>
-              <span class="vs-badge vs-badge--neutral">{{ u.jobRole || 'No job role' }}</span>
+              <span class="vs-badge" [ngClass]="roleBadge(u.accessRole)">{{ roleLabel(u.accessRole) | transloco }}</span>
+              <span class="vs-badge vs-badge--neutral">{{ u.jobRole || ('employees.noJobRole' | transloco) }}</span>
             </div>
             <div class="emp-card-actions" *ngIf="u.active !== false">
               <button class="vs-btn-primary emp-action" type="button" (click)="openEmployeeDetails(u); $event.stopPropagation()">
-                <mat-icon>visibility</mat-icon> Details
+                <mat-icon>visibility</mat-icon> {{ 'employees.details' | transloco }}
               </button>
               <button class="vs-btn-ghost emp-action" type="button" (click)="openTransferDrawer(u)" [disabled]="membershipBusyUid() === u.uid || u.uid === currentUid">
-                <mat-icon>swap_horiz</mat-icon> Request Transfer
+                <mat-icon>swap_horiz</mat-icon> {{ 'employees.requestTransfer' | transloco }}
               </button>
               <button class="vs-btn-ghost emp-action" type="button" (click)="suspendUser(u)" [disabled]="membershipBusyUid() === u.uid || u.uid === currentUid">
-                <mat-icon>pause_circle</mat-icon> Suspend
+                <mat-icon>pause_circle</mat-icon> {{ 'employees.suspend' | transloco }}
               </button>
               <button class="vs-btn-ghost emp-action emp-action--danger" type="button" (click)="revokeUser(u)" [disabled]="membershipBusyUid() === u.uid || u.uid === currentUid">
-                <mat-icon>block</mat-icon> Revoke
+                <mat-icon>block</mat-icon> {{ 'employees.revoke' | transloco }}
               </button>
             </div>
           </div>
           <div class="emp-card-status">
             <span class="vs-dot" [class.vs-dot--green]="u.active !== false" [class.vs-dot--red]="u.active === false"></span>
-            {{ u.active !== false ? 'Active' : 'Inactive' }}
+            {{ u.active !== false ? ('employees.active' | transloco) : ('employees.inactive' | transloco) }}
           </div>
         </div>
       </div>
 
-      <app-drawer [open]="inviteOpen()" title="Invite Employee" (close)="closeInviteDrawer()">
+      <app-drawer [open]="inviteOpen()" [title]="'employees.inviteDrawerTitle' | transloco" (close)="closeInviteDrawer()">
         <div class="emp-invite-form">
           <div class="vs-form-row">
             <div>
-              <label class="vs-field-label">Email Address *</label>
-              <input class="vs-input" type="email" [(ngModel)]="inviteDraft.email" placeholder="jane@example.com">
+              <label class="vs-field-label">{{ 'employees.emailAddress' | transloco }}</label>
+              <input class="vs-input" type="email" [(ngModel)]="inviteDraft.email" [placeholder]="'employees.emailPlaceholder' | transloco">
             </div>
           </div>
 
           <div class="vs-form-row">
             <div>
-              <label class="vs-field-label">Full Name</label>
-              <input class="vs-input" [(ngModel)]="inviteDraft.displayName" placeholder="Jane Doe">
+              <label class="vs-field-label">{{ 'employees.fullName' | transloco }}</label>
+              <input class="vs-input" [(ngModel)]="inviteDraft.displayName" [placeholder]="'employees.fullNamePlaceholder' | transloco">
             </div>
           </div>
 
           <div class="vs-form-row vs-form-row--2">
             <div>
-              <label class="vs-field-label">System Role</label>
+              <label class="vs-field-label">{{ 'employees.systemRole' | transloco }}</label>
               <input class="vs-input" value="staff (employee)" disabled>
             </div>
             <div>
-              <label class="vs-field-label">Job Role *</label>
+              <label class="vs-field-label">{{ 'employees.jobRole' | transloco }}</label>
               <select class="vs-select" [(ngModel)]="inviteDraft.jobRole">
                 <option *ngFor="let r of jobRoleOptions()" [value]="r.value">{{ r.label }}</option>
               </select>
               <div class="emp-role-help">
-                {{ orgIndustry === 'Healthcare' ? 'Suggested clinical roles for this organization type.' : 'Suggested operational roles for this organization type.' }}
+                {{ (orgIndustry === 'Healthcare' ? 'employees.clinicalRolesHint' : 'employees.operationalRolesHint') | transloco }}
               </div>
             </div>
           </div>
 
           <div *ngIf="inviteDraft.jobRole === 'Other'" class="vs-form-row">
             <div>
-              <label class="vs-field-label">Custom Job Role *</label>
-              <input class="vs-input" [(ngModel)]="inviteDraft.customJobRole" placeholder="e.g. Forklift Operator, Billing Specialist">
+              <label class="vs-field-label">{{ 'employees.customJobRole' | transloco }}</label>
+              <input class="vs-input" [(ngModel)]="inviteDraft.customJobRole" [placeholder]="'employees.customJobRolePlaceholder' | transloco">
             </div>
           </div>
 
@@ -159,42 +160,42 @@ const ROLE_BADGE: Record<string, string> = {
           </div>
 
           <div *ngIf="inviteLink()" class="emp-link-box">
-            <div class="emp-link-box__title">Password setup link</div>
+            <div class="emp-link-box__title">{{ 'employees.passwordSetupLink' | transloco }}</div>
             <div class="emp-link-box__row">
               <input class="vs-input" [value]="inviteLink()!" readonly>
-              <button class="vs-btn-ghost" type="button" (click)="copyInviteLink()">Copy</button>
+              <button class="vs-btn-ghost" type="button" (click)="copyInviteLink()">{{ 'employees.copy' | transloco }}</button>
             </div>
           </div>
 
           <div class="emp-drawer-actions">
-            <button class="vs-btn-ghost" type="button" (click)="closeInviteDrawer()" [disabled]="inviting()">Cancel</button>
+            <button class="vs-btn-ghost" type="button" (click)="closeInviteDrawer()" [disabled]="inviting()">{{ 'employees.cancel' | transloco }}</button>
             <button class="vs-btn-primary" type="button" (click)="submitInvite()" [disabled]="inviting() || !inviteDraft.email">
-              <span *ngIf="!inviting()">Send Invite</span>
-              <span *ngIf="inviting()">Sending...</span>
+              <span *ngIf="!inviting()">{{ 'employees.sendInvite' | transloco }}</span>
+              <span *ngIf="inviting()">{{ 'employees.sending' | transloco }}</span>
             </button>
           </div>
         </div>
       </app-drawer>
 
-      <app-drawer [open]="transferOpen()" title="Request Employee Transfer" (close)="closeTransferDrawer()">
+      <app-drawer [open]="transferOpen()" [title]="'employees.transferDrawerTitle' | transloco" (close)="closeTransferDrawer()">
         <div class="emp-invite-form">
           <div *ngIf="transferTargetUser() as user" class="emp-transfer-user vs-glass">
-            <div><strong>{{ user.displayName || 'Unnamed user' }}</strong></div>
-            <div>{{ user.email || 'Email not set' }}</div>
-            <div>{{ user.jobRole || 'No job role' }} · {{ roleLabel(user.accessRole || 'staff') }}</div>
+            <div><strong>{{ user.displayName || ('employees.unnamedUser' | transloco) }}</strong></div>
+            <div>{{ user.email || ('employees.emailNotSet' | transloco) }}</div>
+            <div>{{ user.jobRole || ('employees.noJobRole' | transloco) }} · {{ roleLabel(user.accessRole || 'staff') | transloco }}</div>
           </div>
 
           <div class="vs-form-row">
             <div>
-              <label class="vs-field-label">Target Organization Code *</label>
-              <input class="vs-input" [(ngModel)]="transferDraft.toOrgId" placeholder="ACME_002">
+              <label class="vs-field-label">{{ 'employees.targetOrgCode' | transloco }}</label>
+              <input class="vs-input" [(ngModel)]="transferDraft.toOrgId" [placeholder]="'employees.targetOrgPlaceholder' | transloco">
             </div>
           </div>
 
           <div class="vs-form-row">
             <div>
-              <label class="vs-field-label">Reason</label>
-              <textarea class="vs-input emp-textarea" [(ngModel)]="transferDraft.reason" placeholder="Moved to another facility, changed employer, regional reassignment"></textarea>
+              <label class="vs-field-label">{{ 'employees.reason' | transloco }}</label>
+              <textarea class="vs-input emp-textarea" [(ngModel)]="transferDraft.reason" [placeholder]="'employees.reasonPlaceholder' | transloco"></textarea>
             </div>
           </div>
 
@@ -203,10 +204,10 @@ const ROLE_BADGE: Record<string, string> = {
           </div>
 
           <div class="emp-drawer-actions">
-            <button class="vs-btn-ghost" type="button" (click)="closeTransferDrawer()" [disabled]="requestingTransfer()">Cancel</button>
+            <button class="vs-btn-ghost" type="button" (click)="closeTransferDrawer()" [disabled]="requestingTransfer()">{{ 'employees.cancel' | transloco }}</button>
             <button class="vs-btn-primary" type="button" (click)="submitTransferRequest()" [disabled]="requestingTransfer() || !transferDraft.toOrgId.trim()">
-              <span *ngIf="!requestingTransfer()">Submit Transfer Request</span>
-              <span *ngIf="requestingTransfer()">Submitting...</span>
+              <span *ngIf="!requestingTransfer()">{{ 'employees.submitTransferRequest' | transloco }}</span>
+              <span *ngIf="requestingTransfer()">{{ 'employees.submitting' | transloco }}</span>
             </button>
           </div>
         </div>
@@ -474,12 +475,12 @@ export class AdminEmployeesPage implements OnDestroy {
   private unsub: (() => void) | null = null;
 
   roleOptions = [
-    { value: 'all', label: 'All' },
-    { value: 'admin', label: 'Admin' },
-    { value: 'manager', label: 'Manager' },
-    { value: 'scheduler', label: 'Scheduler' },
-    { value: 'hr', label: 'HR' },
-    { value: 'staff', label: 'Staff' },
+    { value: 'all', label: 'employees.roleAll' },
+    { value: 'admin', label: 'employees.roleAdmin' },
+    { value: 'manager', label: 'employees.roleManager' },
+    { value: 'scheduler', label: 'employees.roleScheduler' },
+    { value: 'hr', label: 'employees.roleHr' },
+    { value: 'staff', label: 'employees.roleStaff' },
   ];
 
   filteredUsers = computed(() => {
@@ -598,7 +599,7 @@ export class AdminEmployeesPage implements OnDestroy {
   }
 
   roleLabel(role?: string) {
-    return role ? (ROLE_LABELS[role] ?? role) : 'Employee';
+    return role ? (ROLE_LABELS[role] ?? role) : 'employees.roleLabelStaff';
   }
 
   roleBadge(role?: string) {

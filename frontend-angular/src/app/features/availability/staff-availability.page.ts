@@ -2,6 +2,7 @@ import { Component, OnDestroy, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { AvailabilityEntry, AvailabilityRepo } from '../../core/repos/availability.repo';
 import { ToastService } from '../../core/ui/toast.service';
@@ -12,29 +13,29 @@ function todayIso(): string {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule],
+  imports: [CommonModule, FormsModule, MatIconModule, TranslocoModule],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
         <div class="vs-page-title">
-          <h1 class="vs-title">My Availability</h1>
+          <h1 class="vs-title">{{ 'availability.title' | transloco }}</h1>
           <p class="vs-page-subtitle">
-            Tell your scheduler which days and times you can work — especially useful if you're PRN/on-call, since your admin and the AI Copilot use this to fill open shifts.
+            {{ 'availability.subtitle' | transloco }}
           </p>
         </div>
       </div>
 
       <div *ngIf="!orgId || !uid" class="vs-glass avl-no-org">
         <mat-icon>warning_amber</mat-icon>
-        Missing account context. Sign in again or contact your administrator.
+        {{ 'availability.missingAccountContext' | transloco }}
       </div>
 
       <div class="vs-grid-2" *ngIf="orgId && uid">
         <section class="vs-glass-strong vs-panel">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Add Availability</div>
-              <div class="vs-panel-subtitle">Submit a date and time window you're free to work</div>
+              <div class="vs-panel-title">{{ 'availability.addAvailability' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'availability.addAvailabilitySub' | transloco }}</div>
             </div>
             <mat-icon class="avl-icon">event_available</mat-icon>
           </div>
@@ -42,28 +43,28 @@ function todayIso(): string {
             <form (ngSubmit)="submit()">
               <div class="vs-form-row vs-form-row--2">
                 <div>
-                  <label class="vs-field-label" for="avl-date">Date *</label>
+                  <label class="vs-field-label" for="avl-date">{{ 'availability.date' | transloco }}</label>
                   <input id="avl-date" class="vs-input" type="date" [(ngModel)]="draftDate" name="date" [min]="minDate" required>
                 </div>
                 <div></div>
               </div>
               <div class="vs-form-row vs-form-row--2">
                 <div>
-                  <label class="vs-field-label" for="avl-start">Available from *</label>
+                  <label class="vs-field-label" for="avl-start">{{ 'availability.availableFrom' | transloco }}</label>
                   <input id="avl-start" class="vs-input" type="time" [(ngModel)]="draftStart" name="startTime" required>
                 </div>
                 <div>
-                  <label class="vs-field-label" for="avl-end">Available until *</label>
+                  <label class="vs-field-label" for="avl-end">{{ 'availability.availableUntil' | transloco }}</label>
                   <input id="avl-end" class="vs-input" type="time" [(ngModel)]="draftEnd" name="endTime" required>
                 </div>
               </div>
-              <label class="vs-field-label" for="avl-note">Note (optional)</label>
-              <input id="avl-note" class="vs-input" [(ngModel)]="draftNote" name="note" placeholder="e.g. Can only start after 2pm">
+              <label class="vs-field-label" for="avl-note">{{ 'availability.noteOptional' | transloco }}</label>
+              <input id="avl-note" class="vs-input" [(ngModel)]="draftNote" name="note" [placeholder]="'availability.notePlaceholder' | transloco">
 
               <div class="avl-form-actions">
                 <button class="vs-btn-primary" type="submit" [disabled]="busy() || !draftDate || !draftStart || !draftEnd">
                   <mat-icon>{{ busy() ? 'hourglass_empty' : 'add' }}</mat-icon>
-                  {{ busy() ? 'Adding…' : 'Add Availability' }}
+                  {{ (busy() ? 'availability.adding' : 'availability.addAvailabilityAction') | transloco }}
                 </button>
               </div>
             </form>
@@ -73,14 +74,14 @@ function todayIso(): string {
         <section class="vs-glass-strong vs-panel">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Upcoming Availability</div>
-              <div class="vs-panel-subtitle">{{ entries().length }} submitted</div>
+              <div class="vs-panel-title">{{ 'availability.upcomingAvailability' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'availability.submittedCount' | transloco: { count: entries().length } }}</div>
             </div>
           </div>
           <div class="vs-panel-body">
             <div class="avl-empty" *ngIf="entries().length === 0">
               <mat-icon>event_busy</mat-icon>
-              <div>No availability submitted yet. Add a date on the left to let your scheduler know when you can work.</div>
+              <div>{{ 'availability.noAvailabilitySubmitted' | transloco }}</div>
             </div>
             <div class="avl-row" *ngFor="let e of entries()">
               <div>
@@ -88,7 +89,7 @@ function todayIso(): string {
                 <span>{{ e.startTime }} – {{ e.endTime }}</span>
                 <small *ngIf="e.note">{{ e.note }}</small>
               </div>
-              <button class="avl-remove-btn" type="button" (click)="remove(e)" [disabled]="busy()" title="Remove">
+              <button class="avl-remove-btn" type="button" (click)="remove(e)" [disabled]="busy()" [title]="'availability.remove' | transloco">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -132,6 +133,7 @@ export class StaffAvailabilityPage implements OnDestroy {
     private ctx: OrgContextService,
     private repo: AvailabilityRepo,
     private toast: ToastService,
+    private i18n: TranslocoService,
   ) {
     const bind = () => {
       const orgId = this.ctx.orgId();
@@ -156,7 +158,7 @@ export class StaffAvailabilityPage implements OnDestroy {
     if (!this.orgId || !this.uid || this.busy()) return;
     if (!this.draftDate || !this.draftStart || !this.draftEnd) return;
     if (this.draftEnd <= this.draftStart) {
-      this.toast.error('End time must be after start time.');
+      this.toast.error(this.i18n.translate('availability.endAfterStart'));
       return;
     }
     this.busy.set(true);
@@ -171,13 +173,13 @@ export class StaffAvailabilityPage implements OnDestroy {
         endTime: this.draftEnd,
         note: this.draftNote.trim() || null,
       });
-      this.toast.success('Availability added.');
+      this.toast.success(this.i18n.translate('availability.availabilityAdded'));
       this.draftDate = '';
       this.draftStart = '';
       this.draftEnd = '';
       this.draftNote = '';
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Unable to add availability.');
+      this.toast.errorFrom(e, this.i18n.translate('availability.addFailed'));
     } finally {
       this.busy.set(false);
     }
@@ -189,7 +191,7 @@ export class StaffAvailabilityPage implements OnDestroy {
     try {
       await this.repo.removeEntry(this.orgId, entry.id);
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Unable to remove availability.');
+      this.toast.errorFrom(e, this.i18n.translate('availability.removeFailed'));
     } finally {
       this.busy.set(false);
     }
