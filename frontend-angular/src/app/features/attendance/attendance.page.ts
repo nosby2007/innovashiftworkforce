@@ -20,25 +20,26 @@ import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map
 import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
+import { TranslocoModule } from '@jsverse/transloco';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, GeofenceMapComponent, TablePaginatorComponent, TipCardComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, GeofenceMapComponent, TablePaginatorComponent, TipCardComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
         <div class="vs-page-title">
-          <h1 class="vs-title">Time & Attendance</h1>
-          <p class="vs-page-subtitle">Log your shift hours and manage active time entries</p>
+          <h1 class="vs-title">{{ 'nav.timeAttendance' | transloco }}</h1>
+          <p class="vs-page-subtitle">{{ 'attendance.subtitle' | transloco }}</p>
         </div>
       </div>
 
-      <app-tip-card tipId="attendance-intro" title="Clocking in with GPS" icon="my_location">
-        Your location is checked against the shift's site when you clock in or out — make sure location access is allowed so the map can confirm you're on-site.
+      <app-tip-card tipId="attendance-intro" [title]="'attendance.tipTitle' | transloco" icon="my_location">
+        {{ 'attendance.tipBody' | transloco }}
       </app-tip-card>
 
       <div *ngIf="!orgId" class="at-no-org vs-glass">
-        <mat-icon>warning_amber</mat-icon> Missing org context.
+        <mat-icon>warning_amber</mat-icon> {{ 'attendance.missingOrgContext' | transloco }}
       </div>
 
       <div *ngIf="orgId" class="at-content">
@@ -148,10 +149,10 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
         <section class="vs-glass-strong at-panel at-current" *ngIf="currentShift() as cs">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Current Shift - In Progress</div>
+              <div class="vs-panel-title">{{ 'attendance.currentShiftInProgress' | transloco }}</div>
               <div class="vs-panel-subtitle">{{ cs.title }} &bull; {{ cs.locationName }}</div>
             </div>
-            <span class="vs-badge vs-badge--warning">In Progress</span>
+            <span class="vs-badge vs-badge--warning">{{ 'attendance.inProgress' | transloco }}</span>
           </div>
           <div class="at-current-row">
             <div class="at-current-info">
@@ -164,22 +165,22 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
             </div>
             <div class="at-current-status" *ngIf="entryId()">
               <span class="vs-dot vs-dot--green"></span>
-              <strong>Active Entry:</strong>
+              <strong>{{ 'attendance.activeEntry' | transloco }}</strong>
               <span class="at-mono">{{ entryId() }}</span>
-              <span *ngIf="onBreak()" class="vs-badge vs-badge--warning">On Break</span>
+              <span *ngIf="onBreak()" class="vs-badge vs-badge--warning">{{ 'attendance.onBreak' | transloco }}</span>
             </div>
           </div>
           <app-geofence-map *ngIf="punchMethod === 'gps' && canUseGps()" [site]="activeSiteForMap()"></app-geofence-map>
 
           <div class="at-actions at-actions-current">
             <button class="vs-btn-ghost at-btn-break" (click)="breakOut()" [disabled]="busy || !entryId() || onBreak()">
-              <mat-icon>pause_circle</mat-icon> Break Out
+              <mat-icon>pause_circle</mat-icon> {{ 'attendance.breakOut' | transloco }}
             </button>
             <button class="vs-btn-ghost at-btn-break" (click)="breakIn()" [disabled]="busy || !entryId() || !onBreak()">
-              <mat-icon>play_circle</mat-icon> Break In
+              <mat-icon>play_circle</mat-icon> {{ 'attendance.breakIn' | transloco }}
             </button>
             <button class="vs-btn-primary at-btn-out" (click)="checkOut()" [disabled]="busy || !entryId()">
-              <mat-icon>logout</mat-icon> Clock Out
+              <mat-icon>logout</mat-icon> {{ 'attendance.clockOut' | transloco }}
             </button>
           </div>
         </section>
@@ -187,8 +188,8 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
         <section class="vs-glass-strong at-panel" *ngIf="todaysSchedule().length > 0 && !currentShift()">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">My Upcoming Shifts</div>
-              <div class="vs-panel-subtitle">Today's shift — clock in when you're ready</div>
+              <div class="vs-panel-title">{{ 'attendance.myUpcomingShifts' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'attendance.todaysShiftClockIn' | transloco }}</div>
             </div>
             <mat-icon style="color:var(--primary);">event</mat-icon>
           </div>
@@ -202,10 +203,10 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
               <div class="at-loc"><mat-icon>location_on</mat-icon>{{ s.locationName }}</div>
               <div class="at-schedule-card-actions">
                 <button class="vs-btn-primary at-btn-in" (click)="clockInToShift(s)" [disabled]="busy">
-                  <mat-icon>login</mat-icon> Clock In
+                  <mat-icon>login</mat-icon> {{ 'attendance.clockIn' | transloco }}
                 </button>
                 <button class="vs-btn-ghost at-btn-callout" (click)="openCallOut(s)" [disabled]="busy">
-                  <mat-icon>event_busy</mat-icon> Call Out
+                  <mat-icon>event_busy</mat-icon> {{ 'attendance.callOut' | transloco }}
                 </button>
               </div>
             </div>
@@ -214,15 +215,15 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
           <div class="at-callout-form vs-glass" *ngIf="callOutTargetShift">
             <div class="at-callout-form-title">
               <mat-icon>event_busy</mat-icon>
-              Call Out — <span>{{ callOutTargetShift.title }}</span>
+              {{ 'attendance.callOutTitle' | transloco }} <span>{{ callOutTargetShift.title }}</span>
             </div>
-            <p class="at-callout-help">This immediately removes you from the shift, puts it back on the marketplace, and notifies your admin.</p>
-            <label class="vs-field-label">Reason (optional)</label>
-            <input class="vs-input" [(ngModel)]="callOutReason" placeholder="Feeling sick, family emergency…" aria-label="Call-out reason">
+            <p class="at-callout-help">{{ 'attendance.callOutHelp' | transloco }}</p>
+            <label class="vs-field-label">{{ 'attendance.reasonOptional' | transloco }}</label>
+            <input class="vs-input" [(ngModel)]="callOutReason" [placeholder]="'attendance.callOutPlaceholder' | transloco" [attr.aria-label]="'attendance.reasonOptional' | transloco">
             <div class="at-callout-form-actions">
-              <button class="vs-btn-ghost" (click)="cancelCallOut()" [disabled]="callOutBusy">Cancel</button>
+              <button class="vs-btn-ghost" (click)="cancelCallOut()" [disabled]="callOutBusy">{{ 'common.cancel' | transloco }}</button>
               <button class="vs-btn-primary" (click)="submitCallOut()" [disabled]="callOutBusy">
-                {{ callOutBusy ? 'Calling out…' : 'Confirm Call Out' }}
+                {{ callOutBusy ? ('attendance.callingOut' | transloco) : ('attendance.confirmCallOut' | transloco) }}
               </button>
             </div>
           </div>
@@ -231,8 +232,8 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
         <section class="vs-glass-strong at-panel" *ngIf="!currentShift()">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Manual Punch</div>
-              <div class="vs-panel-subtitle">Select one of your shifts to clock in</div>
+              <div class="vs-panel-title">{{ 'attendance.manualPunch' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'attendance.selectShiftToClockIn' | transloco }}</div>
             </div>
             <mat-icon style="color:var(--primary);">timer</mat-icon>
           </div>
@@ -240,13 +241,13 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
           <div class="at-form">
             <div class="at-mode-card" *ngIf="gpsRequired() || canUseGps()">
               <div>
-                <div class="vs-field-label">Attendance Verification</div>
-                <div class="vs-muted" *ngIf="gpsRequired()">This organization requires GPS-verified attendance.</div>
-                <div class="vs-muted" *ngIf="!gpsRequired()">Use GPS for on-site punches or manual for standard workflows.</div>
+                <div class="vs-field-label">{{ 'attendance.attendanceVerification' | transloco }}</div>
+                <div class="vs-muted" *ngIf="gpsRequired()">{{ 'attendance.gpsRequiredNote' | transloco }}</div>
+                <div class="vs-muted" *ngIf="!gpsRequired()">{{ 'attendance.gpsOptionalNote' | transloco }}</div>
               </div>
               <div class="at-mode-toggle">
-                <button class="vs-btn-ghost" [class.at-mode-active]="punchMethod==='manual'" (click)="setPunchMethod('manual')" [disabled]="busy || gpsRequired()">Manual</button>
-                <button class="vs-btn-ghost" [class.at-mode-active]="punchMethod==='gps'" (click)="setPunchMethod('gps')" [disabled]="busy || !canUseGps()">GPS Verified</button>
+                <button class="vs-btn-ghost" [class.at-mode-active]="punchMethod==='manual'" (click)="setPunchMethod('manual')" [disabled]="busy || gpsRequired()">{{ 'attendance.manual' | transloco }}</button>
+                <button class="vs-btn-ghost" [class.at-mode-active]="punchMethod==='gps'" (click)="setPunchMethod('gps')" [disabled]="busy || !canUseGps()">{{ 'attendance.gpsVerified' | transloco }}</button>
               </div>
             </div>
 
@@ -255,20 +256,20 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
             <div class="at-upgrade-card" *ngIf="!canUseGps() && !gpsRequired()">
               <mat-icon>workspace_premium</mat-icon>
               <div>
-                <strong>Upgrade to Pro</strong>
-                <div>GPS attendance and geofence validation are available on Pro and Enterprise plans.</div>
+                <strong>{{ 'attendance.upgradeToPro' | transloco }}</strong>
+                <div>{{ 'attendance.upgradeToProBody' | transloco }}</div>
               </div>
             </div>
 
             <div class="vs-form-row">
               <div>
-                <label class="vs-field-label">Shift *</label>
+                <label class="vs-field-label">{{ 'attendance.shiftRequired' | transloco }}</label>
                 <input
                   class="vs-input at-input"
                   [(ngModel)]="shiftSelection"
                   (ngModelChange)="onShiftSelectionChange($event)"
                   list="attendance-shift-options"
-                  placeholder="Type date, title or location"
+                  [placeholder]="'attendance.shiftPlaceholder' | transloco"
                   [disabled]="!!entryId()">
                 <datalist id="attendance-shift-options">
                   <option *ngFor="let s of mySchedule()" [value]="toShiftOptionLabel(s)"></option>
@@ -278,7 +279,7 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
 
             <div class="at-actions">
               <button class="vs-btn-primary at-btn-in" (click)="checkIn()" [disabled]="busy || !shiftId || !!entryId()">
-                <mat-icon>login</mat-icon> Clock In
+                <mat-icon>login</mat-icon> {{ 'attendance.clockIn' | transloco }}
               </button>
             </div>
           </div>
@@ -286,19 +287,19 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
 
         <div class="vs-grid-3 at-kpis" *ngIf="entries().length > 0">
           <div class="vs-stat-card vs-stat--primary">
-            <div class="vs-stat-label">Hours Logged</div>
+            <div class="vs-stat-label">{{ 'attendance.hoursLogged' | transloco }}</div>
             <div class="vs-stat-value">{{ totalHours().toFixed(2) }}</div>
           </div>
           <div class="vs-stat-card vs-stat--success">
-            <div class="vs-stat-label">Estimated Earnings</div>
+            <div class="vs-stat-label">{{ 'attendance.estimatedEarnings' | transloco }}</div>
             <div class="vs-stat-value">{{ totalEarnings() | currency:moneyCurrency():'symbol':'1.2-2' }}</div>
           </div>
           <div class="vs-stat-card vs-stat--warning">
-            <div class="vs-stat-label">Pending Fixes</div>
+            <div class="vs-stat-label">{{ 'attendance.pendingFixes' | transloco }}</div>
             <div class="vs-stat-value">{{ pendingFixCount() }}</div>
           </div>
           <div class="vs-stat-card vs-stat--danger">
-            <div class="vs-stat-label">Anomalies</div>
+            <div class="vs-stat-label">{{ 'attendance.anomalies' | transloco }}</div>
             <div class="vs-stat-value">{{ anomalyCount() }}</div>
           </div>
         </div>
@@ -306,37 +307,37 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
         <section class="vs-glass-strong at-panel">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Recent Punches</div>
-              <div class="vs-panel-subtitle">Your time entries for this week</div>
+              <div class="vs-panel-title">{{ 'attendance.recentPunches' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'attendance.yourTimeEntriesThisWeek' | transloco }}</div>
             </div>
           </div>
           <div class="at-table-toolbar" *ngIf="entries().length > 0">
             <input
               class="at-table-search"
               type="search"
-              placeholder="Search recent punches…"
+              [placeholder]="'attendance.searchRecentPunches' | transloco"
               [value]="punchesCtrl.filterText()"
               (input)="punchesCtrl.setFilter($any($event.target).value)"
-              aria-label="Search recent punches">
+              [attr.aria-label]="'attendance.searchRecentPunches' | transloco">
           </div>
           <div class="vs-table-shell at-table-shell">
             <table class="vs-table at-table">
               <caption class="sr-only">Recent punches with calculated hours, estimated pay, status and anomaly warnings.</caption>
               <thead>
                 <tr>
-                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('shift')">Shift <span>{{ punchesCtrl.sortIndicator('shift') }}</span></th>
-                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('checkInAt')">Clock In <span>{{ punchesCtrl.sortIndicator('checkInAt') }}</span></th>
-                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('checkOutAt')">Clock Out <span>{{ punchesCtrl.sortIndicator('checkOutAt') }}</span></th>
-                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('hours')">Hours <span>{{ punchesCtrl.sortIndicator('hours') }}</span></th>
-                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('pay')">Est. Pay <span>{{ punchesCtrl.sortIndicator('pay') }}</span></th>
-                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('status')">Status <span>{{ punchesCtrl.sortIndicator('status') }}</span></th>
-                  <th>Anomalies</th>
-                  <th>Actions</th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('shift')">{{ 'attendance.colShift' | transloco }} <span>{{ punchesCtrl.sortIndicator('shift') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('checkInAt')">{{ 'attendance.colClockIn' | transloco }} <span>{{ punchesCtrl.sortIndicator('checkInAt') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('checkOutAt')">{{ 'attendance.colClockOut' | transloco }} <span>{{ punchesCtrl.sortIndicator('checkOutAt') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('hours')">{{ 'attendance.colHours' | transloco }} <span>{{ punchesCtrl.sortIndicator('hours') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('pay')">{{ 'attendance.colEstPay' | transloco }} <span>{{ punchesCtrl.sortIndicator('pay') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('status')">{{ 'attendance.colStatus' | transloco }} <span>{{ punchesCtrl.sortIndicator('status') }}</span></th>
+                  <th>{{ 'attendance.colAnomalies' | transloco }}</th>
+                  <th>{{ 'attendance.colActions' | transloco }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr class="vs-empty" *ngIf="punchesCtrl.pageRows().length===0">
-                  <td colspan="8">No recent time entries.</td>
+                  <td colspan="8">{{ 'attendance.noRecentEntries' | transloco }}</td>
                 </tr>
                 <tr *ngFor="let e of punchesCtrl.pageRows(); let i = index; trackBy: trackByEntry" class="vs-row"
                     [class.at-row--pending]="e.exceptionStatus==='pending'"
@@ -367,10 +368,10 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
                             (click)="openFixRequest(e)"
                             [disabled]="busy || e.exceptionStatus==='pending'"
                             *ngIf="e.exceptionStatus !== 'pending'">
-                      <mat-icon>edit_note</mat-icon> Request Fix
+                      <mat-icon>edit_note</mat-icon> {{ 'attendance.requestFix' | transloco }}
                     </button>
                     <span class="at-pending-chip" *ngIf="e.exceptionStatus==='pending'">
-                      <mat-icon>hourglass_top</mat-icon> Pending Review
+                      <mat-icon>hourglass_top</mat-icon> {{ 'attendance.pendingReview' | transloco }}
                     </span>
                   </td>
                 </tr>
@@ -384,8 +385,8 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
         <section class="vs-glass-strong at-panel" *ngIf="corrections.length > 0 || fixRequestEntry">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">My Correction Requests</div>
-              <div class="vs-panel-subtitle">Track your submitted requests and their status</div>
+              <div class="vs-panel-title">{{ 'attendance.myCorrectionRequests' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'attendance.trackSubmittedRequests' | transloco }}</div>
             </div>
             <mat-icon style="color:var(--warning);">pending_actions</mat-icon>
           </div>
@@ -394,42 +395,42 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
           <div class="at-fix-form" *ngIf="fixRequestEntry">
             <div class="at-fix-form-title">
               <mat-icon>edit_calendar</mat-icon>
-              Request Correction — <span>{{ shiftLabel(fixRequestEntry.shiftId) }}</span>
+              {{ 'attendance.requestCorrectionTitle' | transloco }} <span>{{ shiftLabel(fixRequestEntry.shiftId) }}</span>
             </div>
             <div class="at-fix-form-body">
               <div class="vs-form-row at-fix-form-row">
                 <div>
-                  <label class="vs-field-label">Correction Type *</label>
-                  <select class="vs-input" [(ngModel)]="fixCategory" (ngModelChange)="onFixCategoryChange()" aria-label="Correction type">
-                    <option value="missed_punch">Missed punch</option>
-                    <option value="wrong_hours">Wrong working hours</option>
-                    <option value="missed_break">Missed or wrong break</option>
-                    <option value="site_mismatch">Wrong site/location</option>
-                    <option value="other">Other</option>
+                  <label class="vs-field-label">{{ 'attendance.correctionType' | transloco }}</label>
+                  <select class="vs-input" [(ngModel)]="fixCategory" (ngModelChange)="onFixCategoryChange()" [attr.aria-label]="'attendance.correctionType' | transloco">
+                    <option value="missed_punch">{{ 'attendance.missedPunch' | transloco }}</option>
+                    <option value="wrong_hours">{{ 'attendance.wrongHours' | transloco }}</option>
+                    <option value="missed_break">{{ 'attendance.missedBreak' | transloco }}</option>
+                    <option value="site_mismatch">{{ 'attendance.siteMismatch' | transloco }}</option>
+                    <option value="other">{{ 'attendance.other' | transloco }}</option>
                   </select>
                 </div>
               </div>
               <div class="vs-form-row at-fix-form-row">
                 <div>
-                  <label class="vs-field-label">Reason *</label>
-                  <input class="vs-input" [(ngModel)]="fixReason" placeholder="Missed punch, wrong times, missed lunch break…" aria-label="Correction reason">
+                  <label class="vs-field-label">{{ 'attendance.reasonRequired' | transloco }}</label>
+                  <input class="vs-input" [(ngModel)]="fixReason" [placeholder]="'attendance.reasonPlaceholder' | transloco" [attr.aria-label]="'attendance.reasonRequired' | transloco">
                   <div class="at-guidance" *ngIf="fixHint()">{{ fixHint() }}</div>
                 </div>
               </div>
               <div class="vs-form-row at-fix-form-row">
                 <div>
-                  <label class="vs-field-label">Proposed Check-In (optional)</label>
-                  <input type="datetime-local" class="vs-input" [(ngModel)]="fixProposedIn" aria-label="Proposed check-in">
+                  <label class="vs-field-label">{{ 'attendance.proposedCheckIn' | transloco }}</label>
+                  <input type="datetime-local" class="vs-input" [(ngModel)]="fixProposedIn" [attr.aria-label]="'attendance.proposedCheckIn' | transloco">
                 </div>
                 <div>
-                  <label class="vs-field-label">Proposed Check-Out (optional)</label>
-                  <input type="datetime-local" class="vs-input" [(ngModel)]="fixProposedOut" aria-label="Proposed check-out">
+                  <label class="vs-field-label">{{ 'attendance.proposedCheckOut' | transloco }}</label>
+                  <input type="datetime-local" class="vs-input" [(ngModel)]="fixProposedOut" [attr.aria-label]="'attendance.proposedCheckOut' | transloco">
                 </div>
               </div>
               <div class="at-fix-form-actions">
-                <button class="vs-btn-ghost" (click)="cancelFixRequest()" [disabled]="busy">Cancel</button>
-                <button class="vs-btn-primary" (click)="submitFixRequest()" [disabled]="busy || !isFixRequestValid()" aria-label="Submit correction request">
-                  <mat-icon>send</mat-icon> {{ busy ? 'Sending…' : 'Submit Request' }}
+                <button class="vs-btn-ghost" (click)="cancelFixRequest()" [disabled]="busy">{{ 'common.cancel' | transloco }}</button>
+                <button class="vs-btn-primary" (click)="submitFixRequest()" [disabled]="busy || !isFixRequestValid()" [attr.aria-label]="'attendance.submitRequest' | transloco">
+                  <mat-icon>send</mat-icon> {{ busy ? ('attendance.sending' | transloco) : ('attendance.submitRequest' | transloco) }}
                 </button>
               </div>
             </div>

@@ -21,6 +21,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { SchedulerCommands } from '../../core/commands/scheduler.commands';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { ToastService } from '../../core/ui/toast.service';
+import { TranslocoModule } from '@jsverse/transloco';
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -102,24 +103,25 @@ const STATUS_BADGE: Record<string, string> = {
     MatSelectModule,
     MatCheckboxModule,
     MatProgressSpinnerModule,
+    TranslocoModule,
   ],
   template: `
     <div class="sched-page">
       <header class="sched-header">
-        <h1>My Schedule</h1>
+        <h1>{{ 'nav.mySchedule' | transloco }}</h1>
         <div class="sched-actions">
           <details class="sched-request-menu">
-            <summary>Request <mat-icon>expand_more</mat-icon></summary>
-            <button (click)="go('/app/accruals')">Time-off</button>
-            <button (click)="go('/app/dashboard')">Swap shifts</button>
-            <button (click)="go('/app/marketplace')">Open shift</button>
-            <button (click)="go('/app/availability')">My availability</button>
-            <button (click)="clearFilters()">Browse all shifts</button>
+            <summary>{{ 'schedule.request' | transloco }} <mat-icon>expand_more</mat-icon></summary>
+            <button (click)="go('/app/accruals')">{{ 'schedule.timeOff' | transloco }}</button>
+            <button (click)="go('/app/dashboard')">{{ 'schedule.swapShifts' | transloco }}</button>
+            <button (click)="go('/app/marketplace')">{{ 'schedule.openShift' | transloco }}</button>
+            <button (click)="go('/app/availability')">{{ 'nav.myAvailability' | transloco }}</button>
+            <button (click)="clearFilters()">{{ 'schedule.browseAllShifts' | transloco }}</button>
           </details>
-          <button class="sched-icon" (click)="picker.open()" aria-label="Pick date"><mat-icon>tune</mat-icon></button>
-          <button class="sched-icon" (click)="resetAndLoad()" aria-label="Refresh"><mat-icon>refresh</mat-icon></button>
+          <button class="sched-icon" (click)="picker.open()" [attr.aria-label]="'schedule.pickDate' | transloco"><mat-icon>tune</mat-icon></button>
+          <button class="sched-icon" (click)="resetAndLoad()" [attr.aria-label]="'schedule.refresh' | transloco"><mat-icon>refresh</mat-icon></button>
           <mat-form-field class="vs-hidden-date" appearance="outline">
-            <input matInput [matDatepicker]="picker" (dateChange)="onDatePicked($event)" aria-label="Pick date" />
+            <input matInput [matDatepicker]="picker" (dateChange)="onDatePicked($event)" [attr.aria-label]="'schedule.pickDate' | transloco" />
             <mat-datepicker #picker></mat-datepicker>
           </mat-form-field>
         </div>
@@ -129,12 +131,12 @@ const STATUS_BADGE: Record<string, string> = {
         <aside class="sched-mini">
           <div class="sched-mini-head">
             <strong>{{ rangeStartMonth() }}</strong>
-            <button (click)="prevRange()" aria-label="Previous"><mat-icon>chevron_left</mat-icon></button>
-            <button (click)="nextRange()" aria-label="Next"><mat-icon>chevron_right</mat-icon></button>
+            <button (click)="prevRange()" [attr.aria-label]="'schedule.previous' | transloco"><mat-icon>chevron_left</mat-icon></button>
+            <button (click)="nextRange()" [attr.aria-label]="'schedule.next' | transloco"><mat-icon>chevron_right</mat-icon></button>
           </div>
-          <button class="sched-today" (click)="goToday()">Today</button>
+          <button class="sched-today" (click)="goToday()">{{ 'schedule.today' | transloco }}</button>
           <div class="sched-weekdays">
-            <span *ngFor="let d of ['Fri','Sat','Sun','Mon','Tue','Wed','Thu']">{{ d }}</span>
+            <span *ngFor="let d of ('schedule.weekdaysShort' | transloco)">{{ d }}</span>
           </div>
           <div class="sched-days">
             <button *ngFor="let d of calendarDays()"
@@ -149,24 +151,24 @@ const STATUS_BADGE: Record<string, string> = {
 
         <main class="sched-list-card">
           <div class="sched-list-tools">
-            <input [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event); onSearch()" placeholder="Search schedule">
+            <input [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event); onSearch()" [placeholder]="'schedule.searchSchedule' | transloco">
             <select [(ngModel)]="statusFilter" (change)="resetAndLoad()">
-              <option value="">All statuses</option>
-              <option value="open">Open</option>
-              <option value="published">Published</option>
-              <option value="assigned">Assigned</option>
-              <option value="claimed">Claimed</option>
-              <option value="completed">Completed</option>
+              <option value="">{{ 'schedule.statusAll' | transloco }}</option>
+              <option value="open">{{ 'schedule.statusOpen' | transloco }}</option>
+              <option value="published">{{ 'schedule.statusPublished' | transloco }}</option>
+              <option value="assigned">{{ 'schedule.statusAssigned' | transloco }}</option>
+              <option value="claimed">{{ 'schedule.statusClaimed' | transloco }}</option>
+              <option value="completed">{{ 'schedule.statusCompleted' | transloco }}</option>
             </select>
           </div>
 
           <div class="sched-summary">
             <span>{{ rangeLabel() }}</span>
-            <strong>{{ totalHours() }} scheduled hours</strong>
+            <strong>{{ 'schedule.scheduledHours' | transloco: { hours: totalHours() } }}</strong>
           </div>
 
-          <div class="sched-empty" *ngIf="!loading() && displayRows().length === 0">No shifts found for this range.</div>
-          <div class="sched-empty" *ngIf="loading() && displayRows().length === 0">Loading schedule...</div>
+          <div class="sched-empty" *ngIf="!loading() && displayRows().length === 0">{{ 'schedule.noShiftsFound' | transloco }}</div>
+          <div class="sched-empty" *ngIf="loading() && displayRows().length === 0">{{ 'schedule.loadingSchedule' | transloco }}</div>
 
           <button *ngFor="let row of displayRows()"
                   class="sched-row"
@@ -178,7 +180,7 @@ const STATUS_BADGE: Record<string, string> = {
             </div>
             <div class="sched-shift">
               <div class="sched-open" *ngIf="row.assignment === 'OPEN'">
-                <i></i> Open shifts are available
+                <i></i> {{ 'schedule.openShiftsAvailable' | transloco }}
               </div>
               <div class="sched-shift-title">
                 <mat-icon>{{ row.assignment === 'OPEN' ? 'local_offer' : 'spa' }}</mat-icon>
@@ -194,15 +196,15 @@ const STATUS_BADGE: Record<string, string> = {
           <div class="vs-load-more" *ngIf="hasMore()">
             <button mat-stroked-button (click)="loadMore()" [disabled]="loading()">
               <mat-icon>expand_more</mat-icon>
-              Load more
+              {{ 'schedule.loadMore' | transloco }}
             </button>
           </div>
         </main>
 
         <div class="sched-backdrop" *ngIf="selectedRow()" (click)="selectedId.set(null)"></div>
         <aside class="sched-detail" *ngIf="selectedRow() as row">
-          <button class="sched-detail-close" (click)="selectedId.set(null)" aria-label="Close"><mat-icon>close</mat-icon></button>
-          <h2>Your Shift</h2>
+          <button class="sched-detail-close" (click)="selectedId.set(null)" [attr.aria-label]="'schedule.close' | transloco"><mat-icon>close</mat-icon></button>
+          <h2>{{ 'schedule.yourShift' | transloco }}</h2>
           <div class="sched-detail-title">
             <mat-icon>spa</mat-icon>
             {{ row.position }} {{ row.shiftLabel }}
@@ -210,11 +212,11 @@ const STATUS_BADGE: Record<string, string> = {
           <div class="sched-detail-meta">{{ row.date | date:'EEE M/d' }}</div>
           <div class="sched-detail-meta">{{ row.location }}</div>
           <div class="sched-detail-section">
-            <strong>When</strong>
+            <strong>{{ 'schedule.when' | transloco }}</strong>
             <span>{{ row.date | date:'EEE M/d' }}</span>
           </div>
-          <button class="sched-outline" (click)="go('/app/dashboard')">Swap my shift</button>
-          <button class="sched-outline" (click)="go('/app/accruals')">Request time off</button>
+          <button class="sched-outline" (click)="go('/app/dashboard')">{{ 'schedule.swapMyShift' | transloco }}</button>
+          <button class="sched-outline" (click)="go('/app/accruals')">{{ 'schedule.requestTimeOff' | transloco }}</button>
         </aside>
       </div>
     </div>
@@ -541,15 +543,16 @@ export class SchedulePage {
     MatFormFieldModule,
     MatInputModule,
     MatDividerModule,
+    TranslocoModule,
   ],
   template: `
     <div class="vs-dialog">
       <div class="vs-dialog-header">
         <div>
-          <div class="vs-dialog-title">Share Shift to Marketplace</div>
-          <div class="vs-dialog-subtitle">Once published, staff can see and claim this shift.</div>
+          <div class="vs-dialog-title">{{ 'scheduleDialog.title' | transloco }}</div>
+          <div class="vs-dialog-subtitle">{{ 'scheduleDialog.subtitle' | transloco }}</div>
         </div>
-        <button mat-icon-button class="vs-icon-btn" (click)="close(false)" aria-label="Close">
+        <button mat-icon-button class="vs-icon-btn" (click)="close(false)" [attr.aria-label]="'common.close' | transloco">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -557,45 +560,45 @@ export class SchedulePage {
       <div class="vs-dialog-alert">
         <mat-icon class="vs-alert-icon">warning_amber</mat-icon>
         <div class="vs-alert-text">
-          <div class="vs-alert-head">Confirm before publishing</div>
-          <div class="vs-alert-body">Staff will be notified and can claim this shift.</div>
+          <div class="vs-alert-head">{{ 'scheduleDialog.confirmHead' | transloco }}</div>
+          <div class="vs-alert-body">{{ 'scheduleDialog.confirmBody' | transloco }}</div>
         </div>
       </div>
 
       <div class="vs-shift-summary">
         <div class="vs-summary-row">
-          <span class="vs-label">Date</span>
+          <span class="vs-label">{{ 'scheduleDialog.date' | transloco }}</span>
           <span class="vs-value">{{ data.date | date:'EEE, MMM d, y' }}</span>
         </div>
         <div class="vs-summary-row">
-          <span class="vs-label">Shift</span>
+          <span class="vs-label">{{ 'scheduleDialog.shift' | transloco }}</span>
           <span class="vs-value">{{ data.shiftLabel }} ({{ data.hours }}h)</span>
         </div>
         <div class="vs-summary-row">
-          <span class="vs-label">Projected</span>
+          <span class="vs-label">{{ 'scheduleDialog.projected' | transloco }}</span>
           <span class="vs-value vs-strong">{{ data.projected | currency:moneyCurrency() }}</span>
         </div>
         <mat-divider></mat-divider>
         <div class="vs-summary-row">
-          <span class="vs-label">Position</span>
+          <span class="vs-label">{{ 'scheduleDialog.position' | transloco }}</span>
           <span class="vs-value">{{ data.position }}</span>
         </div>
         <div class="vs-summary-row">
-          <span class="vs-label">Location</span>
+          <span class="vs-label">{{ 'scheduleDialog.location' | transloco }}</span>
           <span class="vs-value">{{ data.location }}</span>
         </div>
       </div>
 
       <mat-form-field appearance="outline" class="vs-note">
-        <mat-label>Optional note</mat-label>
-        <input matInput [(ngModel)]="note" placeholder="e.g. Please arrive 10 min early" />
+        <mat-label>{{ 'scheduleDialog.optionalNote' | transloco }}</mat-label>
+        <input matInput [(ngModel)]="note" [placeholder]="'scheduleDialog.notePlaceholder' | transloco" />
       </mat-form-field>
 
       <div class="vs-dialog-actions">
-        <button mat-button (click)="close(false)">Cancel</button>
+        <button mat-button (click)="close(false)">{{ 'common.cancel' | transloco }}</button>
         <button mat-flat-button class="vs-btn-primary" (click)="close(true)">
           <mat-icon>send</mat-icon>
-          Publish Shift
+          {{ 'scheduleDialog.publishShift' | transloco }}
         </button>
       </div>
     </div>
