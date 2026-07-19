@@ -14,6 +14,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { PlanEntitlementsService, PlanFeature } from '../../core/tenancy/plan-entitlements.service';
 import { getAuth, signOut } from 'firebase/auth';
+import { TranslocoModule } from '@jsverse/transloco';
+import { LanguageSwitcherComponent } from '../../core/i18n/language-switcher.component';
 
 type ShellMode = 'staff' | 'admin' | 'platform';
 type NavSection = 'workspace' | 'admin' | 'platform' | 'account';
@@ -29,37 +31,40 @@ type NavItem = {
   roles?: string[];
 };
 
+// Values are translation keys (routeTitles.*), not literal text — the
+// template resolves them via the `transloco` pipe so the toolbar title
+// reacts to language changes.
 const ROUTE_TITLES: Record<string, string> = {
-  '/app/dashboard':               'Dashboard',
-  '/app/onboarding':              'Staff Onboarding',
-  '/app/schedule':                'My Schedule',
-  '/app/availability':            'My Availability',
-  '/app/marketplace':             'Shift Marketplace',
-  '/app/attendance':              'Time & Attendance',
-  '/app/accruals':                'My Accruals',
-  '/app/payroll':                 'My Payroll',
-  '/app/profile':                 'My Profile',
-  '/app/documents':               'Document Center',
-  '/app/messages':                'Message Center',
-  '/app/shift-chat':              'Shift Live Chat',
-  '/app/notifications':           'Notifications',
-  '/app/settings':                'Settings',
-  '/admin':                       'Admin Dashboard',
-  '/admin/scheduler':             'Scheduler',
-  '/admin/timesheets':            'Timesheets',
-  '/admin/payroll':               'Payroll',
-  '/admin/pto':                   'PTO Requests',
-  '/admin/documents':             'Document Verification',
-  '/admin/readiness':             'Launch Readiness',
-  '/admin/audit':                 'Audit Log',
-  '/admin/ai-copilot':            'AI Copilot',
-  '/admin/employees':             'Employees',
-  '/admin/availability':          'Staff Availability',
-  '/admin/schedule-details':      'Schedule Details',
-  '/admin/org-settings':          'Organization Settings',
-  '/admin/settings':              'Admin Settings',
-  '/platform':                    'Platform Administration',
-  '/platform/settings':           'Platform Settings',
+  '/app/dashboard':               'routeTitles.dashboard',
+  '/app/onboarding':              'routeTitles.onboarding',
+  '/app/schedule':                'routeTitles.schedule',
+  '/app/availability':            'routeTitles.availability',
+  '/app/marketplace':             'routeTitles.marketplace',
+  '/app/attendance':              'routeTitles.attendance',
+  '/app/accruals':                'routeTitles.accruals',
+  '/app/payroll':                 'routeTitles.payroll',
+  '/app/profile':                 'routeTitles.profile',
+  '/app/documents':               'routeTitles.documents',
+  '/app/messages':                'routeTitles.messages',
+  '/app/shift-chat':              'routeTitles.shiftChat',
+  '/app/notifications':           'routeTitles.notifications',
+  '/app/settings':                'routeTitles.settings',
+  '/admin':                       'routeTitles.adminDashboard',
+  '/admin/scheduler':             'routeTitles.adminScheduler',
+  '/admin/timesheets':            'routeTitles.adminTimesheets',
+  '/admin/payroll':               'routeTitles.adminPayroll',
+  '/admin/pto':                   'routeTitles.adminPto',
+  '/admin/documents':             'routeTitles.adminDocuments',
+  '/admin/readiness':             'routeTitles.adminReadiness',
+  '/admin/audit':                 'routeTitles.adminAudit',
+  '/admin/ai-copilot':            'routeTitles.adminAiCopilot',
+  '/admin/employees':             'routeTitles.adminEmployees',
+  '/admin/availability':          'routeTitles.adminAvailability',
+  '/admin/schedule-details':      'routeTitles.adminScheduleDetails',
+  '/admin/org-settings':          'routeTitles.adminOrgSettings',
+  '/admin/settings':              'routeTitles.adminSettings',
+  '/platform':                    'routeTitles.platform',
+  '/platform/settings':           'routeTitles.platformSettings',
 };
 
 @Component({
@@ -77,6 +82,8 @@ const ROUTE_TITLES: Record<string, string> = {
     MatMenuModule,
     MatDividerModule,
     MatTooltipModule,
+    TranslocoModule,
+    LanguageSwitcherComponent,
   ],
   template: `
     <mat-sidenav-container class="l-shell" [class.shell-platform]="shellMode() === 'platform'">
@@ -100,71 +107,71 @@ const ROUTE_TITLES: Record<string, string> = {
         <nav class="l-nav" role="navigation" aria-label="Main navigation">
 
           <ng-container *ngIf="shellMode() === 'staff'">
-            <div class="l-nav-section-title">Staff Workspace</div>
+            <div class="l-nav-section-title">{{ 'shell.staffWorkspace' | transloco }}</div>
             <a *ngFor="let item of workspaceNav"
                class="l-nav-item"
                [routerLink]="item.link"
                routerLinkActive="is-active"
                [routerLinkActiveOptions]="{ exact: item.link === '/app/dashboard' }"
-               [matTooltip]="item.label"
+               [matTooltip]="item.label | transloco"
                matTooltipPosition="right">
               <mat-icon class="l-nav-icon">{{ item.icon }}</mat-icon>
-              <span class="l-nav-label">{{ item.label }}</span>
+              <span class="l-nav-label">{{ item.label | transloco }}</span>
             </a>
 
             <a *ngIf="isAdminLike()"
                class="l-nav-item l-nav-item--admin-bridge"
                routerLink="/admin"
-               matTooltip="Admin Dashboard"
+               [matTooltip]="'nav.adminDashboard' | transloco"
                matTooltipPosition="right">
               <mat-icon class="l-nav-icon">admin_panel_settings</mat-icon>
-              <span class="l-nav-label">Admin Dashboard</span>
+              <span class="l-nav-label">{{ 'nav.adminDashboard' | transloco }}</span>
             </a>
 
             <mat-divider class="l-divider"></mat-divider>
           </ng-container>
 
           <ng-container *ngIf="shellMode() === 'admin'">
-            <div class="l-nav-section-title">Administration</div>
+            <div class="l-nav-section-title">{{ 'shell.administration' | transloco }}</div>
             <a *ngFor="let item of visibleAdminNav()"
                class="l-nav-item"
                [routerLink]="item.link"
                routerLinkActive="is-active"
                [routerLinkActiveOptions]="{ exact: item.link === '/admin' }"
-               [matTooltip]="item.label"
+               [matTooltip]="item.label | transloco"
                matTooltipPosition="right">
               <mat-icon class="l-nav-icon">{{ item.icon }}</mat-icon>
-              <span class="l-nav-label">{{ item.label }}</span>
+              <span class="l-nav-label">{{ item.label | transloco }}</span>
             </a>
             <a class="l-nav-item l-nav-item--staff-bridge"
                routerLink="/app/schedule"
-               matTooltip="View my staff schedule"
+               [matTooltip]="'shell.viewMyStaffSchedule' | transloco"
                matTooltipPosition="right">
               <mat-icon class="l-nav-icon">badge</mat-icon>
-              <span class="l-nav-label">My Staff Schedule</span>
+              <span class="l-nav-label">{{ 'shell.myStaffSchedule' | transloco }}</span>
             </a>
             <mat-divider class="l-divider"></mat-divider>
           </ng-container>
 
           <ng-container *ngIf="shellMode() === 'platform'">
-            <div class="l-nav-section-title">Platform Console</div>
+            <div class="l-nav-section-title">{{ 'shell.platformConsole' | transloco }}</div>
             <a *ngFor="let item of platformNav"
                class="l-nav-item"
                [routerLink]="item.link"
                routerLinkActive="is-active"
                [routerLinkActiveOptions]="{ exact: item.link === '/platform' }"
-               [matTooltip]="item.label"
+               [matTooltip]="item.label | transloco"
                matTooltipPosition="right">
               <mat-icon class="l-nav-icon">{{ item.icon }}</mat-icon>
-              <span class="l-nav-label">{{ item.label }}</span>
+              <span class="l-nav-label">{{ item.label | transloco }}</span>
             </a>
             <mat-divider class="l-divider"></mat-divider>
           </ng-container>
 
-          <div class="l-nav-section-title">Account</div>
+          <div class="l-nav-section-title">{{ 'shell.account' | transloco }}</div>
           <a class="l-nav-item" [routerLink]="settingsLink()" routerLinkActive="is-active">
             <mat-icon class="l-nav-icon">settings</mat-icon>
-            <span class="l-nav-label">Settings</span>
+            <span class="l-nav-label">{{ 'shell.settings' | transloco }}</span>
           </a>
         </nav>
 
@@ -180,8 +187,8 @@ const ROUTE_TITLES: Record<string, string> = {
           </div>
           <button mat-icon-button class="l-logout-btn"
                   (click)="logout()"
-                  matTooltip="Sign out"
-                  aria-label="Sign out">
+                  [matTooltip]="'shell.signOut' | transloco"
+                  [attr.aria-label]="'shell.signOut' | transloco">
             <mat-icon>logout</mat-icon>
           </button>
         </div>
@@ -194,13 +201,13 @@ const ROUTE_TITLES: Record<string, string> = {
         <mat-toolbar class="l-toolbar">
           <button mat-icon-button class="l-burger"
                   (click)="toggleSidenav()"
-                  aria-label="Toggle navigation">
+                  [attr.aria-label]="'shell.toggleNavigation' | transloco">
             <mat-icon>{{ opened ? 'menu_open' : 'menu' }}</mat-icon>
           </button>
 
           <div class="l-toolbar-left">
-            <div class="l-toolbar-title">{{ pageTitle() }}</div>
-            <div class="l-toolbar-sub" *ngIf="orgId()">Organization workspace</div>
+            <div class="l-toolbar-title">{{ pageTitle() | transloco }}</div>
+            <div class="l-toolbar-sub" *ngIf="orgId()">{{ 'shell.organizationWorkspace' | transloco }}</div>
           </div>
 
           <span class="l-spacer"></span>
@@ -208,25 +215,28 @@ const ROUTE_TITLES: Record<string, string> = {
           <button mat-button class="l-admin-bridge-top"
                   routerLink="/admin"
                   *ngIf="shellMode() === 'staff' && isAdminLike()"
-                  matTooltip="Go to Admin Dashboard">
+                  [matTooltip]="'shell.goToAdminDashboard' | transloco">
             <mat-icon>admin_panel_settings</mat-icon>
-            <span class="l-bridge-label">Admin</span>
+            <span class="l-bridge-label">{{ 'shell.admin' | transloco }}</span>
           </button>
 
           <button mat-button class="l-staff-bridge-top"
                   routerLink="/app/schedule"
                   *ngIf="shellMode() === 'admin'"
-                  matTooltip="Go to my staff schedule">
+                  [matTooltip]="'shell.goToMyStaffSchedule' | transloco">
             <mat-icon>badge</mat-icon>
-            <span class="l-bridge-label">My Schedule</span>
+            <span class="l-bridge-label">{{ 'shell.mySchedule' | transloco }}</span>
           </button>
+
+          <!-- Language switcher -->
+          <app-language-switcher class="l-topbtn"></app-language-switcher>
 
           <!-- Notifications -->
           <button mat-icon-button class="l-topbtn"
                   routerLink="/app/notifications"
                   *ngIf="shellMode() !== 'platform'"
-                  matTooltip="Notifications"
-                  aria-label="Notifications">
+                  [matTooltip]="'shell.notifications' | transloco"
+                  [attr.aria-label]="'shell.notifications' | transloco">
             <mat-icon>notifications</mat-icon>
           </button>
 
@@ -244,21 +254,21 @@ const ROUTE_TITLES: Record<string, string> = {
             <div class="l-menu-header">
               <div class="l-menu-name">{{ userDisplayName() }}</div>
               <div class="l-menu-role">{{ roleLabel() }}</div>
-              <div class="l-menu-org" *ngIf="orgId()">Organization workspace</div>
+              <div class="l-menu-org" *ngIf="orgId()">{{ 'shell.organizationWorkspace' | transloco }}</div>
             </div>
             <mat-divider></mat-divider>
             <button mat-menu-item [routerLink]="settingsLink()">
               <mat-icon>settings</mat-icon>
-              <span>Settings</span>
+              <span>{{ 'shell.settings' | transloco }}</span>
             </button>
             <button mat-menu-item routerLink="/admin/org-settings" *ngIf="shellMode() === 'admin'">
               <mat-icon>business</mat-icon>
-              <span>Organization Settings</span>
+              <span>{{ 'shell.organizationSettings' | transloco }}</span>
             </button>
             <mat-divider></mat-divider>
             <button mat-menu-item (click)="logout()" class="l-menu-logout">
               <mat-icon>logout</mat-icon>
-              <span>Sign out</span>
+              <span>{{ 'shell.signOut' | transloco }}</span>
             </button>
           </mat-menu>
         </mat-toolbar>
@@ -579,40 +589,42 @@ export class AppLayoutComponent implements OnDestroy {
   currentRoute = signal<string>('/app/dashboard');
   shellMode = signal<ShellMode>('staff');
 
+  // label values are translation keys (nav.*), resolved via the
+  // `transloco` pipe at the template usage sites.
   workspaceNav: NavItem[] = [
-    { label: 'Dashboard',        link: '/app/dashboard',    icon: 'dashboard',      section: 'workspace' },
-    { label: 'Onboarding',       link: '/app/onboarding',   icon: 'task_alt',       section: 'workspace' },
-    { label: 'My Schedule',      link: '/app/schedule',     icon: 'event',          section: 'workspace' },
-    { label: 'My Availability',  link: '/app/availability', icon: 'event_available',section: 'workspace' },
-    { label: 'Shift Marketplace',link: '/app/marketplace',  icon: 'storefront',     section: 'workspace' },
-    { label: 'Time & Attendance',link: '/app/attendance',   icon: 'schedule',       section: 'workspace' },
-    { label: 'My Accruals',      link: '/app/accruals',     icon: 'beach_access',  section: 'workspace' },
-    { label: 'My Payroll',       link: '/app/payroll',      icon: 'payments',      section: 'workspace' },
-    { label: 'My Profile',       link: '/app/profile',      icon: 'account_circle',section: 'workspace' },
-    { label: 'Document Center',   link: '/app/documents',    icon: 'folder_shared', section: 'workspace' },
-    { label: 'Message Center',   link: '/app/messages',     icon: 'forum',          section: 'workspace' },
-    { label: 'Shift Live Chat',  link: '/app/shift-chat',   icon: 'chat',           section: 'workspace' },
-    { label: 'Notifications',    link: '/app/notifications',icon: 'notifications',  section: 'workspace' },
+    { label: 'nav.dashboard',        link: '/app/dashboard',    icon: 'dashboard',      section: 'workspace' },
+    { label: 'nav.onboarding',       link: '/app/onboarding',   icon: 'task_alt',       section: 'workspace' },
+    { label: 'nav.mySchedule',       link: '/app/schedule',     icon: 'event',          section: 'workspace' },
+    { label: 'nav.myAvailability',   link: '/app/availability', icon: 'event_available',section: 'workspace' },
+    { label: 'nav.shiftMarketplace', link: '/app/marketplace',  icon: 'storefront',     section: 'workspace' },
+    { label: 'nav.timeAttendance',   link: '/app/attendance',   icon: 'schedule',       section: 'workspace' },
+    { label: 'nav.myAccruals',       link: '/app/accruals',     icon: 'beach_access',  section: 'workspace' },
+    { label: 'nav.myPayroll',        link: '/app/payroll',      icon: 'payments',      section: 'workspace' },
+    { label: 'nav.myProfile',        link: '/app/profile',      icon: 'account_circle',section: 'workspace' },
+    { label: 'nav.documentCenter',   link: '/app/documents',    icon: 'folder_shared', section: 'workspace' },
+    { label: 'nav.messageCenter',    link: '/app/messages',     icon: 'forum',          section: 'workspace' },
+    { label: 'nav.shiftLiveChat',    link: '/app/shift-chat',   icon: 'chat',           section: 'workspace' },
+    { label: 'nav.notifications',    link: '/app/notifications',icon: 'notifications',  section: 'workspace' },
   ];
 
   adminNav: NavItem[] = [
-    { label: 'Admin Dashboard',  link: '/admin',                  icon: 'admin_panel_settings', section: 'admin', adminOnly: true, feature: 'adminAnalytics' },
-    { label: 'Employees',        link: '/admin/employees',        icon: 'people',               section: 'admin', adminOnly: true },
-    { label: 'Availability',     link: '/admin/availability',     icon: 'event_available',      section: 'admin', adminOnly: true },
-    { label: 'Schedule Details', link: '/admin/schedule-details', icon: 'event_note',           section: 'admin', adminOnly: true },
-    { label: 'Scheduler',        link: '/admin/scheduler',        icon: 'calendar_month',       section: 'admin', adminOnly: true, feature: 'smartScheduler' },
-    { label: 'AI Copilot',       link: '/admin/ai-copilot',       icon: 'auto_awesome',         section: 'admin', adminOnly: true, feature: 'aiCopilot' },
-    { label: 'Timesheets',       link: '/admin/timesheets',       icon: 'receipt_long',         section: 'admin', adminOnly: true, feature: 'timesheetsExport' },
-    { label: 'PTO Requests',      link: '/admin/pto',              icon: 'event_available',      section: 'admin', adminOnly: true, roles: ['admin', 'hr'] },
-    { label: 'Documents',         link: '/admin/documents',        icon: 'folder_shared',        section: 'admin', adminOnly: true, roles: ['admin', 'hr'] },
-    { label: 'Launch Readiness',  link: '/admin/readiness',        icon: 'health_and_safety',    section: 'admin', adminOnly: true },
-    { label: 'Payroll',          link: '/admin/payroll',          icon: 'payments',             section: 'admin', adminOnly: true, feature: 'timesheetsExport', roles: ['admin', 'hr'] },
-    { label: 'Audit Log',        link: '/admin/audit',            icon: 'history',              section: 'admin', adminOnly: true, feature: 'auditLog' },
-    { label: 'Org Settings',     link: '/admin/org-settings',     icon: 'business',             section: 'admin', adminOnly: true },
+    { label: 'nav.adminDashboard',   link: '/admin',                  icon: 'admin_panel_settings', section: 'admin', adminOnly: true, feature: 'adminAnalytics' },
+    { label: 'nav.employees',        link: '/admin/employees',        icon: 'people',               section: 'admin', adminOnly: true },
+    { label: 'nav.availability',     link: '/admin/availability',     icon: 'event_available',      section: 'admin', adminOnly: true },
+    { label: 'nav.scheduleDetails',  link: '/admin/schedule-details', icon: 'event_note',           section: 'admin', adminOnly: true },
+    { label: 'nav.scheduler',        link: '/admin/scheduler',        icon: 'calendar_month',       section: 'admin', adminOnly: true, feature: 'smartScheduler' },
+    { label: 'nav.aiCopilot',        link: '/admin/ai-copilot',       icon: 'auto_awesome',         section: 'admin', adminOnly: true, feature: 'aiCopilot' },
+    { label: 'nav.timesheets',       link: '/admin/timesheets',       icon: 'receipt_long',         section: 'admin', adminOnly: true, feature: 'timesheetsExport' },
+    { label: 'nav.ptoRequests',      link: '/admin/pto',              icon: 'event_available',      section: 'admin', adminOnly: true, roles: ['admin', 'hr'] },
+    { label: 'nav.documents',        link: '/admin/documents',        icon: 'folder_shared',        section: 'admin', adminOnly: true, roles: ['admin', 'hr'] },
+    { label: 'nav.launchReadiness',  link: '/admin/readiness',        icon: 'health_and_safety',    section: 'admin', adminOnly: true },
+    { label: 'nav.payroll',          link: '/admin/payroll',          icon: 'payments',             section: 'admin', adminOnly: true, feature: 'timesheetsExport', roles: ['admin', 'hr'] },
+    { label: 'nav.auditLog',         link: '/admin/audit',            icon: 'history',              section: 'admin', adminOnly: true, feature: 'auditLog' },
+    { label: 'nav.orgSettings',      link: '/admin/org-settings',     icon: 'business',             section: 'admin', adminOnly: true },
   ];
 
   platformNav: NavItem[] = [
-    { label: 'Platform Console', link: '/platform', icon: 'shield', section: 'platform', superAdminOnly: true },
+    { label: 'nav.platformConsole', link: '/platform', icon: 'shield', section: 'platform', superAdminOnly: true },
   ];
 
   constructor(private ctx: OrgContextService, private plans: PlanEntitlementsService, private router: Router, private route: ActivatedRoute) {
@@ -717,12 +729,12 @@ export class AppLayoutComponent implements OnDestroy {
 
   pageTitle = computed(() => {
     const route = this.currentRoute();
-    if (route.startsWith('/admin/employees/')) return 'Employee Details';
+    if (route.startsWith('/admin/employees/')) return 'routeTitles.employeeDetails';
     // Match longest prefix
     const match = Object.keys(ROUTE_TITLES)
       .filter(k => route === k || route.startsWith(k + '/'))
       .sort((a, b) => b.length - a.length)[0];
-    return match ? ROUTE_TITLES[match] : 'INNOVASHIFT';
+    return match ? ROUTE_TITLES[match] : 'routeTitles.default';
   });
 
   toggleSidenav() { this.opened = !this.opened; }

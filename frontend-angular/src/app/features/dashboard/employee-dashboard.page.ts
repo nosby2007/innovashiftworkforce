@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { TranslocoModule } from '@jsverse/transloco';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
@@ -68,21 +69,22 @@ export type ShiftSwapCandidate = {
     FormsModule,
     MatIconModule,
     MatDialogModule,
+    TranslocoModule,
   ],
   template: `
     <div class="staff-home">
       <section class="staff-welcome">
         <div class="staff-avatar">{{ staffInitials() }}</div>
         <div>
-          <div class="staff-welcome-title">Welcome back, {{ staffFirstName() }}</div>
-          <div class="staff-welcome-sub" *ngIf="orgId()">Staff workspace</div>
-          <div class="staff-welcome-sub" *ngIf="!orgId()">Missing org context. Contact your administrator.</div>
+          <div class="staff-welcome-title">{{ 'dashboard.welcomeBack' | transloco: { name: staffFirstName() } }}</div>
+          <div class="staff-welcome-sub" *ngIf="orgId()">{{ 'dashboard.staffWorkspace' | transloco }}</div>
+          <div class="staff-welcome-sub" *ngIf="!orgId()">{{ 'dashboard.missingOrgContext' | transloco }}</div>
         </div>
       </section>
 
       <div *ngIf="!orgId()" class="staff-alert">
         <mat-icon>warning_amber</mat-icon>
-        Missing organization context.
+        {{ 'dashboard.missingOrgContextAlert' | transloco }}
       </div>
 
       <section class="staff-premium-strip" *ngIf="orgId()">
@@ -90,8 +92,8 @@ export type ShiftSwapCandidate = {
                 [class.is-attention]="profileReadiness().score < 100">
           <span class="staff-premium-icon"><mat-icon>task_alt</mat-icon></span>
           <span>
-            <strong>Onboarding Center</strong>
-            <small>Profile, documents, payroll, PTO</small>
+            <strong>{{ 'dashboard.onboardingCenter' | transloco }}</strong>
+            <small>{{ 'dashboard.onboardingCenterSub' | transloco }}</small>
           </span>
           <mat-icon>chevron_right</mat-icon>
         </button>
@@ -99,7 +101,7 @@ export type ShiftSwapCandidate = {
                 [class.is-attention]="profileReadiness().score < 100">
           <span class="staff-premium-icon"><mat-icon>verified_user</mat-icon></span>
           <span>
-            <strong>{{ profileReadiness().score }}% Profile Ready</strong>
+            <strong>{{ 'dashboard.profileReadyPct' | transloco: { pct: profileReadiness().score } }}</strong>
             <small>{{ profileReadinessLabel() }}</small>
           </span>
           <mat-icon>chevron_right</mat-icon>
@@ -107,8 +109,8 @@ export type ShiftSwapCandidate = {
         <button class="staff-premium-item" type="button" (click)="go('/app/documents')">
           <span class="staff-premium-icon"><mat-icon>folder_shared</mat-icon></span>
           <span>
-            <strong>Document Center</strong>
-            <small>W-4, W-2, payslips, dependents</small>
+            <strong>{{ 'nav.documentCenter' | transloco }}</strong>
+            <small>{{ 'dashboard.documentCenterSub' | transloco }}</small>
           </span>
           <mat-icon>chevron_right</mat-icon>
         </button>
@@ -116,8 +118,8 @@ export type ShiftSwapCandidate = {
                 [class.is-attention]="pendingTimeOffCount() > 0">
           <span class="staff-premium-icon"><mat-icon>event_available</mat-icon></span>
           <span>
-            <strong>{{ pendingTimeOffCount() }} PTO Pending</strong>
-            <small>{{ approvedTimeOffCount() }} approved request(s)</small>
+            <strong>{{ 'dashboard.ptoPending' | transloco: { count: pendingTimeOffCount() } }}</strong>
+            <small>{{ 'dashboard.ptoPendingSub' | transloco: { count: approvedTimeOffCount() } }}</small>
           </span>
           <mat-icon>chevron_right</mat-icon>
         </button>
@@ -125,8 +127,8 @@ export type ShiftSwapCandidate = {
                 [class.is-attention]="unreadNotificationCount() > 0">
           <span class="staff-premium-icon"><mat-icon>notifications_active</mat-icon></span>
           <span>
-            <strong>{{ unreadNotificationCount() }} Unread</strong>
-            <small>Messages, approvals, shift updates</small>
+            <strong>{{ 'dashboard.unread' | transloco: { count: unreadNotificationCount() } }}</strong>
+            <small>{{ 'dashboard.unreadSub' | transloco }}</small>
           </span>
           <mat-icon>chevron_right</mat-icon>
         </button>
@@ -135,67 +137,67 @@ export type ShiftSwapCandidate = {
       <section class="staff-card-grid" *ngIf="orgId()">
         <article class="staff-card staff-actions-card">
           <div class="staff-card-head">
-            <h2>Manage My Schedule</h2>
-            <button class="staff-icon-link" (click)="go('/app/schedule')" aria-label="Open schedule">
+            <h2>{{ 'dashboard.manageMySchedule' | transloco }}</h2>
+            <button class="staff-icon-link" (click)="go('/app/schedule')" [attr.aria-label]="'dashboard.mySchedule' | transloco">
               <mat-icon>arrow_forward</mat-icon>
             </button>
           </div>
           <div class="staff-action-grid">
             <button class="staff-action" (click)="openFirstSwitchableShift()">
               <mat-icon>sync_alt</mat-icon>
-              <span>Swap my shift</span>
+              <span>{{ 'dashboard.swapMyShift' | transloco }}</span>
             </button>
             <button class="staff-action" (click)="go('/app/marketplace')">
               <mat-icon>add_to_queue</mat-icon>
-              <span>Pick up an open shift</span>
+              <span>{{ 'dashboard.pickUpOpenShift' | transloco }}</span>
             </button>
             <button class="staff-action" (click)="go('/app/schedule')">
               <mat-icon>calendar_month</mat-icon>
-              <span>Build my schedule</span>
+              <span>{{ 'dashboard.buildMySchedule' | transloco }}</span>
             </button>
             <button class="staff-action" (click)="go('/app/availability')">
               <mat-icon>event_available</mat-icon>
-              <span>Change my availability</span>
+              <span>{{ 'dashboard.changeMyAvailability' | transloco }}</span>
             </button>
             <button class="staff-action" (click)="go('/app/payroll')">
               <mat-icon>payments</mat-icon>
-              <span>View my payroll</span>
+              <span>{{ 'dashboard.viewMyPayroll' | transloco }}</span>
             </button>
             <button class="staff-action" (click)="go('/app/attendance')">
               <mat-icon>receipt_long</mat-icon>
-              <span>Timecard inquiry</span>
+              <span>{{ 'dashboard.timecardInquiry' | transloco }}</span>
             </button>
           </div>
         </article>
 
         <article class="staff-card staff-notifications-card">
           <div class="staff-card-head">
-            <h2>My Notifications</h2>
-            <button class="staff-icon-link" (click)="go('/app/notifications')" aria-label="Open notifications">
+            <h2>{{ 'dashboard.myNotifications' | transloco }}</h2>
+            <button class="staff-icon-link" (click)="go('/app/notifications')" [attr.aria-label]="'dashboard.myNotifications' | transloco">
               <mat-icon>arrow_forward</mat-icon>
             </button>
           </div>
           <button class="staff-notification-row" (click)="go('/app/notifications')">
-            <span>My Requests</span><strong>{{ outgoingSwapCount() }}</strong><mat-icon>chevron_right</mat-icon>
+            <span>{{ 'dashboard.myRequests' | transloco }}</span><strong>{{ outgoingSwapCount() }}</strong><mat-icon>chevron_right</mat-icon>
           </button>
           <button class="staff-notification-row" (click)="go('/app/messages')">
-            <span>Notices</span><strong>{{ messages().length }}</strong><mat-icon>chevron_right</mat-icon>
+            <span>{{ 'dashboard.notices' | transloco }}</span><strong>{{ messages().length }}</strong><mat-icon>chevron_right</mat-icon>
           </button>
           <button class="staff-notification-row" (click)="go('/app/marketplace')">
-            <span>Open Shift Available</span><strong>{{ openShifts().length }}</strong><mat-icon>chevron_right</mat-icon>
+            <span>{{ 'dashboard.openShiftAvailable' | transloco }}</span><strong>{{ openShifts().length }}</strong><mat-icon>chevron_right</mat-icon>
           </button>
           <button class="staff-notification-row" (click)="go('/app/schedule')">
-            <span>Shift Swap</span><strong>{{ incomingSwapCount() }}</strong><mat-icon>chevron_right</mat-icon>
+            <span>{{ 'dashboard.shiftSwap' | transloco }}</span><strong>{{ incomingSwapCount() }}</strong><mat-icon>chevron_right</mat-icon>
           </button>
           <button class="staff-notification-row" (click)="go('/app/notifications')">
-            <span>System Messages</span><strong>{{ notificationCount() }}</strong><mat-icon>chevron_right</mat-icon>
+            <span>{{ 'dashboard.systemMessages' | transloco }}</span><strong>{{ notificationCount() }}</strong><mat-icon>chevron_right</mat-icon>
           </button>
         </article>
 
         <article class="staff-card staff-schedule-card">
           <div class="staff-card-head">
-            <h2>My Schedule</h2>
-            <button class="staff-icon-link" (click)="go('/app/schedule')" aria-label="Open my schedule">
+            <h2>{{ 'dashboard.mySchedule' | transloco }}</h2>
+            <button class="staff-icon-link" (click)="go('/app/schedule')" [attr.aria-label]="'dashboard.mySchedule' | transloco">
               <mat-icon>arrow_forward</mat-icon>
             </button>
           </div>
@@ -204,11 +206,11 @@ export type ShiftSwapCandidate = {
               <span>{{ shortWeekday(s.startAt) }}</span>
               <strong>{{ dayNumber(s.startAt) }}</strong>
             </div>
-            <div class="staff-shift-title">{{ s.title || 'Day shift' }}</div>
+            <div class="staff-shift-title">{{ s.title || ('dashboard.dayShift' | transloco) }}</div>
             <div class="staff-shift-time">{{ fmtTimeRange(s.startAt, s.endAt) }} [{{ calcHours(s.startAt, s.endAt) }}h]</div>
             <div class="staff-shift-meta">
               <mat-icon>local_activity</mat-icon>
-              <span>{{ s.locationName || 'Location pending' }}</span>
+              <span>{{ s.locationName || ('dashboard.locationPending' | transloco) }}</span>
             </div>
             <div class="staff-shift-meta">
               <mat-icon>school</mat-icon>
