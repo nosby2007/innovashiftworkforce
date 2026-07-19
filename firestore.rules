@@ -81,6 +81,7 @@ service cloud.firestore {
         'w2',
         'dependents',
         'preferences',
+        'photoURL',
         'profileUpdatedAt',
         'updatedAt'
       ]) &&
