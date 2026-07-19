@@ -1,23 +1,24 @@
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { TranslocoModule } from '@jsverse/transloco';
 import { SeoService } from '../../../core/seo/seo.service';
 
 const FEATURES = [
-  { icon: '📋', title: 'Shift Marketplace', desc: 'Post open shifts to a live marketplace. Employees browse and claim shifts that fit their availability — no more manual assignment chaos.' },
-  { icon: '📅', title: 'Smart Scheduling', desc: 'Drag-and-drop visual scheduler with conflict detection, overtime alerts, and automated notifications sent directly to staff.' },
-  { icon: '⏱️', title: 'Attendance & Timesheets', desc: 'GPS-verified clock in/out, automated timesheet generation, time correction requests with manager approval workflow.' },
-  { icon: '💬', title: 'Real-time Messaging', desc: 'Built-in in-app messaging with read receipts, push notifications, and threaded conversations to keep your team aligned.' },
-  { icon: '📊', title: 'Admin Analytics', desc: 'Live dashboards showing attendance rates, shift coverage, labor cost trends, and compliance reports — export-ready.' },
-  { icon: '🏢', title: 'Multi-Tenant SaaS', desc: 'Each organization is fully isolated with its own data space, roles, and configuration. Scale from 10 to 10,000 employees.' },
-  { icon: '🔔', title: 'Smart Notifications', desc: 'Configurable push, email and in-app alerts for shift changes, overtime warnings, clock-in reminders and approvals.' },
-  { icon: '👥', title: 'Role-Based Access', desc: 'Granular permission system: Super Admin, Org Admin, Scheduler, Manager, HR, and Staff — each with tailored access.' },
-  { icon: '🔒', title: 'Enterprise Security', desc: 'Firebase Authentication, JWT-secured APIs, Firestore security rules, and full audit logging on every sensitive action.' },
+  { icon: '📋', title: 'publicFeatures.f1Title', desc: 'publicFeatures.f1Desc' },
+  { icon: '📅', title: 'publicFeatures.f2Title', desc: 'publicFeatures.f2Desc' },
+  { icon: '⏱️', title: 'publicFeatures.f3Title', desc: 'publicFeatures.f3Desc' },
+  { icon: '💬', title: 'publicFeatures.f4Title', desc: 'publicFeatures.f4Desc' },
+  { icon: '📊', title: 'publicFeatures.f5Title', desc: 'publicFeatures.f5Desc' },
+  { icon: '🏢', title: 'publicFeatures.f6Title', desc: 'publicFeatures.f6Desc' },
+  { icon: '🔔', title: 'publicFeatures.f7Title', desc: 'publicFeatures.f7Desc' },
+  { icon: '👥', title: 'publicFeatures.f8Title', desc: 'publicFeatures.f8Desc' },
+  { icon: '🔒', title: 'publicFeatures.f9Title', desc: 'publicFeatures.f9Desc' },
 ];
 
 @Component({
   selector: 'app-features',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, TranslocoModule],
   template: `
     <div class="feat-page">
       <div class="orb orb-a" aria-hidden="true"></div>
@@ -26,11 +27,11 @@ const FEATURES = [
       <!-- Header -->
       <section class="feat-hero" id="features-hero">
         <div class="feat-hero__inner">
-          <div class="label">Everything you need</div>
-          <h1 class="feat-hero__h1">Powerful features,<br><span class="grad">built for healthcare</span></h1>
-          <p class="feat-hero__sub">From the moment a shift is created to the moment payroll exports — INNOVASHIFT has every step covered.</p>
+          <div class="label">{{ 'publicFeatures.kicker' | transloco }}</div>
+          <h1 class="feat-hero__h1">{{ 'publicFeatures.h1Line1' | transloco }}<br><span class="grad">{{ 'publicFeatures.h1Grad' | transloco }}</span></h1>
+          <p class="feat-hero__sub">{{ 'publicFeatures.sub' | transloco }}</p>
           <div class="feat-hero__actions">
-            <a routerLink="/contact" class="btn-primary" id="feat-cta">Request a Demo →</a>
+            <a routerLink="/contact" class="btn-primary" id="feat-cta">{{ 'publicFeatures.requestDemo' | transloco }}</a>
           </div>
           <div class="feat-hero__img-wrap">
             <div class="feat-hero__img-glow" aria-hidden="true"></div>
@@ -45,8 +46,8 @@ const FEATURES = [
           @for (f of features; track f.title; let i = $index) {
             <div class="feat-card" [id]="'feat-card-' + i">
               <div class="feat-card__icon">{{ f.icon }}</div>
-              <h3 class="feat-card__title">{{ f.title }}</h3>
-              <p class="feat-card__desc">{{ f.desc }}</p>
+              <h3 class="feat-card__title">{{ f.title | transloco }}</h3>
+              <p class="feat-card__desc">{{ f.desc | transloco }}</p>
             </div>
           }
         </div>
@@ -55,10 +56,10 @@ const FEATURES = [
       <!-- Bottom CTA -->
       <section class="feat-cta" id="features-bottom-cta">
         <div class="feat-cta__inner">
-          <h2 class="feat-cta__h2">Ready to see it in action?</h2>
+          <h2 class="feat-cta__h2">{{ 'publicFeatures.bottomCtaH2' | transloco }}</h2>
           <div class="feat-cta__btns">
-            <a routerLink="/contact" class="btn-primary" id="feat-bottom-demo">Book a Demo</a>
-            <a routerLink="/pricing" class="btn-ghost"   id="feat-bottom-pricing">See Pricing</a>
+            <a routerLink="/contact" class="btn-primary" id="feat-bottom-demo">{{ 'publicFeatures.bookDemo' | transloco }}</a>
+            <a routerLink="/pricing" class="btn-ghost"   id="feat-bottom-pricing">{{ 'publicFeatures.seePricing' | transloco }}</a>
           </div>
         </div>
       </section>

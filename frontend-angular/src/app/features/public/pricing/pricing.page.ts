@@ -1,66 +1,67 @@
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { TranslocoModule } from '@jsverse/transloco';
 import { SeoService } from '../../../core/seo/seo.service';
 
 const PLANS = [
   {
     id: 'starter',
-    name: 'Starter',
+    name: 'publicPricing.starterName',
     price: '$49',
     period: '/month',
-    desc: 'Perfect for small clinics and care homes getting started.',
+    desc: 'publicPricing.starterDesc',
     badge: null,
     color: 'rgba(99,102,241,0.18)',
     features: [
-      'Up to 25 employees',
-      'Shift Marketplace',
-      'Basic Scheduling',
-      'Attendance Tracking',
-      'In-app Messaging',
-      'Email Support',
+      'publicPricing.starterFeat1',
+      'publicPricing.starterFeat2',
+      'publicPricing.starterFeat3',
+      'publicPricing.starterFeat4',
+      'publicPricing.starterFeat5',
+      'publicPricing.starterFeat6',
     ],
-    cta: 'Get Started',
+    cta: 'publicPricing.starterCta',
     ctaLink: '/contact',
   },
   {
     id: 'pro',
-    name: 'Pro',
+    name: 'publicPricing.proName',
     price: '$149',
     period: '/month',
-    desc: 'Everything in Starter plus advanced tools for growing teams.',
-    badge: 'Most Popular',
+    desc: 'publicPricing.proDesc',
+    badge: 'publicPricing.proBadge',
     color: 'rgba(99,102,241,0.28)',
     features: [
-      'Up to 150 employees',
-      'Smart Scheduling + Conflicts',
-      'GPS Attendance Verification',
-      'AI Copilot for scheduling',
-      'Admin Analytics Dashboard',
-      'Timesheet Export (PDF/CSV)',
-      'Role-based Access Control',
-      'Priority Support',
+      'publicPricing.proFeat1',
+      'publicPricing.proFeat2',
+      'publicPricing.proFeat3',
+      'publicPricing.proFeat4',
+      'publicPricing.proFeat5',
+      'publicPricing.proFeat6',
+      'publicPricing.proFeat7',
+      'publicPricing.proFeat8',
     ],
-    cta: 'Start Free Trial',
+    cta: 'publicPricing.proCta',
     ctaLink: '/contact',
   },
   {
     id: 'enterprise',
-    name: 'Enterprise',
+    name: 'publicPricing.enterpriseName',
     price: 'Custom',
     period: '',
-    desc: 'Tailored solutions for large healthcare networks.',
+    desc: 'publicPricing.enterpriseDesc',
     badge: null,
     color: 'rgba(244,114,182,0.12)',
     features: [
-      'Unlimited employees',
-      'Multi-site Management',
-      'Custom Integrations (EHR/Payroll)',
-      'Dedicated Success Manager',
-      'SLA Guarantee (99.9% uptime)',
-      'Audit Logging & Compliance',
-      'SSO / SAML',
+      'publicPricing.enterpriseFeat1',
+      'publicPricing.enterpriseFeat2',
+      'publicPricing.enterpriseFeat3',
+      'publicPricing.enterpriseFeat4',
+      'publicPricing.enterpriseFeat5',
+      'publicPricing.enterpriseFeat6',
+      'publicPricing.enterpriseFeat7',
     ],
-    cta: 'Contact Sales',
+    cta: 'publicPricing.enterpriseCta',
     ctaLink: '/contact',
   },
 ];
@@ -68,7 +69,7 @@ const PLANS = [
 @Component({
   selector: 'app-pricing',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, TranslocoModule],
   template: `
     <div class="price-page">
       <div class="orb orb-a" aria-hidden="true"></div>
@@ -77,9 +78,9 @@ const PLANS = [
       <!-- Header -->
       <section class="price-hero" id="pricing-hero">
         <div class="price-hero__inner">
-          <div class="label">Transparent Pricing</div>
-          <h1 class="price-hero__h1">Plans that grow<br><span class="grad">with your team</span></h1>
-          <p class="price-hero__sub">No hidden fees. Cancel anytime. All plans include a 14-day free trial.</p>
+          <div class="label">{{ 'publicPricing.kicker' | transloco }}</div>
+          <h1 class="price-hero__h1">{{ 'publicPricing.h1Line1' | transloco }}<br><span class="grad">{{ 'publicPricing.h1Grad' | transloco }}</span></h1>
+          <p class="price-hero__sub">{{ 'publicPricing.sub' | transloco }}</p>
         </div>
       </section>
 
@@ -89,24 +90,24 @@ const PLANS = [
           @for (plan of plans; track plan.id) {
             <div class="price-card" [class.popular]="plan.badge" [id]="'plan-' + plan.id">
               @if (plan.badge) {
-                <div class="price-card__badge">{{ plan.badge }}</div>
+                <div class="price-card__badge">{{ plan.badge | transloco }}</div>
               }
-              <div class="price-card__name">{{ plan.name }}</div>
+              <div class="price-card__name">{{ plan.name | transloco }}</div>
               <div class="price-card__price-row">
                 <span class="price-card__price">{{ plan.price }}</span>
                 <span class="price-card__period">{{ plan.period }}</span>
               </div>
-              <p class="price-card__desc">{{ plan.desc }}</p>
+              <p class="price-card__desc">{{ plan.desc | transloco }}</p>
               <div class="price-card__divider"></div>
               <ul class="price-card__features">
                 @for (f of plan.features; track f) {
                   <li class="price-card__feat">
-                    <span class="price-card__check">✓</span> {{ f }}
+                    <span class="price-card__check">✓</span> {{ f | transloco }}
                   </li>
                 }
               </ul>
               <a [routerLink]="plan.ctaLink" class="price-card__cta" [class.popular-cta]="plan.badge" [id]="'plan-cta-' + plan.id">
-                {{ plan.cta }} →
+                {{ plan.cta | transloco }} →
               </a>
             </div>
           }
@@ -126,9 +127,9 @@ const PLANS = [
       <!-- FAQ teaser -->
       <section class="price-faq" id="pricing-faq">
         <div class="price-faq__inner">
-          <h2 class="price-faq__h2">Questions about pricing?</h2>
-          <p class="price-faq__sub">Our team is happy to walk you through the right plan for your organization.</p>
-          <a routerLink="/contact" class="btn-primary" id="pricing-contact-cta">Talk to Sales</a>
+          <h2 class="price-faq__h2">{{ 'publicPricing.faqH2' | transloco }}</h2>
+          <p class="price-faq__sub">{{ 'publicPricing.faqSub' | transloco }}</p>
+          <a routerLink="/contact" class="btn-primary" id="pricing-contact-cta">{{ 'publicPricing.talkToSales' | transloco }}</a>
         </div>
       </section>
     </div>

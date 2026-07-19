@@ -25,6 +25,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 
 import { MatIconModule } from '@angular/material/icon';
 import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 interface OrgSite {
   id: string;
@@ -34,7 +35,7 @@ interface OrgSite {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FullCalendarModule, DrawerComponent, FormsModule, MatIconModule, TipCardComponent],
+  imports: [CommonModule, FullCalendarModule, DrawerComponent, FormsModule, MatIconModule, TipCardComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad sch-page">
       <!-- Header -->
@@ -44,61 +45,61 @@ interface OrgSite {
             <span class="sch-brand-mark">S</span>
             <span>InnovaShift</span>
           </div>
-          <h1 class="vs-title sch-hero-title">All-in-One Workforce Calendar</h1>
-          <p class="vs-page-subtitle sch-hero-subtitle">Scheduling, attendance, timesheets, communication, and insights in one place.</p>
+          <h1 class="vs-title sch-hero-title">{{ 'scheduler.title' | transloco }}</h1>
+          <p class="vs-page-subtitle sch-hero-subtitle">{{ 'scheduler.subtitle' | transloco }}</p>
         </div>
         <div class="vs-page-actions sch-hero-actions">
           <button class="vs-btn-ghost sch-hero-btn" (click)="printScheduler()">
-            <mat-icon>print</mat-icon> Print Week
+            <mat-icon>print</mat-icon> {{ 'scheduler.printWeek' | transloco }}
           </button>
           <button class="vs-btn-ghost sch-hero-btn" (click)="exportSchedulerCsv()">
-            <mat-icon>download</mat-icon> Export CSV
+            <mat-icon>download</mat-icon> {{ 'scheduler.exportCsv' | transloco }}
           </button>
           <button class="vs-btn-primary sch-create-btn" (click)="openDrawerForNew()">
-            <mat-icon>add</mat-icon> Create Shift
+            <mat-icon>add</mat-icon> {{ 'scheduler.createShift' | transloco }}
           </button>
         </div>
       </div>
 
-      <app-tip-card tipId="scheduler-intro" title="Working with the calendar" icon="calendar_month">
-        Click any shift to open its actions — assign, publish, or cancel. Use "Create Shift" above to add a new one, and the filters below to focus on a location or role.
+      <app-tip-card tipId="scheduler-intro" [title]="'scheduler.tipTitle' | transloco" icon="calendar_month">
+        {{ 'scheduler.tipBody' | transloco }}
       </app-tip-card>
 
       <div *ngIf="!orgId" class="ad-no-org vs-glass">
-        <mat-icon>warning_amber</mat-icon> Missing org context.
+        <mat-icon>warning_amber</mat-icon> {{ 'scheduler.missingOrgContext' | transloco }}
       </div>
 
       <div *ngIf="orgId" class="sch-planning-grid">
         <div class="sch-plan-card vs-glass">
           <mat-icon class="sch-plan-icon">calendar_month</mat-icon>
           <div>
-            <div class="sch-plan-label">Visible Shifts</div>
+            <div class="sch-plan-label">{{ 'scheduler.visibleShifts' | transloco }}</div>
             <div class="sch-plan-value">{{ totalVisibleShifts() }}</div>
-            <div class="sch-plan-sub">Current filters</div>
+            <div class="sch-plan-sub">{{ 'scheduler.currentFilters' | transloco }}</div>
           </div>
         </div>
         <div class="sch-plan-card vs-glass" [class.sch-plan-card--warn]="unassignedVisibleShifts() > 0">
           <mat-icon class="sch-plan-icon">radar</mat-icon>
           <div>
-            <div class="sch-plan-label">Open Coverage</div>
+            <div class="sch-plan-label">{{ 'scheduler.openCoverage' | transloco }}</div>
             <div class="sch-plan-value">{{ unassignedVisibleShifts() }}</div>
-            <div class="sch-plan-sub">Unassigned shifts</div>
+            <div class="sch-plan-sub">{{ 'scheduler.unassignedShiftsSub' | transloco }}</div>
           </div>
         </div>
         <div class="sch-plan-card vs-glass" [class.sch-plan-card--danger]="urgentVisibleShifts() > 0">
           <mat-icon class="sch-plan-icon">emergency_home</mat-icon>
           <div>
-            <div class="sch-plan-label">Next 24h Risk</div>
+            <div class="sch-plan-label">{{ 'scheduler.next24hRisk' | transloco }}</div>
             <div class="sch-plan-value">{{ urgentVisibleShifts() }}</div>
-            <div class="sch-plan-sub">Open or draft shifts</div>
+            <div class="sch-plan-sub">{{ 'scheduler.openOrDraftShifts' | transloco }}</div>
           </div>
         </div>
         <div class="sch-plan-card vs-glass">
           <mat-icon class="sch-plan-icon">monitoring</mat-icon>
           <div>
-            <div class="sch-plan-label">Planned Labor</div>
+            <div class="sch-plan-label">{{ 'scheduler.plannedLabor' | transloco }}</div>
             <div class="sch-plan-value">{{ projectedHours() }}h</div>
-            <div class="sch-plan-sub">{{ projectedLaborCost() | currency:moneyCurrency():'symbol':'1.0-0' }} projected</div>
+            <div class="sch-plan-sub">{{ projectedLaborCost() | currency:moneyCurrency():'symbol':'1.0-0' }} {{ 'scheduler.projected' | transloco }}</div>
           </div>
         </div>
       </div>
@@ -107,29 +108,29 @@ interface OrgSite {
         <div class="sch-toolbar">
           <div class="sch-filters">
             <select class="vs-select" [(ngModel)]="filterStatus" (ngModelChange)="refreshCalendarEvents()">
-              <option value="all">All statuses</option>
+              <option value="all">{{ 'scheduler.allStatuses' | transloco }}</option>
               <option *ngFor="let s of statusOptions" [value]="s">{{ s }}</option>
             </select>
             <select class="vs-select" [(ngModel)]="filterSite" (ngModelChange)="refreshCalendarEvents()">
-              <option value="all">All sites</option>
+              <option value="all">{{ 'scheduler.allSites' | transloco }}</option>
               <option *ngFor="let site of sites" [value]="site.id">{{ site.name }}</option>
             </select>
             <select class="vs-select" [(ngModel)]="filterAssigned" (ngModelChange)="refreshCalendarEvents()">
-              <option value="all">All assignment</option>
-              <option value="assigned">Assigned</option>
-              <option value="unassigned">Unassigned</option>
+              <option value="all">{{ 'scheduler.allAssignment' | transloco }}</option>
+              <option value="assigned">{{ 'scheduler.assigned' | transloco }}</option>
+              <option value="unassigned">{{ 'scheduler.unassigned' | transloco }}</option>
             </select>
           </div>
           <div class="sch-toolbar-bottom">
             <div class="sch-legend">
               <span class="sch-legend-item" *ngFor="let item of statusLegend">
                 <span class="sch-legend-dot" [class]="'sch-legend-dot sch-legend-dot--' + item.key"></span>
-                {{ item.label }}
+                {{ item.label | transloco }}
               </span>
             </div>
             <button class="vs-btn-ghost sch-batch-btn" type="button" (click)="publishFilteredOpenShifts()" [disabled]="publishingBatch || batchPublishCount() === 0">
               <mat-icon>campaign</mat-icon>
-              {{ publishingBatch ? 'Publishing...' : 'Publish Filtered Open' }}
+              {{ (publishingBatch ? 'scheduler.publishing' : 'scheduler.publishFilteredOpen') | transloco }}
               <span *ngIf="batchPublishCount() > 0">({{ batchPublishCount() }})</span>
             </button>
           </div>
@@ -138,12 +139,12 @@ interface OrgSite {
         <div class="sch-calendar-shell">
           <div class="sch-calendar-topline">
             <div>
-              <div class="sch-calendar-kicker">Smart Scheduling</div>
-              <div class="sch-calendar-title">Weekly Workforce Plan</div>
+              <div class="sch-calendar-kicker">{{ 'scheduler.smartScheduling' | transloco }}</div>
+              <div class="sch-calendar-title">{{ 'scheduler.weeklyWorkforcePlan' | transloco }}</div>
             </div>
             <div class="sch-live-pill">
               <span></span>
-              Live Calendar
+              {{ 'scheduler.liveCalendar' | transloco }}
             </div>
           </div>
 
@@ -155,26 +156,26 @@ interface OrgSite {
 
         <div class="sch-footer-hint">
           <mat-icon style="font-size:16px;">info</mat-icon>
-          Click a shift for actions. Drag range to create. Drag & drop to reschedule.
+          {{ 'scheduler.footerHint' | transloco }}
         </div>
 
         <!-- Shift Actions Modal -->
         <ng-template #shiftActionsTpl let-s="shift">
           <div *ngIf="s" class="sch-modal-content">
             <div class="vs-form-row vs-form-row--2">
-              <button class="vs-btn-primary" (click)="openEditDrawer(s)" [disabled]="s.status === 'completed' || s.status === 'cancelled'"><mat-icon>edit</mat-icon> Edit</button>
-              <button class="vs-btn-primary" (click)="publish(s,true)" *ngIf="s.status === 'draft' || s.status === 'open'">Publish to Marketplace</button>
-              <button class="vs-btn-ghost" (click)="publish(s,false)" *ngIf="s.status === 'published'">Unpublish</button>
-              <button class="vs-btn-primary" (click)="openStaffPicker(s)">Assign</button>
-              <button class="vs-btn-ghost" (click)="unassign(s)" *ngIf="s.assignedUserId">Unassign</button>
-              <button class="vs-btn-ghost" (click)="openShiftChat(s.id)"><mat-icon>chat</mat-icon> Open Chat</button>
+              <button class="vs-btn-primary" (click)="openEditDrawer(s)" [disabled]="s.status === 'completed' || s.status === 'cancelled'"><mat-icon>edit</mat-icon> {{ 'scheduler.edit' | transloco }}</button>
+              <button class="vs-btn-primary" (click)="publish(s,true)" *ngIf="s.status === 'draft' || s.status === 'open'">{{ 'scheduler.publishToMarketplace' | transloco }}</button>
+              <button class="vs-btn-ghost" (click)="publish(s,false)" *ngIf="s.status === 'published'">{{ 'scheduler.unpublish' | transloco }}</button>
+              <button class="vs-btn-primary" (click)="openStaffPicker(s)">{{ 'scheduler.assign' | transloco }}</button>
+              <button class="vs-btn-ghost" (click)="unassign(s)" *ngIf="s.assignedUserId">{{ 'scheduler.unassignAction' | transloco }}</button>
+              <button class="vs-btn-ghost" (click)="openShiftChat(s.id)"><mat-icon>chat</mat-icon> {{ 'scheduler.openChat' | transloco }}</button>
             </div>
 
             <div class="sch-shift-details">
-              <div class="sch-detail-item"><span>Title</span> {{ s.title }}</div>
-              <div class="sch-detail-item"><span>Status</span> <span class="vs-badge vs-badge--neutral">{{ s.status | uppercase }}</span></div>
-              <div class="sch-detail-item"><span>Location</span> {{ s.locationName }}</div>
-              <div class="sch-detail-item"><span>Assigned</span> {{ s.assignedUserId ? userLabel(s.assignedUserId) : '—' }}</div>
+              <div class="sch-detail-item"><span>{{ 'scheduler.titleLabel' | transloco }}</span> {{ s.title }}</div>
+              <div class="sch-detail-item"><span>{{ 'scheduler.status' | transloco }}</span> <span class="vs-badge vs-badge--neutral">{{ s.status | uppercase }}</span></div>
+              <div class="sch-detail-item"><span>{{ 'scheduler.location' | transloco }}</span> {{ s.locationName }}</div>
+              <div class="sch-detail-item"><span>{{ 'scheduler.assignedLabel' | transloco }}</span> {{ s.assignedUserId ? userLabel(s.assignedUserId) : '—' }}</div>
             </div>
           </div>
         </ng-template>
@@ -183,113 +184,113 @@ interface OrgSite {
         <ng-template #staffPickerTpl>
           <div class="sch-modal-content">
             <div class="vs-input-wrap" style="margin-bottom:14px;">
-              <input class="vs-input" [(ngModel)]="staffSearch" placeholder="Search staff (name/email/role)">
+              <input class="vs-input" [(ngModel)]="staffSearch" [placeholder]="'scheduler.searchStaffPlaceholder' | transloco">
             </div>
 
             <div class="sch-staff-list">
               <div *ngFor="let u of filteredUsers(); let i = index" class="sch-staff-item">
                 <div class="sch-staff-info">
-                  <div class="sch-staff-name">{{ u.displayName || u.email || 'Staff member' }}</div>
+                  <div class="sch-staff-name">{{ u.displayName || u.email || ('scheduler.staffMemberFallback' | transloco) }}</div>
                   <div class="sch-staff-role">{{ u.jobRole || '—' }}</div>
                 </div>
-                <button class="vs-btn-ghost sch-assign-btn" (click)="pickStaff(u.uid)">Select</button>
+                <button class="vs-btn-ghost sch-assign-btn" (click)="pickStaff(u.uid)">{{ 'scheduler.select' | transloco }}</button>
               </div>
-              <div *ngIf="filteredUsers().length === 0" class="vs-muted" style="padding:20px;text-align:center;">No staff found.</div>
+              <div *ngIf="filteredUsers().length === 0" class="vs-muted" style="padding:20px;text-align:center;">{{ 'scheduler.noStaffFound' | transloco }}</div>
             </div>
           </div>
         </ng-template>
       </div>
 
-      <app-drawer [open]="drawerOpen" [title]="drawerTitle" (close)="closeDrawer()">
+      <app-drawer [open]="drawerOpen" [title]="drawerTitle | transloco" (close)="closeDrawer()">
         <div class="sch-drawer-body">
           <div class="sch-preset-row" *ngIf="!editingShiftId">
             <button class="vs-btn-ghost" type="button" (click)="applyWeekdayPreset()">
               <mat-icon>auto_fix_high</mat-icon>
-              Standard Mon-Fri 8h
+              {{ 'scheduler.standardMonFri8h' | transloco }}
             </button>
           </div>
 
           <div class="vs-form-row">
             <div>
-              <label class="vs-field-label">Title *</label>
-              <input class="vs-input" [(ngModel)]="draft.title" placeholder="e.g. Morning Shift">
+              <label class="vs-field-label">{{ 'scheduler.titleRequired' | transloco }}</label>
+              <input class="vs-input" [(ngModel)]="draft.title" [placeholder]="'scheduler.titlePlaceholder' | transloco">
             </div>
           </div>
           <div class="vs-form-row">
             <div>
-              <label class="vs-field-label">Location *</label>
+              <label class="vs-field-label">{{ 'scheduler.locationRequired' | transloco }}</label>
               <select *ngIf="sites.length" class="vs-select" [(ngModel)]="draft.locationId" (ngModelChange)="onDraftSiteChange($event)">
-                <option value="">Select a site</option>
+                <option value="">{{ 'scheduler.selectASite' | transloco }}</option>
                 <option *ngFor="let site of sites" [value]="site.id">{{ site.name }}</option>
               </select>
-              <input *ngIf="!sites.length" class="vs-input" [(ngModel)]="draft.locationName" placeholder="e.g. Main Clinic">
+              <input *ngIf="!sites.length" class="vs-input" [(ngModel)]="draft.locationName" [placeholder]="'scheduler.locationPlaceholder' | transloco">
             </div>
           </div>
 
           <div class="vs-form-row vs-form-row--2">
             <div>
-              <label class="vs-field-label">Start Time *</label>
+              <label class="vs-field-label">{{ 'scheduler.startTimeRequired' | transloco }}</label>
               <input type="datetime-local" class="vs-input" [(ngModel)]="draft.startLocal">
             </div>
             <div>
-              <label class="vs-field-label">End Time *</label>
+              <label class="vs-field-label">{{ 'scheduler.endTimeRequired' | transloco }}</label>
               <input type="datetime-local" class="vs-input" [(ngModel)]="draft.endLocal">
             </div>
           </div>
 
           <div class="vs-form-row vs-form-row--2">
             <div>
-              <label class="vs-field-label">Required Role</label>
+              <label class="vs-field-label">{{ 'scheduler.requiredRole' | transloco }}</label>
               <select class="vs-select" [(ngModel)]="draft.requiredJobRole">
-                <option value="">Any</option>
+                <option value="">{{ 'scheduler.any' | transloco }}</option>
                 <option>RN</option><option>CNA</option><option>LPN</option><option>Caregiver</option>
                 <option>NP</option><option>MD</option><option>Manager</option><option>Admin</option><option>HR</option>
               </select>
             </div>
             <div>
-              <label class="vs-field-label">Pay Rate ({{ moneyCurrency() }}/hr)</label>
-              <input type="number" class="vs-input" [(ngModel)]="draft.payRate" placeholder="e.g. 45">
+              <label class="vs-field-label">{{ 'scheduler.payRate' | transloco: { currency: moneyCurrency() } }}</label>
+              <input type="number" class="vs-input" [(ngModel)]="draft.payRate" [placeholder]="'scheduler.payRatePlaceholder' | transloco">
             </div>
           </div>
 
           <div class="vs-form-row">
             <div>
-              <label class="vs-field-label">Notes</label>
-              <textarea rows="3" class="vs-input" [(ngModel)]="draft.notes" placeholder="Shift instructions..."></textarea>
+              <label class="vs-field-label">{{ 'scheduler.notes' | transloco }}</label>
+              <textarea rows="3" class="vs-input" [(ngModel)]="draft.notes" [placeholder]="'scheduler.notesPlaceholder' | transloco"></textarea>
             </div>
           </div>
 
           <div class="vs-form-row vs-form-row--2" *ngIf="!editingShiftId">
             <div>
-              <label class="vs-field-label">Assign to Employee (optional)</label>
+              <label class="vs-field-label">{{ 'scheduler.assignToEmployeeOptional' | transloco }}</label>
               <select class="vs-select" [(ngModel)]="draft.assigneeUid">
-                <option value="">Unassigned</option>
+                <option value="">{{ 'scheduler.unassignedOption' | transloco }}</option>
                 <option *ngFor="let u of users()" [value]="u.uid">{{ userLabel(u.uid) }}</option>
               </select>
             </div>
             <div class="sch-inline-checks">
               <label class="sch-toggle-inline">
                 <input type="checkbox" [(ngModel)]="draft.publishIfUnassigned">
-                <span>Publish to marketplace if unassigned</span>
+                <span>{{ 'scheduler.publishIfUnassigned' | transloco }}</span>
               </label>
               <label class="sch-toggle-inline">
                 <input type="checkbox" [(ngModel)]="draft.repeatWeekdays">
-                <span>Repeat weekdays</span>
+                <span>{{ 'scheduler.repeatWeekdays' | transloco }}</span>
               </label>
             </div>
           </div>
 
           <div class="vs-form-row" *ngIf="!editingShiftId && draft.repeatWeekdays">
             <div>
-              <label class="vs-field-label">Number of weeks</label>
+              <label class="vs-field-label">{{ 'scheduler.numberOfWeeks' | transloco }}</label>
               <input type="number" min="1" max="12" class="vs-input" [(ngModel)]="draft.repeatWeeks" placeholder="1">
             </div>
           </div>
 
           <div class="sch-drawer-actions">
-            <button class="vs-btn-ghost" (click)="closeDrawer()">Cancel</button>
+            <button class="vs-btn-ghost" (click)="closeDrawer()">{{ 'scheduler.cancel' | transloco }}</button>
             <button class="vs-btn-primary" (click)="saveDrawer()" [disabled]="!draft.title || !draft.locationName || !draft.startLocal || !draft.endLocal">
-              <mat-icon>{{ editingShiftId ? 'save' : 'add' }}</mat-icon> {{ editingShiftId ? 'Save Changes' : 'Create Shift' }}
+              <mat-icon>{{ editingShiftId ? 'save' : 'add' }}</mat-icon> {{ (editingShiftId ? 'scheduler.saveChanges' : 'scheduler.createShift') | transloco }}
             </button>
           </div>
         </div>
@@ -915,13 +916,13 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   filterAssigned: 'all' | 'assigned' | 'unassigned' = 'all';
   statusOptions = ['draft', 'open', 'published', 'assigned', 'claimed', 'in_progress', 'completed', 'cancelled', 'expired', 'no_show'];
   statusLegend = [
-    { key: 'draft', label: 'Draft' },
-    { key: 'open', label: 'Open' },
-    { key: 'published', label: 'Published' },
-    { key: 'assigned', label: 'Assigned/Claimed' },
-    { key: 'in_progress', label: 'In Progress' },
-    { key: 'completed', label: 'Completed' },
-    { key: 'cancelled', label: 'Cancelled/Expired' },
+    { key: 'draft', label: 'scheduler.legendDraft' },
+    { key: 'open', label: 'scheduler.legendOpen' },
+    { key: 'published', label: 'scheduler.legendPublished' },
+    { key: 'assigned', label: 'scheduler.legendAssignedClaimed' },
+    { key: 'in_progress', label: 'scheduler.legendInProgress' },
+    { key: 'completed', label: 'scheduler.legendCompleted' },
+    { key: 'cancelled', label: 'scheduler.legendCancelledExpired' },
   ];
   
   calendarOptions: any = {
@@ -959,7 +960,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   publishingBatch = false;
 
   drawerOpen = false;
-  drawerTitle = 'Create Shift';
+  drawerTitle = 'scheduler.drawerTitleCreate';
   editingShiftId: string | null = null;
   draft: any = {
     title: 'Shift',
@@ -995,7 +996,8 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     private modal: ModalService,
     private router: Router,
     private zone: NgZone,
-    private toast: ToastService
+    private toast: ToastService,
+    private i18n: TranslocoService,
   ) {
     const bind = () => {
       const orgId = this.ctx.orgId();
@@ -1040,10 +1042,10 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       await this.cmd.publishShift(s.id, yes);
       this.zone.run(() => {
         this.modal.close();
-        this.toast.success(yes ? 'Shift published.' : 'Shift unpublished.');
+        this.toast.success(this.i18n.translate(yes ? 'scheduler.shiftPublished' : 'scheduler.shiftUnpublished'));
       });
     } catch (e: any) {
-      this.zone.run(() => this.toast.errorFrom(e, 'Publish failed.'));
+      this.zone.run(() => this.toast.errorFrom(e, this.i18n.translate('scheduler.publishFailed')));
     }
   }
 
@@ -1072,10 +1074,10 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       await this.cmd.assignShift(this.staffPickForShiftId, uid);
       this.zone.run(() => {
         this.modal.close();
-        this.toast.success('Staff assigned successfully.');
+        this.toast.success(this.i18n.translate('scheduler.staffAssigned'));
       });
     } catch (e: any) {
-      this.zone.run(() => this.toast.errorFrom(e, mapAttendancePolicyError(e, 'Assign failed.')));
+      this.zone.run(() => this.toast.errorFrom(e, mapAttendancePolicyError(e, this.i18n.translate('scheduler.assignFailed'))));
     }
   }
 
@@ -1084,10 +1086,10 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       await this.cmd.unassignShift(s.id);
       this.zone.run(() => {
         this.modal.close();
-        this.toast.success('Staff unassigned.');
+        this.toast.success(this.i18n.translate('scheduler.staffUnassigned'));
       });
     } catch (e: any) {
-      this.zone.run(() => this.toast.errorFrom(e, 'Unassign failed.'));
+      this.zone.run(() => this.toast.errorFrom(e, this.i18n.translate('scheduler.unassignFailed')));
     }
   }
 
@@ -1105,10 +1107,10 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
 
     try {
       await this.adminCmd.rescheduleShift(s.id, start, end);
-      this.toast.success('Shift rescheduled.');
+      this.toast.success(this.i18n.translate('scheduler.shiftRescheduled'));
     } catch (e: any) {
       if (typeof info.revert === 'function') info.revert();
-      this.toast.errorFrom(e, mapAttendancePolicyError(e, 'Reschedule failed.'));
+      this.toast.errorFrom(e, mapAttendancePolicyError(e, this.i18n.translate('scheduler.rescheduleFailed')));
     }
   }
 
@@ -1138,7 +1140,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   }
 
   openDrawerForNew() {
-    this.drawerTitle = 'Create Shift';
+    this.drawerTitle = 'scheduler.drawerTitleCreate';
     this.editingShiftId = null;
     this.drawerOpen = true;
     this.draft = {
@@ -1173,7 +1175,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       this.modal.close();
       const start = tsToDate(s.startAt);
       const end = tsToDate(s.endAt);
-      this.drawerTitle = 'Edit Shift';
+      this.drawerTitle = 'scheduler.drawerTitleEdit';
       this.editingShiftId = s.id;
       this.drawerOpen = true;
       this.draft = {
@@ -1214,11 +1216,11 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       const endAtMs = this.draft.endLocal ? new Date(this.draft.endLocal).getTime() : 0;
 
       if (!startAtMs || !endAtMs) {
-        this.toast.error('Please provide valid Start and End times. [E_VALIDATION_TIME_RANGE]');
+        this.toast.error(`${this.i18n.translate('scheduler.validTimeRangeRequired')} [E_VALIDATION_TIME_RANGE]`);
         return;
       }
       if (endAtMs <= startAtMs) {
-        this.toast.error('End time cannot be before start time. [E_VALIDATION_TIME_ORDER]');
+        this.toast.error(`${this.i18n.translate('scheduler.endBeforeStart')} [E_VALIDATION_TIME_ORDER]`);
         return;
       }
 
@@ -1234,9 +1236,9 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       });
 
       this.closeDrawer();
-      this.toast.success('Shift updated successfully.');
+      this.toast.success(this.i18n.translate('scheduler.shiftUpdated'));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Update shift failed.');
+      this.toast.errorFrom(e, this.i18n.translate('scheduler.updateShiftFailed'));
     }
   }
 
@@ -1246,12 +1248,12 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       const endAtMs = this.draft.endLocal ? new Date(this.draft.endLocal).getTime() : 0;
 
       if (!startAtMs || !endAtMs) {
-        this.toast.error('Please provide valid Start and End times. [E_VALIDATION_TIME_RANGE]');
+        this.toast.error(`${this.i18n.translate('scheduler.validTimeRangeRequired')} [E_VALIDATION_TIME_RANGE]`);
         return;
       }
 
       if (endAtMs <= startAtMs) {
-        this.toast.error('End time cannot be before start time. [E_VALIDATION_TIME_ORDER]');
+        this.toast.error(`${this.i18n.translate('scheduler.endBeforeStart')} [E_VALIDATION_TIME_ORDER]`);
         return;
       }
 
@@ -1288,9 +1290,11 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       }
 
       this.drawerOpen = false;
-      this.toast.success(slots.length > 1 ? `${slots.length} shifts created successfully.` : 'Shift created successfully.');
+      this.toast.success(slots.length > 1
+        ? this.i18n.translate('scheduler.shiftsCreated', { count: slots.length })
+        : this.i18n.translate('scheduler.shiftCreated'));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Create shift failed.');
+      this.toast.errorFrom(e, this.i18n.translate('scheduler.createShiftFailed'));
     }
   }
 
@@ -1531,9 +1535,11 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       for (const shift of targets) {
         await this.cmd.publishShift(shift.id, true);
       }
-      this.toast.success(targets.length === 1 ? 'Shift published.' : `${targets.length} shifts published.`);
+      this.toast.success(targets.length === 1
+        ? this.i18n.translate('scheduler.shiftPublished')
+        : this.i18n.translate('scheduler.shiftsPublished', { count: targets.length }));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Batch publish failed.');
+      this.toast.errorFrom(e, this.i18n.translate('scheduler.batchPublishFailed'));
     } finally {
       this.publishingBatch = false;
     }
