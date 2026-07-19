@@ -2,6 +2,7 @@ import { ApplicationConfig, APP_INITIALIZER, ErrorHandler, importProvidersFrom, 
 import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideServiceWorker } from '@angular/service-worker';
+import { provideTransloco } from '@jsverse/transloco';
 
 import { APP_ROUTES } from './app.routes';
 
@@ -9,6 +10,8 @@ import { ThemeService } from './core/theme/theme.service';
 import { SessionBootstrapService } from './core/auth/session-bootstrap.service';
 import { GlobalErrorHandler } from './core/error-handling/global-error-handler';
 import { AppUpdateService } from './core/pwa/app-update.service';
+import { LanguageService } from './core/i18n/language.service';
+import { TranslocoHttpLoader } from './core/i18n/transloco-http-loader';
 
 // Material modules you want globally
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -34,6 +37,16 @@ export const appConfig: ApplicationConfig = {
       enabled: !isDevMode(),
       registrationStrategy: 'registerWhenStable:30000',
     }),
+    provideTransloco({
+      config: {
+        availableLangs: ['en', 'fr'],
+        defaultLang: 'en',
+        fallbackLang: 'en',
+        reRenderOnLangChange: true,
+        prodMode: !isDevMode(),
+      },
+      loader: TranslocoHttpLoader,
+    }),
 
     importProvidersFrom(
       MatToolbarModule,
@@ -55,6 +68,12 @@ export const appConfig: ApplicationConfig = {
       multi: true,
       deps: [ThemeService],
       useFactory: (theme: ThemeService) => () => theme.init(),
+    },
+    {
+      provide: APP_INITIALIZER,
+      multi: true,
+      deps: [LanguageService],
+      useFactory: (language: LanguageService) => () => language.init(),
     },
     {
       provide: APP_INITIALIZER,
