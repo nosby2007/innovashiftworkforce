@@ -1,10 +1,12 @@
 import { Component } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { TranslocoModule } from '@jsverse/transloco';
+import { LanguageSwitcherComponent } from '../../../core/i18n/language-switcher.component';
 
 @Component({
   selector: 'app-public-layout',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, TranslocoModule, LanguageSwitcherComponent],
   template: `
     <header class="pub-nav" id="pub-navbar">
       <div class="pub-nav__inner">
@@ -13,24 +15,25 @@ import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
           <span class="pub-nav__name">INNO<span class="pub-nav__accent">VASHIFT</span></span>
         </a>
         <nav class="pub-nav__links">
-          <a routerLink="/features" routerLinkActive="active" class="pub-nav__link" id="nav-features">Features</a>
-          <a routerLink="/pricing"  routerLinkActive="active" class="pub-nav__link" id="nav-pricing">Pricing</a>
-          <a routerLink="/contact"  routerLinkActive="active" class="pub-nav__link" id="nav-contact">Contact</a>
+          <a routerLink="/features" routerLinkActive="active" class="pub-nav__link" id="nav-features">{{ 'publicLayout.navFeatures' | transloco }}</a>
+          <a routerLink="/pricing"  routerLinkActive="active" class="pub-nav__link" id="nav-pricing">{{ 'publicLayout.navPricing' | transloco }}</a>
+          <a routerLink="/contact"  routerLinkActive="active" class="pub-nav__link" id="nav-contact">{{ 'publicLayout.navContact' | transloco }}</a>
         </nav>
         <div class="pub-nav__actions">
-          <a routerLink="/login"   class="pub-nav__signin" id="nav-signin">Sign in</a>
-          <a routerLink="/contact" class="pub-nav__cta"    id="nav-get-started">Get Started</a>
+          <app-language-switcher></app-language-switcher>
+          <a routerLink="/login"   class="pub-nav__signin" id="nav-signin">{{ 'publicLayout.signIn' | transloco }}</a>
+          <a routerLink="/contact" class="pub-nav__cta"    id="nav-get-started">{{ 'publicLayout.getStarted' | transloco }}</a>
         </div>
-        <button class="pub-nav__burger" [class.open]="open" (click)="open=!open" id="pub-hamburger" aria-label="Menu">
+        <button class="pub-nav__burger" [class.open]="open" (click)="open=!open" id="pub-hamburger" [attr.aria-label]="'publicLayout.menuAria' | transloco">
           <span></span><span></span><span></span>
         </button>
       </div>
       <div class="pub-nav__drawer" [class.open]="open" id="pub-mobile-menu">
-        <a routerLink="/features" (click)="open=false" class="pub-nav__dl">Features</a>
-        <a routerLink="/pricing"  (click)="open=false" class="pub-nav__dl">Pricing</a>
-        <a routerLink="/contact"  (click)="open=false" class="pub-nav__dl">Contact</a>
-        <a routerLink="/login"    (click)="open=false" class="pub-nav__dl">Sign in</a>
-        <a routerLink="/contact"  (click)="open=false" class="pub-nav__dcta">Get Started →</a>
+        <a routerLink="/features" (click)="open=false" class="pub-nav__dl">{{ 'publicLayout.navFeatures' | transloco }}</a>
+        <a routerLink="/pricing"  (click)="open=false" class="pub-nav__dl">{{ 'publicLayout.navPricing' | transloco }}</a>
+        <a routerLink="/contact"  (click)="open=false" class="pub-nav__dl">{{ 'publicLayout.navContact' | transloco }}</a>
+        <a routerLink="/login"    (click)="open=false" class="pub-nav__dl">{{ 'publicLayout.signIn' | transloco }}</a>
+        <a routerLink="/contact"  (click)="open=false" class="pub-nav__dcta">{{ 'publicLayout.getStartedArrow' | transloco }}</a>
       </div>
     </header>
 
@@ -42,30 +45,30 @@ import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
           <div class="pub-footer__logo">IS</div>
           <div>
             <div class="pub-footer__name">INNOVASHIFT</div>
-            <div class="pub-footer__tag">Workforce Management Platform by Innovacare</div>
+            <div class="pub-footer__tag">{{ 'publicLayout.footerTagline' | transloco }}</div>
           </div>
         </div>
         <div class="pub-footer__cols">
           <div class="pub-footer__col">
-            <p class="pub-footer__ht">Product</p>
-            <a routerLink="/features" class="pub-footer__lk">Features</a>
-            <a routerLink="/pricing"  class="pub-footer__lk">Pricing</a>
-            <a routerLink="/contact"  class="pub-footer__lk">Request Demo</a>
+            <p class="pub-footer__ht">{{ 'publicLayout.footerProduct' | transloco }}</p>
+            <a routerLink="/features" class="pub-footer__lk">{{ 'publicLayout.navFeatures' | transloco }}</a>
+            <a routerLink="/pricing"  class="pub-footer__lk">{{ 'publicLayout.navPricing' | transloco }}</a>
+            <a routerLink="/contact"  class="pub-footer__lk">{{ 'publicLayout.footerRequestDemo' | transloco }}</a>
           </div>
           <div class="pub-footer__col">
-            <p class="pub-footer__ht">Company</p>
-            <a routerLink="/contact" class="pub-footer__lk">Contact</a>
-            <a routerLink="/"        class="pub-footer__lk">About</a>
+            <p class="pub-footer__ht">{{ 'publicLayout.footerCompany' | transloco }}</p>
+            <a routerLink="/contact" class="pub-footer__lk">{{ 'publicLayout.navContact' | transloco }}</a>
+            <a routerLink="/"        class="pub-footer__lk">{{ 'publicLayout.footerAbout' | transloco }}</a>
           </div>
           <div class="pub-footer__col">
-            <p class="pub-footer__ht">Workspace</p>
-            <a routerLink="/login"     class="pub-footer__lk">Employee Login</a>
-            <a routerLink="/admin" class="pub-footer__lk">Admin Portal</a>
+            <p class="pub-footer__ht">{{ 'publicLayout.footerWorkspace' | transloco }}</p>
+            <a routerLink="/login"     class="pub-footer__lk">{{ 'publicLayout.footerEmployeeLogin' | transloco }}</a>
+            <a routerLink="/admin" class="pub-footer__lk">{{ 'publicLayout.footerAdminPortal' | transloco }}</a>
           </div>
         </div>
       </div>
       <div class="pub-footer__bottom">
-        <span>© {{ year }} INNOVASHIFT · Healthcare Workforce Management</span>
+        <span>{{ 'publicLayout.footerBottom' | transloco: { year } }}</span>
       </div>
     </footer>
   `,

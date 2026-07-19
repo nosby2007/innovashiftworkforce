@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { TranslocoModule } from '@jsverse/transloco';
 import { SeoService } from '../../../core/seo/seo.service';
 
 // Cloudinary image assets
@@ -14,7 +15,7 @@ const IMG = {
 @Component({
   selector: 'app-landing',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, TranslocoModule],
   template: `
     <div class="land">
 
@@ -28,25 +29,24 @@ const IMG = {
         <div class="hero__inner">
           <!-- Left copy -->
           <div class="hero__copy">
-            <div class="hero__badge">🏥 Trusted by 150+ Healthcare Orgs</div>
+            <div class="hero__badge">{{ 'landing.heroBadge' | transloco }}</div>
             <h1 class="hero__h1">
-              The smarter way to<br>
-              <span class="grad">manage your workforce</span>
+              {{ 'landing.heroH1Line1' | transloco }}<br>
+              <span class="grad">{{ 'landing.heroH1Grad' | transloco }}</span>
             </h1>
             <p class="hero__sub">
-              INNOVASHIFT unifies scheduling, shift marketplace, attendance tracking,
-              and admin analytics into one powerful platform — built for modern healthcare.
+              {{ 'landing.heroSub' | transloco }}
             </p>
             <div class="hero__actions">
-              <a routerLink="/contact" class="btn-primary" id="hero-get-started">Start Free Trial →</a>
-              <a routerLink="/features" class="btn-ghost"  id="hero-features">See Features</a>
+              <a routerLink="/contact" class="btn-primary" id="hero-get-started">{{ 'landing.startFreeTrial' | transloco }}</a>
+              <a routerLink="/features" class="btn-ghost"  id="hero-features">{{ 'landing.seeFeatures' | transloco }}</a>
             </div>
             <div class="hero__trust">
-              <div class="hero__trust-item"><span class="hero__trust-num">10k+</span><span class="hero__trust-lbl">Shifts / month</span></div>
+              <div class="hero__trust-item"><span class="hero__trust-num">10k+</span><span class="hero__trust-lbl">{{ 'landing.trustShifts' | transloco }}</span></div>
               <div class="hero__trust-div"></div>
-              <div class="hero__trust-item"><span class="hero__trust-num">98%</span><span class="hero__trust-lbl">On-time rate</span></div>
+              <div class="hero__trust-item"><span class="hero__trust-num">98%</span><span class="hero__trust-lbl">{{ 'landing.trustOnTime' | transloco }}</span></div>
               <div class="hero__trust-div"></div>
-              <div class="hero__trust-item"><span class="hero__trust-num">99.9%</span><span class="hero__trust-lbl">Uptime SLA</span></div>
+              <div class="hero__trust-item"><span class="hero__trust-num">99.9%</span><span class="hero__trust-lbl">{{ 'landing.trustUptime' | transloco }}</span></div>
             </div>
           </div>
 
@@ -64,23 +64,22 @@ const IMG = {
       <section class="feat-row" id="feat-shifts">
         <div class="feat-row__inner">
           <div class="feat-row__img-wrap">
-            <div class="feat-row__img-badge">📋 Shift Marketplace</div>
+            <div class="feat-row__img-badge">{{ 'landing.shiftsBadge' | transloco }}</div>
             <img [src]="img.shifts" alt="Open shifts and swap requests" class="feat-row__img" loading="lazy" />
           </div>
           <div class="feat-row__copy">
-            <div class="section-label">Smart Scheduling</div>
-            <h2 class="section-h2">Open shifts filled in real&nbsp;time</h2>
+            <div class="section-label">{{ 'landing.shiftsLabel' | transloco }}</div>
+            <h2 class="section-h2">{{ 'landing.shiftsH2' | transloco }}</h2>
             <p class="section-body">
-              Post open shifts to a live marketplace. Employees browse available opportunities,
-              submit swap requests, and get instant notifications — eliminating manual back-and-forth.
+              {{ 'landing.shiftsBody' | transloco }}
             </p>
             <ul class="feat-list">
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Drag-and-drop visual scheduler</li>
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Shift swap & claim workflows</li>
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Conflict & overtime detection</li>
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Push & in-app notifications</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.shiftsFeat1' | transloco }}</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.shiftsFeat2' | transloco }}</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.shiftsFeat3' | transloco }}</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.shiftsFeat4' | transloco }}</li>
             </ul>
-            <a routerLink="/features" class="feat-row__link" id="shifts-learn-more">Learn more →</a>
+            <a routerLink="/features" class="feat-row__link" id="shifts-learn-more">{{ 'landing.learnMore' | transloco }}</a>
           </div>
         </div>
       </section>
@@ -89,23 +88,22 @@ const IMG = {
       <section class="feat-row feat-row--rev" id="feat-timesheets">
         <div class="feat-row__inner">
           <div class="feat-row__img-wrap">
-            <div class="feat-row__img-badge">⏱️ Attendance</div>
+            <div class="feat-row__img-badge">{{ 'landing.timesheetsBadge' | transloco }}</div>
             <img [src]="img.timesheets" alt="Timesheets and reports" class="feat-row__img" loading="lazy" />
           </div>
           <div class="feat-row__copy">
-            <div class="section-label">Time & Attendance</div>
-            <h2 class="section-h2">Accurate timesheets,<br>zero paperwork</h2>
+            <div class="section-label">{{ 'landing.timesheetsLabel' | transloco }}</div>
+            <h2 class="section-h2">{{ 'landing.timesheetsH2' | transloco }}</h2>
             <p class="section-body">
-              GPS-verified clock in/out, automated timesheet generation, manager approvals, and
-              one-click payroll-ready exports. Full compliance, zero headaches.
+              {{ 'landing.timesheetsBody' | transloco }}
             </p>
             <ul class="feat-list">
-              <li class="feat-list__item"><span class="feat-list__dot"></span>GPS-verified attendance</li>
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Manager correction workflows</li>
-              <li class="feat-list__item"><span class="feat-list__dot"></span>PDF & CSV export</li>
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Overtime & compliance alerts</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.timesheetsFeat1' | transloco }}</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.timesheetsFeat2' | transloco }}</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.timesheetsFeat3' | transloco }}</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.timesheetsFeat4' | transloco }}</li>
             </ul>
-            <a routerLink="/features" class="feat-row__link" id="timesheets-learn-more">Learn more →</a>
+            <a routerLink="/features" class="feat-row__link" id="timesheets-learn-more">{{ 'landing.learnMore' | transloco }}</a>
           </div>
         </div>
       </section>
@@ -114,23 +112,22 @@ const IMG = {
       <section class="feat-row" id="feat-multisite">
         <div class="feat-row__inner">
           <div class="feat-row__img-wrap">
-            <div class="feat-row__img-badge">🌍 Multi-Location</div>
+            <div class="feat-row__img-badge">{{ 'landing.multisiteBadge' | transloco }}</div>
             <img [src]="img.multisite" alt="Multi-location workforce control" class="feat-row__img" loading="lazy" />
           </div>
           <div class="feat-row__copy">
-            <div class="section-label">Enterprise Scale</div>
-            <h2 class="section-h2">One platform,<br>every location</h2>
+            <div class="section-label">{{ 'landing.multisiteLabel' | transloco }}</div>
+            <h2 class="section-h2">{{ 'landing.multisiteH2' | transloco }}</h2>
             <p class="section-body">
-              Manage multiple sites, departments, and thousands of employees from a single dashboard.
-              Each organization is fully isolated — secure, scalable multi-tenant SaaS.
+              {{ 'landing.multisiteBody' | transloco }}
             </p>
             <ul class="feat-list">
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Centralized multi-site oversight</li>
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Per-location performance metrics</li>
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Role-based access (Admin/HR/Staff)</li>
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Audit logging on every action</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.multisiteFeat1' | transloco }}</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.multisiteFeat2' | transloco }}</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.multisiteFeat3' | transloco }}</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.multisiteFeat4' | transloco }}</li>
             </ul>
-            <a routerLink="/features" class="feat-row__link" id="multisite-learn-more">Learn more →</a>
+            <a routerLink="/features" class="feat-row__link" id="multisite-learn-more">{{ 'landing.learnMore' | transloco }}</a>
           </div>
         </div>
       </section>
@@ -139,23 +136,22 @@ const IMG = {
       <section class="feat-row feat-row--rev" id="feat-leave">
         <div class="feat-row__inner">
           <div class="feat-row__img-wrap">
-            <div class="feat-row__img-badge">📆 Leave Management</div>
+            <div class="feat-row__img-badge">{{ 'landing.leaveBadge' | transloco }}</div>
             <img [src]="img.leave" alt="Leave requests and approvals" class="feat-row__img" loading="lazy" />
           </div>
           <div class="feat-row__copy">
-            <div class="section-label">HR Workflows</div>
-            <h2 class="section-h2">Leave requests,<br>handled instantly</h2>
+            <div class="section-label">{{ 'landing.leaveLabel' | transloco }}</div>
+            <h2 class="section-h2">{{ 'landing.leaveH2' | transloco }}</h2>
             <p class="section-body">
-              Employees submit leave requests in seconds. Managers review, approve, or decline with a tap.
-              Leave balances update automatically and sync with the scheduler.
+              {{ 'landing.leaveBody' | transloco }}
             </p>
             <ul class="feat-list">
-              <li class="feat-list__item"><span class="feat-list__dot"></span>One-tap approval workflow</li>
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Leave balance tracking</li>
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Leave type analytics</li>
-              <li class="feat-list__item"><span class="feat-list__dot"></span>Scheduler conflict prevention</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.leaveFeat1' | transloco }}</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.leaveFeat2' | transloco }}</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.leaveFeat3' | transloco }}</li>
+              <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.leaveFeat4' | transloco }}</li>
             </ul>
-            <a routerLink="/features" class="feat-row__link" id="leave-learn-more">Learn more →</a>
+            <a routerLink="/features" class="feat-row__link" id="leave-learn-more">{{ 'landing.learnMore' | transloco }}</a>
           </div>
         </div>
       </section>
@@ -163,15 +159,15 @@ const IMG = {
       <!-- ── QUICK STATS ──────────────────────────────────────────────── -->
       <section class="stats-band" id="stats">
         <div class="stats-band__inner">
-          <div class="stats-band__item"><span class="stats-num">150+</span><span class="stats-lbl">Organizations</span></div>
+          <div class="stats-band__item"><span class="stats-num">150+</span><span class="stats-lbl">{{ 'landing.statsOrgs' | transloco }}</span></div>
           <div class="stats-band__div"></div>
-          <div class="stats-band__item"><span class="stats-num">10k+</span><span class="stats-lbl">Shifts per month</span></div>
+          <div class="stats-band__item"><span class="stats-num">10k+</span><span class="stats-lbl">{{ 'landing.statsShifts' | transloco }}</span></div>
           <div class="stats-band__div"></div>
-          <div class="stats-band__item"><span class="stats-num">98%</span><span class="stats-lbl">On-time delivery</span></div>
+          <div class="stats-band__item"><span class="stats-num">98%</span><span class="stats-lbl">{{ 'landing.statsOnTime' | transloco }}</span></div>
           <div class="stats-band__div"></div>
-          <div class="stats-band__item"><span class="stats-num">5 min</span><span class="stats-lbl">Avg. onboarding</span></div>
+          <div class="stats-band__item"><span class="stats-num">5 min</span><span class="stats-lbl">{{ 'landing.statsOnboarding' | transloco }}</span></div>
           <div class="stats-band__div"></div>
-          <div class="stats-band__item"><span class="stats-num">99.9%</span><span class="stats-lbl">Uptime SLA</span></div>
+          <div class="stats-band__item"><span class="stats-num">99.9%</span><span class="stats-lbl">{{ 'landing.statsUptime' | transloco }}</span></div>
         </div>
       </section>
 
@@ -179,11 +175,11 @@ const IMG = {
       <section class="cta-band" id="cta">
         <div class="cta-band__inner">
           <div class="cta-band__glow" aria-hidden="true"></div>
-          <h2 class="cta-band__h2">Ready to modernize your workforce?</h2>
-          <p class="cta-band__sub">Join 150+ healthcare organizations already running on INNOVASHIFT.</p>
+          <h2 class="cta-band__h2">{{ 'landing.ctaH2' | transloco }}</h2>
+          <p class="cta-band__sub">{{ 'landing.ctaSub' | transloco }}</p>
           <div class="cta-band__btns">
-            <a routerLink="/contact" class="btn-primary" id="cta-demo">Request a Demo</a>
-            <a routerLink="/pricing" class="btn-ghost"   id="cta-pricing">View Pricing</a>
+            <a routerLink="/contact" class="btn-primary" id="cta-demo">{{ 'landing.ctaRequestDemo' | transloco }}</a>
+            <a routerLink="/pricing" class="btn-ghost"   id="cta-pricing">{{ 'landing.ctaViewPricing' | transloco }}</a>
           </div>
         </div>
       </section>

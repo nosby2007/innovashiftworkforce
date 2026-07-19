@@ -2,12 +2,13 @@ import { Component, signal, inject } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { SeoService } from '../../../core/seo/seo.service';
 
 @Component({
   selector: 'app-contact',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, TranslocoModule],
   template: `
     <div class="contact-page">
       <div class="orb orb-a" aria-hidden="true"></div>
@@ -17,30 +18,30 @@ import { SeoService } from '../../../core/seo/seo.service';
 
         <!-- Left info panel -->
         <aside class="contact-info" id="contact-info">
-          <div class="label">Get in Touch</div>
-          <h1 class="contact-info__h1">Let's get your<br><span class="grad">team shifting</span></h1>
-          <p class="contact-info__sub">Fill out the form and our team will reach out within one business day to schedule your personalized demo.</p>
+          <div class="label">{{ 'publicContact.kicker' | transloco }}</div>
+          <h1 class="contact-info__h1">{{ 'publicContact.h1Line1' | transloco }}<br><span class="grad">{{ 'publicContact.h1Grad' | transloco }}</span></h1>
+          <p class="contact-info__sub">{{ 'publicContact.sub' | transloco }}</p>
 
           <div class="contact-info__items">
             <div class="ci-item">
               <div class="ci-icon">📧</div>
               <div>
-                <div class="ci-label">Email</div>
+                <div class="ci-label">{{ 'publicContact.email' | transloco }}</div>
                 <div class="ci-value">hello&#64;innovashift.com</div>
               </div>
             </div>
             <div class="ci-item">
               <div class="ci-icon">🕐</div>
               <div>
-                <div class="ci-label">Response Time</div>
-                <div class="ci-value">Within 1 business day</div>
+                <div class="ci-label">{{ 'publicContact.responseTime' | transloco }}</div>
+                <div class="ci-value">{{ 'publicContact.responseTimeValue' | transloco }}</div>
               </div>
             </div>
             <div class="ci-item">
               <div class="ci-icon">🔒</div>
               <div>
-                <div class="ci-label">Privacy</div>
-                <div class="ci-value">Your data is never shared</div>
+                <div class="ci-label">{{ 'publicContact.privacy' | transloco }}</div>
+                <div class="ci-value">{{ 'publicContact.privacyValue' | transloco }}</div>
               </div>
             </div>
           </div>
@@ -51,39 +52,39 @@ import { SeoService } from '../../../core/seo/seo.service';
 
           @if (!submitted()) {
             <form [formGroup]="form" (ngSubmit)="submit()" id="contact-form" novalidate>
-              <div class="contact-card__title">Request a Demo</div>
-              <div class="contact-card__sub">Tell us about your organization</div>
+              <div class="contact-card__title">{{ 'publicContact.formTitle' | transloco }}</div>
+              <div class="contact-card__sub">{{ 'publicContact.formSub' | transloco }}</div>
 
               <div class="form-row">
                 <div class="form-field" id="field-name">
-                  <label class="form-label" for="c-name">Full Name</label>
-                  <input id="c-name" class="form-input" formControlName="name" placeholder="Jane Smith" autocomplete="name" [class.err]="touched('name')" />
+                  <label class="form-label" for="c-name">{{ 'publicContact.fullName' | transloco }}</label>
+                  <input id="c-name" class="form-input" formControlName="name" [placeholder]="'publicContact.fullNamePlaceholder' | transloco" autocomplete="name" [class.err]="touched('name')" />
                 </div>
                 <div class="form-field" id="field-org">
-                  <label class="form-label" for="c-org">Organization</label>
-                  <input id="c-org" class="form-input" formControlName="organization" placeholder="City Medical Center" autocomplete="organization" [class.err]="touched('org')" />
+                  <label class="form-label" for="c-org">{{ 'publicContact.organization' | transloco }}</label>
+                  <input id="c-org" class="form-input" formControlName="organization" [placeholder]="'publicContact.organizationPlaceholder' | transloco" autocomplete="organization" [class.err]="touched('org')" />
                 </div>
               </div>
 
               <div class="form-field" id="field-email">
-                <label class="form-label" for="c-email">Work Email</label>
-                <input id="c-email" class="form-input" formControlName="email" type="email" autocomplete="email" placeholder="jane@hospital.org" [class.err]="touched('email')" />
+                <label class="form-label" for="c-email">{{ 'publicContact.workEmail' | transloco }}</label>
+                <input id="c-email" class="form-input" formControlName="email" type="email" autocomplete="email" [placeholder]="'publicContact.workEmailPlaceholder' | transloco" [class.err]="touched('email')" />
               </div>
 
               <div class="form-field" id="field-size">
-                <label class="form-label" for="c-size">Team Size</label>
+                <label class="form-label" for="c-size">{{ 'publicContact.teamSize' | transloco }}</label>
                 <select id="c-size" class="form-input form-select" formControlName="size">
-                  <option value="" disabled>Select team size</option>
-                  <option value="1-25">1 – 25 employees</option>
-                  <option value="26-100">26 – 100 employees</option>
-                  <option value="101-500">101 – 500 employees</option>
-                  <option value="500+">500+ employees</option>
+                  <option value="" disabled>{{ 'publicContact.selectTeamSize' | transloco }}</option>
+                  <option value="1-25">{{ 'publicContact.size1' | transloco }}</option>
+                  <option value="26-100">{{ 'publicContact.size2' | transloco }}</option>
+                  <option value="101-500">{{ 'publicContact.size3' | transloco }}</option>
+                  <option value="500+">{{ 'publicContact.size4' | transloco }}</option>
                 </select>
               </div>
 
               <div class="form-field" id="field-message">
-                <label class="form-label" for="c-message">Message <span class="form-opt">(optional)</span></label>
-                <textarea id="c-message" class="form-input form-textarea" formControlName="message" placeholder="Tell us about your scheduling challenges..."></textarea>
+                <label class="form-label" for="c-message">{{ 'publicContact.message' | transloco }} <span class="form-opt">{{ 'publicContact.optional' | transloco }}</span></label>
+                <textarea id="c-message" class="form-input form-textarea" formControlName="message" [placeholder]="'publicContact.messagePlaceholder' | transloco"></textarea>
               </div>
 
               <div class="hp-field" aria-hidden="true">
@@ -97,15 +98,15 @@ import { SeoService } from '../../../core/seo/seo.service';
 
               <button type="submit" id="contact-submit" class="contact-btn" [disabled]="form.invalid || loading()">
                 @if (loading()) { <span class="contact-spinner"></span> }
-                @else { Send Request → }
+                @else { {{ 'publicContact.sendRequest' | transloco }} }
               </button>
             </form>
           } @else {
             <div class="contact-success" id="contact-success" role="status" aria-live="polite">
               <div class="contact-success__icon">✅</div>
-              <h2 class="contact-success__h2">Request Sent!</h2>
-              <p class="contact-success__sub">Thanks! Our team will reach out to <strong>{{ submittedEmail() }}</strong> within one business day.</p>
-              <a routerLink="/" class="btn-ghost" id="contact-success-home">← Back to Home</a>
+              <h2 class="contact-success__h2">{{ 'publicContact.requestSent' | transloco }}</h2>
+              <p class="contact-success__sub">{{ 'publicContact.successSubPre' | transloco }} <strong>{{ submittedEmail() }}</strong> {{ 'publicContact.successSubPost' | transloco }}</p>
+              <a routerLink="/" class="btn-ghost" id="contact-success-home">{{ 'publicContact.backToHome' | transloco }}</a>
             </div>
           }
         </div>
@@ -188,6 +189,7 @@ import { SeoService } from '../../../core/seo/seo.service';
 })
 export class ContactPage {
   private fb = inject(FormBuilder);
+  private i18n = inject(TranslocoService);
 
   constructor(seo: SeoService) {
     seo.setPage({
@@ -227,7 +229,7 @@ export class ContactPage {
       this.submittedEmail.set(body.email ?? '');
       this.submitted.set(true);
     } catch (e: any) {
-      this.error.set(e?.message || 'Could not send your request. Please try again or email us directly.');
+      this.error.set(e?.message || this.i18n.translate('publicContact.submitError'));
     } finally {
       this.loading.set(false);
     }
