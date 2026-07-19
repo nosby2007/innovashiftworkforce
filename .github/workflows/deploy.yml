@@ -24,7 +24,7 @@ jobs:
         working-directory: frontend-angular
         run: |
           npm ci
-          npm run build
+          npm run prerender
 
       - name: Install & build functions
         working-directory: backend-firebase-functions

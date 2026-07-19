@@ -2,6 +2,7 @@ import { ApplicationConfig, APP_INITIALIZER, ErrorHandler, importProvidersFrom, 
 import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideServiceWorker } from '@angular/service-worker';
+import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
 import { provideTransloco } from '@jsverse/transloco';
 
 import { APP_ROUTES } from './app.routes';
@@ -87,5 +88,6 @@ export const appConfig: ApplicationConfig = {
       deps: [AppUpdateService],
       useFactory: (appUpdate: AppUpdateService) => () => appUpdate.init(),
     },
+    provideClientHydration(withEventReplay()),
   ],
 };

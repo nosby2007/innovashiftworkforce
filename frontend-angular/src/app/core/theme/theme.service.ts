@@ -1,5 +1,5 @@
-import { Injectable, signal, inject } from '@angular/core';
-import { DOCUMENT } from '@angular/common';
+import { Injectable, PLATFORM_ID, signal, inject } from '@angular/core';
+import { DOCUMENT, isPlatformBrowser } from '@angular/common';
 import { ThemeId, ThemeOption } from './theme.model';
 
 const STORAGE_KEY = 'vs_theme';
@@ -7,6 +7,8 @@ const STORAGE_KEY = 'vs_theme';
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
   private doc = inject(DOCUMENT);
+  private platformId = inject(PLATFORM_ID);
+  private isBrowser = isPlatformBrowser(this.platformId);
 
   private readonly themes: ThemeOption[] = [
     { id: 'ocean', label: 'theme.ocean', bodyClass: 'theme-ocean', recommended: true, description: 'theme.oceanDesc' },
@@ -23,7 +25,7 @@ export class ThemeService {
   }
 
   init(): void {
-    const saved = (localStorage.getItem(STORAGE_KEY) as ThemeId | null) ?? 'ocean';
+    const saved = (this.isBrowser ? (localStorage.getItem(STORAGE_KEY) as ThemeId | null) : null) ?? 'ocean';
     this.apply(saved);
   }
 
@@ -35,7 +37,7 @@ export class ThemeService {
     const match = this.themes.find(t => t.id === themeId) ?? this.themes[0];
     body.classList.add(match.bodyClass);
 
-    localStorage.setItem(STORAGE_KEY, match.id);
+    if (this.isBrowser) localStorage.setItem(STORAGE_KEY, match.id);
     this.current.set(match.id);
   }
 }

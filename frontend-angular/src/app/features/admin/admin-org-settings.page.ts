@@ -1,5 +1,5 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, PLATFORM_ID, ViewChild, inject, signal } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -24,7 +24,10 @@ import {
   DEFAULT_ACCRUAL_POLICY,
 } from '../../core/tenancy/org-accrual.model';
 import { OrgHoliday, BenefitLine, defaultDeductionElectionsForCountry } from '../../shared/utils/payroll.util';
-import * as L from 'leaflet';
+// Leaflet touches `window` at module-evaluation time, so it's type-only here
+// and loaded dynamically (gated on isPlatformBrowser) in ensureMapReady() —
+// see geofence-map.component.ts for the full rationale.
+import type * as Leaflet from 'leaflet';
 
 interface OrgSite {
   id: string;
@@ -975,9 +978,11 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   selectedSiteIndex = 0;
 
   @ViewChild('geofenceMap') geofenceMap?: ElementRef<HTMLDivElement>;
-  private map: L.Map | null = null;
-  private marker: L.Marker | null = null;
-  private circle: L.Circle | null = null;
+  private platformId = inject(PLATFORM_ID);
+  private L: typeof Leaflet | null = null;
+  private map: Leaflet.Map | null = null;
+  private marker: Leaflet.Marker | null = null;
+  private circle: Leaflet.Circle | null = null;
 
   constructor(private ctx: OrgContextService, private toast: ToastService, private plans: PlanEntitlementsService) {
     this.orgId = this.ctx.orgId();
@@ -1027,6 +1032,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit() {
+    if (!isPlatformBrowser(this.platformId)) return;
     setTimeout(() => this.ensureMapReady(), 0);
   }
 
@@ -1202,9 +1208,12 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     this.refreshMapFromSelectedSite(false);
   }
 
-  private ensureMapReady() {
+  private async ensureMapReady() {
+    if (!isPlatformBrowser(this.platformId)) return;
     if (!this.canManageSites()) return;
     if (this.map || !this.geofenceMap?.nativeElement) return;
+
+    const L = this.L ?? (this.L = await import('leaflet'));
 
     this.map = L.map(this.geofenceMap.nativeElement, {
       center: [33.749, -84.388],
@@ -1217,7 +1226,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(this.map);
 
-    this.map.on('click', (event: L.LeafletMouseEvent) => {
+    this.map.on('click', (event: Leaflet.LeafletMouseEvent) => {
       const site = this.draft.sites[this.selectedSiteIndex];
       if (!site) return;
       site.latitude = Number(event.latlng.lat.toFixed(6));
@@ -1228,11 +1237,14 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     this.refreshMapFromSelectedSite();
   }
 
-  private refreshMapFromSelectedSite(recenter = true) {
+  private async refreshMapFromSelectedSite(recenter = true) {
+    if (!isPlatformBrowser(this.platformId)) return;
     if (!this.map) {
-      this.ensureMapReady();
+      await this.ensureMapReady();
       if (!this.map) return;
     }
+    const L = this.L;
+    if (!L) return;
     const site = this.draft.sites[this.selectedSiteIndex];
     if (!site) {
       if (this.marker) { this.map.removeLayer(this.marker); this.marker = null; }
@@ -1246,7 +1258,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
 
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-    const center: L.LatLngExpression = [lat, lng];
+    const center: Leaflet.LatLngExpression = [lat, lng];
     if (!this.marker) {
       this.marker = L.marker(center).addTo(this.map);
     } else {
