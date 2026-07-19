@@ -43,7 +43,7 @@
     }
   },
   "hosting": {
-    "public": "frontend-angular/dist/innovacare-shift-frontend",
+    "public": "frontend-angular/dist/innovacare-shift-frontend/browser",
     "ignore": [
       "firebase.json",
       "**/.*",

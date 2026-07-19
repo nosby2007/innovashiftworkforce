@@ -10,16 +10,19 @@
         "build": {
           "builder": "@angular-devkit/build-angular:browser",
           "options": {
-            "outputPath": "dist/innovacare-shift-frontend",
+            "outputPath": "dist/innovacare-shift-frontend/browser",
             "index": "src/index.html",
             "main": "src/main.ts",
             "polyfills": [],
             "tsConfig": "tsconfig.app.json",
-            "assets": ["src/assets", "src/manifest.webmanifest", "src/firebase-messaging-sw.js", "src/robots.txt", "src/sitemap.xml"],
-            "styles": [
-              "src/material-theme.scss",
-              "src/styles.scss"
+            "assets": [
+              "src/assets",
+              "src/manifest.webmanifest",
+              "src/firebase-messaging-sw.js",
+              "src/robots.txt",
+              "src/sitemap.xml"
             ],
+            "styles": ["src/material-theme.scss", "src/styles.scss"],
             "scripts": [],
             "serviceWorker": true,
             "ngswConfigPath": "ngsw-config.json",
@@ -33,6 +36,10 @@
                 "inline": false
               }
             }
+          },
+          "configurations": {
+            "production": {},
+            "development": {}
           }
         },
         "serve": {
@@ -52,6 +59,52 @@
             "runner": "vitest",
             "buildTarget": "innovacare-shift-frontend:build"
           }
+        },
+        "server": {
+          "builder": "@angular-devkit/build-angular:server",
+          "options": {
+            "outputPath": "dist/innovacare-shift-frontend/server",
+            "main": "src/server.ts",
+            "tsConfig": "tsconfig.server.json",
+            "optimization": true
+          },
+          "configurations": {
+            "production": {},
+            "development": {}
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve-ssr": {
+          "builder": "@angular-devkit/build-angular:ssr-dev-server",
+          "configurations": {
+            "development": {
+              "browserTarget": "innovacare-shift-frontend:build:development",
+              "serverTarget": "innovacare-shift-frontend:server:development"
+            },
+            "production": {
+              "browserTarget": "innovacare-shift-frontend:build:production",
+              "serverTarget": "innovacare-shift-frontend:server:production"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "prerender": {
+          "builder": "@angular-devkit/build-angular:prerender",
+          "options": {
+            "discoverRoutes": false,
+            "routes": ["/", "/features", "/pricing", "/contact"]
+          },
+          "configurations": {
+            "production": {
+              "browserTarget": "innovacare-shift-frontend:build:production",
+              "serverTarget": "innovacare-shift-frontend:server:production"
+            },
+            "development": {
+              "browserTarget": "innovacare-shift-frontend:build:development",
+              "serverTarget": "innovacare-shift-frontend:server:development"
+            }
+          },
+          "defaultConfiguration": "production"
         }
       }
     }

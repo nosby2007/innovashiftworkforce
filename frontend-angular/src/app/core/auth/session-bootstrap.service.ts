@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, PLATFORM_ID, inject } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { OrgContextService } from '../tenancy/org-context.service';
 import { AuthService } from './auth.service';
 import { AppLockService } from '../app-lock/app-lock.service';
@@ -11,12 +12,21 @@ import { AppLockService } from '../app-lock/app-lock.service';
 @Injectable({ providedIn: 'root' })
 export class SessionBootstrapService {
   private readyPromise: Promise<void> | null = null;
+  private platformId = inject(PLATFORM_ID);
 
   constructor(private auth: AuthService, private ctx: OrgContextService, private appLock: AppLockService) {}
 
   /** Idempotent: safe to call more than once, always returns the same first-resolution promise. */
   start(): Promise<void> {
     if (this.readyPromise) return this.readyPromise;
+
+    // Prerendering the public marketing pages boots this app config too, but
+    // those pages never read OrgContextService and Firebase Auth's client
+    // SDK isn't meant to run in Node — skip wiring the listener there.
+    if (!isPlatformBrowser(this.platformId)) {
+      this.readyPromise = Promise.resolve();
+      return this.readyPromise;
+    }
 
     this.readyPromise = new Promise<void>((resolveFirstRun) => {
       let first = true;
