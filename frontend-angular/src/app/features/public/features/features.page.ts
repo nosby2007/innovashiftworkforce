@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { SeoService } from '../../../core/seo/seo.service';
 
 const FEATURES = [
   { icon: '📋', title: 'Shift Marketplace', desc: 'Post open shifts to a live marketplace. Employees browse and claim shifts that fit their availability — no more manual assignment chaos.' },
@@ -122,4 +123,12 @@ const FEATURES = [
 })
 export class FeaturesPage {
   features = FEATURES;
+
+  constructor(seo: SeoService) {
+    seo.setPage({
+      title: 'Features — Scheduling, Shift Marketplace, Time Tracking & Payroll',
+      description: 'Explore InnovaShift Workforce features: shift marketplace, smart scheduling with conflict detection, GPS-verified attendance, admin analytics, role-based access, and enterprise security.',
+      path: '/features',
+    });
+  }
 }

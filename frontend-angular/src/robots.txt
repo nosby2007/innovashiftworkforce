@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /features
+Allow: /pricing
+Allow: /contact
+Disallow: /app/
+Disallow: /admin/
+Disallow: /platform/
+Disallow: /print/
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+
+Sitemap: https://www.innovashift-workforce.com/sitemap.xml
