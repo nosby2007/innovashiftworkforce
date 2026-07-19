@@ -2,6 +2,7 @@ import { Component, signal, inject } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { SeoService } from '../../../core/seo/seo.service';
 
 @Component({
   selector: 'app-contact',
@@ -187,6 +188,14 @@ import { RouterLink } from '@angular/router';
 })
 export class ContactPage {
   private fb = inject(FormBuilder);
+
+  constructor(seo: SeoService) {
+    seo.setPage({
+      title: 'Contact Us — Book a Demo',
+      description: 'Talk to InnovaShift Workforce about scheduling, shift marketplace, time tracking, and payroll for your healthcare team. Request a demo or start a free trial.',
+      path: '/contact',
+    });
+  }
 
   loading       = signal(false);
   error         = signal<string | null>(null);

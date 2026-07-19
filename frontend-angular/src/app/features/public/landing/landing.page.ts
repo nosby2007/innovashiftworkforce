@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { SeoService } from '../../../core/seo/seo.service';
 
 // Cloudinary image assets
 const IMG = {
@@ -423,4 +424,12 @@ const IMG = {
 })
 export class LandingPage {
   img = IMG;
+
+  constructor(seo: SeoService) {
+    seo.setPage({
+      title: 'Healthcare Workforce Scheduling & Shift Management Software',
+      description: 'InnovaShift Workforce unifies shift scheduling, a staff shift marketplace, GPS time & attendance tracking, and payroll in one platform built for healthcare teams. Trusted by 150+ healthcare organizations.',
+      path: '/',
+    });
+  }
 }

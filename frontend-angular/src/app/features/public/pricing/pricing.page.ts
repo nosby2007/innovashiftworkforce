@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { SeoService } from '../../../core/seo/seo.service';
 
 const PLANS = [
   {
@@ -212,4 +213,12 @@ const PLANS = [
 })
 export class PricingPage {
   plans = PLANS;
+
+  constructor(seo: SeoService) {
+    seo.setPage({
+      title: 'Pricing — Plans for Every Healthcare Team Size',
+      description: 'Simple, transparent pricing for InnovaShift Workforce. Starter, Pro, and Enterprise plans that scale from small teams to large multi-site healthcare organizations.',
+      path: '/pricing',
+    });
+  }
 }
