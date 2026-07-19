@@ -76,10 +76,35 @@ interface OrgSettings {
   ssoEnabled: boolean;
   ssoProvider: string;
   integrationConfigs: OrgIntegrationConfig[];
+  dataRetention: DataRetentionSettings;
   stripeCustomerId?: string;
   createdAt?: any;
   updatedAt?: any;
 }
+
+// Years null = "not confirmed yet, never auto-delete this category" — the
+// safe default. Only an explicit number (set after legal/counsel confirms
+// the figure for this org's jurisdiction) turns on automated purging for
+// that category in enforceDataRetention. See docs/DATA_RETENTION_POLICY.md.
+interface DataRetentionSettings {
+  timeEntriesYears: number | null;
+  payrollRunsYears: number | null;
+  accrualLedgerYears: number | null;
+  timeOffRequestsYears: number | null;
+  employeeDocumentsYearsAfterTermination: number | null;
+  confirmedBy: string | null;
+  confirmedAt: any;
+}
+
+const DEFAULT_DATA_RETENTION: DataRetentionSettings = {
+  timeEntriesYears: null,
+  payrollRunsYears: null,
+  accrualLedgerYears: null,
+  timeOffRequestsYears: null,
+  employeeDocumentsYearsAfterTermination: null,
+  confirmedBy: null,
+  confirmedAt: null,
+};
 
 const DEFAULT_SETTINGS: OrgSettings = {
   name: '', industry: 'Healthcare', timezone: 'America/New_York',
@@ -113,6 +138,7 @@ const DEFAULT_SETTINGS: OrgSettings = {
   ssoEnabled: false,
   ssoProvider: '',
   integrationConfigs: [],
+  dataRetention: { ...DEFAULT_DATA_RETENTION },
 };
 
 const INDUSTRIES = [
@@ -454,6 +480,55 @@ const PLAN_BADGE: Record<string, string> = {
                 </button>
               </div>
             </div>
+          </div>
+        </section>
+
+        <!-- Data Retention section -->
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Data Retention</div>
+              <div class="vs-panel-subtitle">How long payroll-adjacent records are kept before automatic deletion. See docs/DATA_RETENTION_POLICY.md for the legal basis and per-jurisdiction caveats.</div>
+            </div>
+            <mat-icon class="ors-section-icon">auto_delete</mat-icon>
+          </div>
+          <div class="vs-panel-body ors-form">
+            <div class="vs-muted" style="margin-bottom:8px;">
+              Leave a field blank to never auto-delete that category — this is the safe default. Only fill in a number once your own legal/compliance advisor has confirmed the retention period required for your country (this app spans many tax jurisdictions with different rules). A wrong number here is a real compliance risk in either direction, so nothing here defaults to anything except "keep forever."
+            </div>
+            <div class="vs-form-row vs-form-row--3">
+              <div>
+                <label class="vs-field-label" for="ors-ret-time">Time Entries (years)</label>
+                <input id="ors-ret-time" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.timeEntriesYears" placeholder="Never">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-ret-payroll">Payroll Runs (years)</label>
+                <input id="ors-ret-payroll" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.payrollRunsYears" placeholder="Never">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-ret-accrual">PTO/Accrual Ledger (years)</label>
+                <input id="ors-ret-accrual" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.accrualLedgerYears" placeholder="Never">
+              </div>
+            </div>
+            <div class="vs-form-row vs-form-row--3" style="margin-top:16px;">
+              <div>
+                <label class="vs-field-label" for="ors-ret-requests">Time-Off Requests (years)</label>
+                <input id="ors-ret-requests" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.timeOffRequestsYears" placeholder="Never">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-ret-docs">Employee Documents, years after termination</label>
+                <input id="ors-ret-docs" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.employeeDocumentsYearsAfterTermination" placeholder="Never">
+              </div>
+              <div>
+                <label class="vs-field-label">Last confirmed</label>
+                <div class="vs-input" style="display:flex; align-items:center; background:transparent; cursor:default;">
+                  {{ draft.dataRetention.confirmedAt ? (draft.dataRetention.confirmedBy + ' · ' + formatConfirmedAt()) : 'Not yet confirmed' }}
+                </div>
+              </div>
+            </div>
+            <button class="vs-btn-ghost ors-quick-set-btn" type="button" style="margin-top:10px;" (click)="confirmDataRetention()">
+              Mark these figures as legally confirmed
+            </button>
           </div>
         </section>
 
@@ -1026,6 +1101,23 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     this.draft.defaultMedicarePercent = defaults.medicarePercent;
   }
 
+  confirmDataRetention() {
+    this.draft = {
+      ...this.draft,
+      dataRetention: {
+        ...this.draft.dataRetention,
+        confirmedBy: this.ctx.displayName() || this.ctx.email() || this.ctx.uid() || 'Unknown',
+        confirmedAt: new Date(),
+      },
+    };
+  }
+
+  formatConfirmedAt(): string {
+    const value = this.draft.dataRetention.confirmedAt;
+    const date = value?.toDate ? value.toDate() : value instanceof Date ? value : null;
+    return date ? date.toLocaleDateString() : '';
+  }
+
   addBenefitPlan() {
     this.draft = {
       ...this.draft,
@@ -1228,6 +1320,20 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
           .sort((a, b) => a.minTenureMonths - b.minTenureMonths),
       };
 
+      const positiveYearsOrNull = (value: unknown): number | null => {
+        const n = Number(value);
+        return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+      };
+      const normalizedDataRetention: DataRetentionSettings = {
+        timeEntriesYears: positiveYearsOrNull(this.draft.dataRetention?.timeEntriesYears),
+        payrollRunsYears: positiveYearsOrNull(this.draft.dataRetention?.payrollRunsYears),
+        accrualLedgerYears: positiveYearsOrNull(this.draft.dataRetention?.accrualLedgerYears),
+        timeOffRequestsYears: positiveYearsOrNull(this.draft.dataRetention?.timeOffRequestsYears),
+        employeeDocumentsYearsAfterTermination: positiveYearsOrNull(this.draft.dataRetention?.employeeDocumentsYearsAfterTermination),
+        confirmedBy: this.draft.dataRetention?.confirmedBy || null,
+        confirmedAt: this.draft.dataRetention?.confirmedAt || null,
+      };
+
       const db = getFirestore();
       await setDoc(doc(db, 'orgs', this.orgId), {
         ...this.draft,
@@ -1248,6 +1354,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         default401kMatchPercent: Math.max(0, Number(this.draft.default401kMatchPercent || 0)),
         default401kProvider: String(this.draft.default401kProvider || '').trim(),
         benefitPlans: normalizedBenefitPlans,
+        dataRetention: normalizedDataRetention,
         gpsAttendanceEnabled: this.hasGpsAttendance() ? this.draft.gpsAttendanceEnabled : false,
         sites: this.canManageSites() ? normalizedSites : [],
         accrualPolicy: normalizedAccrualPolicy,
@@ -1263,8 +1370,8 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         orgId: this.orgId,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans });
-      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans };
+      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans, dataRetention: normalizedDataRetention });
+      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans, dataRetention: normalizedDataRetention };
       this.ctx.setContext({
         orgId: this.ctx.orgId(),
         uid: this.ctx.uid(),
