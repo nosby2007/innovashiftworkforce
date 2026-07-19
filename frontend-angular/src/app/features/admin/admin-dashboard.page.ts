@@ -1,4 +1,4 @@
-import { Component, OnDestroy, effect, EffectRef, signal } from '@angular/core';
+import { Component, OnDestroy, computed, effect, EffectRef, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -20,6 +20,7 @@ import { formatDateTime, tsToDate } from '../../shared/utils/date.util';
 import { ToastService } from '../../core/ui/toast.service';
 import { PlanEntitlementsService } from '../../core/tenancy/plan-entitlements.service';
 import { fmtShiftDate, fmtShiftTime, getCurrentWeekRange } from '../../shared/utils/shift-lifecycle.utils';
+import { payrollHours } from '../../shared/utils/payroll.util';
 import { Timestamp } from 'firebase/firestore';
 import { profileCompletion } from '../../shared/utils/profile-completion.util';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
@@ -86,6 +87,34 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
           <div class="vs-stat-value">{{ metrics()?.upcoming7dOpenCount ?? 0 }}</div>
           <div class="vs-stat-sub">Require immediate action</div>
           <mat-icon class="vs-stat-icon">schedule</mat-icon>
+        </div>
+      </div>
+
+      <!-- Workforce KPI Cards -->
+      <div *ngIf="orgId" class="vs-grid-4 ad-kpis">
+        <div class="vs-stat-card vs-stat--primary">
+          <div class="vs-stat-label">Total Employees</div>
+          <div class="vs-stat-value">{{ totalEmployeesCount() }}</div>
+          <div class="vs-stat-sub">Active headcount</div>
+          <mat-icon class="vs-stat-icon">groups</mat-icon>
+        </div>
+        <div class="vs-stat-card vs-stat--success">
+          <div class="vs-stat-label">Active Shifts</div>
+          <div class="vs-stat-value">{{ weeklyActiveShiftsCount() }}</div>
+          <div class="vs-stat-sub">Live or needing coverage, {{ weekLabel }}</div>
+          <mat-icon class="vs-stat-icon">bolt</mat-icon>
+        </div>
+        <div class="vs-stat-card vs-stat--warning">
+          <div class="vs-stat-label">Coverage Rate</div>
+          <div class="vs-stat-value">{{ coverageRatePct() !== null ? coverageRatePct() + '%' : '—' }}</div>
+          <div class="vs-stat-sub">Assigned vs. all open shifts</div>
+          <mat-icon class="vs-stat-icon">verified</mat-icon>
+        </div>
+        <div class="vs-stat-card vs-stat--primary">
+          <div class="vs-stat-label">Labor Worked</div>
+          <div class="vs-stat-value">{{ weeklyLaborHours() | number:'1.0-1' }}h</div>
+          <div class="vs-stat-sub">Clocked hours, {{ weekLabel }}</div>
+          <mat-icon class="vs-stat-icon">timelapse</mat-icon>
         </div>
       </div>
 
@@ -869,6 +898,20 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
 export class AdminDashboardPage implements OnDestroy {
   orgId: string | null = null;
   metrics = signal<OrgMetricsSummary | null>(null);
+
+  // Workforce KPI cards
+  weeklyActiveShiftsCount = signal(0);
+  weeklyLaborHours = signal(0);
+  totalEmployeesCount = computed(() => this.commOrgUsers().filter((u) => u.active !== false).length);
+  coverageRatePct = computed(() => {
+    const m = this.metrics();
+    if (!m) return null;
+    const total = (m.assignedCount || 0) + (m.openCount || 0);
+    if (total <= 0) return null;
+    return Math.round((m.assignedCount / total) * 100);
+  });
+  private unsubActiveShifts: (() => void) | null = null;
+  private unsubLaborHours: (() => void) | null = null;
   pending = signal<TimeEntry[]>([]);
   pendingCtrl = new TableListController<TimeEntry>(this.pending, {
     pageSize: 10,
@@ -958,6 +1001,7 @@ export class AdminDashboardPage implements OnDestroy {
         this.refreshCommCandidates();
       }));
       this.loadLifecycleTab(orgId, this.lifecycleTab);
+      this.loadWorkforceKpis(orgId);
       void this.refreshSwapRequests();
     });
   }
@@ -968,6 +1012,25 @@ export class AdminDashboardPage implements OnDestroy {
   selectLifecycleTab(tab: ShiftStatus) {
     this.lifecycleTab = tab;
     if (this.orgId) this.loadLifecycleTab(this.orgId, tab);
+  }
+
+  private loadWorkforceKpis(orgId: string) {
+    if (this.unsubActiveShifts) { this.unsubActiveShifts(); this.unsubActiveShifts = null; }
+    if (this.unsubLaborHours) { this.unsubLaborHours(); this.unsubLaborHours = null; }
+
+    const week = getCurrentWeekRange();
+    const startTs = Timestamp.fromDate(week.start);
+    const endTs = Timestamp.fromDate(week.end);
+
+    this.unsubActiveShifts = this.shiftsRepo.watchByStatus(
+      orgId, ['open', 'published', 'claimed', 'in_progress'], startTs, endTs,
+      (shifts) => this.weeklyActiveShiftsCount.set(shifts.length)
+    );
+
+    this.unsubLaborHours = this.timeRepo.watchOrgEntriesRange(orgId, startTs, endTs, (entries) => {
+      const total = entries.reduce((sum, e) => sum + payrollHours(e), 0);
+      this.weeklyLaborHours.set(Math.round(total * 10) / 10);
+    });
   }
 
   private loadLifecycleTab(orgId: string, status: ShiftStatus) {
@@ -1231,6 +1294,8 @@ export class AdminDashboardPage implements OnDestroy {
   private cleanupWatchers() {
     this.unsub.forEach((u) => u()); this.unsub = [];
     if (this.unsubLifecycle) { this.unsubLifecycle(); this.unsubLifecycle = null; }
+    if (this.unsubActiveShifts) { this.unsubActiveShifts(); this.unsubActiveShifts = null; }
+    if (this.unsubLaborHours) { this.unsubLaborHours(); this.unsubLaborHours = null; }
   }
 
   ngOnDestroy() { this.cleanupWatchers(); this.effectRef?.destroy(); }
