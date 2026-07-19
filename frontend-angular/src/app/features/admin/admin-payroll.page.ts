@@ -24,6 +24,7 @@ import { PayFrequency } from '../../core/tenancy/org-finance.model';
 import { toCsv, downloadTextFile } from '../../shared/utils/csv.util';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
+import { TranslocoModule } from '@jsverse/transloco';
 
 type PayrollRow = {
   userId: string;
@@ -39,20 +40,20 @@ type PayrollRow = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule, TablePaginatorComponent],
+  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule, TablePaginatorComponent, TranslocoModule],
   template: `
     <div class="pay-admin">
       <header class="pay-admin-hero">
         <div>
-          <div class="pay-admin-kicker">Payroll Control Center</div>
-          <h1>Payroll</h1>
-          <p>Review staff hours, gross pay, exceptions, and export payroll-ready totals.</p>
+          <div class="pay-admin-kicker">{{ 'adminPayroll.kicker' | transloco }}</div>
+          <h1>{{ 'adminPayroll.title' | transloco }}</h1>
+          <p>{{ 'adminPayroll.subtitle' | transloco }}</p>
         </div>
         <div class="pay-admin-period">
-          <label>Payroll period</label>
+          <label>{{ 'adminPayroll.payrollPeriod' | transloco }}</label>
           <div>
             <input type="date" [(ngModel)]="fromDate" (change)="reloadEntries()">
-            <span>to</span>
+            <span>{{ 'adminPayroll.to' | transloco }}</span>
             <input type="date" [(ngModel)]="toDate" (change)="reloadEntries()">
           </div>
         </div>
@@ -60,83 +61,83 @@ type PayrollRow = {
 
       <div *ngIf="!orgId" class="pay-admin-alert">
         <mat-icon>warning_amber</mat-icon>
-        Missing organization context.
+        {{ 'adminPayroll.missingOrgContext' | transloco }}
       </div>
 
       <section class="pay-admin-kpis" *ngIf="orgId">
-        <article><span>Employees</span><strong>{{ rows.length }}</strong></article>
-        <article><span>Total Hours</span><strong>{{ totalHours().toFixed(2) }}</strong></article>
-        <article><span>Gross Payroll</span><strong>{{ totalGross() | currency:moneyCurrency() }}</strong></article>
-        <article><span>Employer Contributions</span><strong>{{ totalEmployerContributions() | currency:moneyCurrency() }}</strong></article>
-        <article [class.is-warn]="totalExceptions() > 0"><span>Exceptions</span><strong>{{ totalExceptions() }}</strong></article>
+        <article><span>{{ 'adminPayroll.employees' | transloco }}</span><strong>{{ rows.length }}</strong></article>
+        <article><span>{{ 'adminPayroll.totalHours' | transloco }}</span><strong>{{ totalHours().toFixed(2) }}</strong></article>
+        <article><span>{{ 'adminPayroll.grossPayroll' | transloco }}</span><strong>{{ totalGross() | currency:moneyCurrency() }}</strong></article>
+        <article><span>{{ 'adminPayroll.employerContributions' | transloco }}</span><strong>{{ totalEmployerContributions() | currency:moneyCurrency() }}</strong></article>
+        <article [class.is-warn]="totalExceptions() > 0"><span>{{ 'adminPayroll.exceptions' | transloco }}</span><strong>{{ totalExceptions() }}</strong></article>
       </section>
 
       <section class="pay-admin-grid" *ngIf="orgId">
         <article class="pay-admin-card pay-run">
           <div class="pay-admin-card-head">
-            <h2>Draft Payroll Run</h2>
-            <span>{{ payrollRunLabel() }}</span>
+            <h2>{{ 'adminPayroll.draftPayrollRun' | transloco }}</h2>
+            <span>{{ payrollRunLabel() | transloco }}</span>
           </div>
           <div class="pay-run-lock" [class.is-final]="payrollFinalized">
             <mat-icon>{{ payrollFinalized ? 'lock' : 'lock_open' }}</mat-icon>
             <div>
-              <strong>{{ payrollFinalized ? 'Payroll finalized' : 'Payroll draft is editable' }}</strong>
-              <span>{{ payrollFinalized ? 'Finalized ' + finalizedAtLabel() : payrollStatus() }}</span>
+              <strong>{{ (payrollFinalized ? 'adminPayroll.payrollFinalizedLabel' : 'adminPayroll.payrollDraftEditable') | transloco }}</strong>
+              <span>{{ payrollFinalized ? ('adminPayroll.finalizedAt' | transloco: { when: finalizedAtLabel() }) : (payrollStatus() | transloco) }}</span>
             </div>
           </div>
           <div class="pay-run-total">
-            <span>Estimated net payroll</span>
+            <span>{{ 'adminPayroll.estimatedNetPayroll' | transloco }}</span>
             <strong>{{ totalNet() | currency:moneyCurrency() }}</strong>
           </div>
           <div class="pay-run-lines">
-            <div><span>Gross wages</span><strong>{{ totalGross() | currency:moneyCurrency() }}</strong></div>
-            <div><span>Estimated deductions</span><strong>-{{ totalDeductions() | currency:moneyCurrency() }}</strong></div>
-            <div><span>Timecard rows</span><strong>{{ entries().length }}</strong></div>
+            <div><span>{{ 'adminPayroll.grossWages' | transloco }}</span><strong>{{ totalGross() | currency:moneyCurrency() }}</strong></div>
+            <div><span>{{ 'adminPayroll.estimatedDeductions' | transloco }}</span><strong>-{{ totalDeductions() | currency:moneyCurrency() }}</strong></div>
+            <div><span>{{ 'adminPayroll.timecardRows' | transloco }}</span><strong>{{ entries().length }}</strong></div>
           </div>
           <button class="pay-primary" (click)="exportPayroll()" [disabled]="rows.length === 0">
             <mat-icon>download</mat-icon>
-            Export Payroll CSV
+            {{ 'adminPayroll.exportPayrollCsv' | transloco }}
           </button>
           <button class="pay-primary pay-primary-alt" type="button" (click)="printSelectedPayslips()" [disabled]="selectedUserIds().length === 0">
             <mat-icon>print</mat-icon>
-            Print Selected PDF
+            {{ 'adminPayroll.printSelectedPdf' | transloco }}
           </button>
           <div class="pay-run-actions">
             <button class="pay-secondary" type="button" (click)="finalizePayroll()" [disabled]="rows.length === 0 || totalExceptions() > 0 || payrollFinalized || payrollBusy">
               <mat-icon>verified</mat-icon>
-              {{ payrollBusy ? 'Saving...' : 'Finalize Payroll' }}
+              {{ (payrollBusy ? 'adminPayroll.saving' : 'adminPayroll.finalizePayroll') | transloco }}
             </button>
             <button class="pay-secondary" type="button" (click)="reopenPayroll()" [disabled]="!payrollFinalized || payrollBusy">
               <mat-icon>edit</mat-icon>
-              Reopen
+              {{ 'adminPayroll.reopen' | transloco }}
             </button>
           </div>
         </article>
 
         <article class="pay-admin-card pay-exceptions">
           <div class="pay-admin-card-head">
-            <h2>Payroll Readiness</h2>
+            <h2>{{ 'adminPayroll.payrollReadiness' | transloco }}</h2>
             <mat-icon>fact_check</mat-icon>
           </div>
           <div class="pay-readiness" [class.is-ready]="totalExceptions() === 0">
             <mat-icon>{{ totalExceptions() === 0 ? 'check_circle' : 'warning_amber' }}</mat-icon>
             <div>
-              <strong>{{ totalExceptions() === 0 ? 'Ready for export' : 'Needs review' }}</strong>
-              <span>{{ totalExceptions() === 0 ? 'No pending payroll exceptions in this period.' : totalExceptions() + ' row(s) have pending or rejected corrections.' }}</span>
+              <strong>{{ (totalExceptions() === 0 ? 'adminPayroll.readyForExport' : 'adminPayroll.needsReview') | transloco }}</strong>
+              <span>{{ totalExceptions() === 0 ? ('adminPayroll.noExceptionsNote' | transloco) : ('adminPayroll.exceptionsNote' | transloco: { count: totalExceptions() }) }}</span>
             </div>
           </div>
           <div class="pay-run-lines">
-            <div><span>Pending review</span><strong>{{ exceptionStatusCount('pending') }}</strong></div>
-            <div><span>Rejected</span><strong>{{ exceptionStatusCount('rejected') }}</strong></div>
-            <div><span>Open punches</span><strong>{{ openPunchCount() }}</strong></div>
+            <div><span>{{ 'adminPayroll.pendingReview' | transloco }}</span><strong>{{ exceptionStatusCount('pending') }}</strong></div>
+            <div><span>{{ 'adminPayroll.rejected' | transloco }}</span><strong>{{ exceptionStatusCount('rejected') }}</strong></div>
+            <div><span>{{ 'adminPayroll.openPunches' | transloco }}</span><strong>{{ openPunchCount() }}</strong></div>
           </div>
         </article>
       </section>
 
       <section class="pay-admin-card pay-table-card" *ngIf="orgId">
         <div class="pay-admin-card-head">
-          <h2>Employee Payroll Summary</h2>
-          <input [ngModel]="query" (ngModelChange)="onQueryChange($event)" placeholder="Search employee">
+          <h2>{{ 'adminPayroll.employeePayrollSummary' | transloco }}</h2>
+          <input [ngModel]="query" (ngModelChange)="onQueryChange($event)" [placeholder]="'adminPayroll.searchEmployee' | transloco">
         </div>
         <div class="pay-table-shell">
           <table>
@@ -145,26 +146,26 @@ type PayrollRow = {
                 <th class="pay-check-col">
                   <input type="checkbox" [checked]="allFilteredSelected()" (change)="toggleSelectAll($any($event.target).checked)">
                 </th>
-                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('employee')">Employee {{ payrollCtrl.sortIndicator('employee') }}</th>
-                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('entries')">Entries {{ payrollCtrl.sortIndicator('entries') }}</th>
-                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('hours')">Hours {{ payrollCtrl.sortIndicator('hours') }}</th>
-                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('gross')">Gross {{ payrollCtrl.sortIndicator('gross') }}</th>
-                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('deductions')">Deductions {{ payrollCtrl.sortIndicator('deductions') }}</th>
-                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('net')">Net {{ payrollCtrl.sortIndicator('net') }}</th>
-                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('exceptions')">Exceptions {{ payrollCtrl.sortIndicator('exceptions') }}</th>
-                <th>Status</th>
-                <th>Print</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('employee')">{{ 'adminPayroll.colEmployee' | transloco }} {{ payrollCtrl.sortIndicator('employee') }}</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('entries')">{{ 'adminPayroll.colEntries' | transloco }} {{ payrollCtrl.sortIndicator('entries') }}</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('hours')">{{ 'adminPayroll.colHours' | transloco }} {{ payrollCtrl.sortIndicator('hours') }}</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('gross')">{{ 'adminPayroll.colGross' | transloco }} {{ payrollCtrl.sortIndicator('gross') }}</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('deductions')">{{ 'adminPayroll.colDeductions' | transloco }} {{ payrollCtrl.sortIndicator('deductions') }}</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('net')">{{ 'adminPayroll.colNet' | transloco }} {{ payrollCtrl.sortIndicator('net') }}</th>
+                <th class="pay-th-sort" (click)="payrollCtrl.toggleSort('exceptions')">{{ 'adminPayroll.colExceptions' | transloco }} {{ payrollCtrl.sortIndicator('exceptions') }}</th>
+                <th>{{ 'adminPayroll.colStatus' | transloco }}</th>
+                <th>{{ 'adminPayroll.colPrint' | transloco }}</th>
               </tr>
             </thead>
             <tbody>
               <tr *ngIf="payrollCtrl.pageRows().length === 0">
-                <td colspan="10">No payroll rows found for this period.</td>
+                <td colspan="10">{{ 'adminPayroll.noPayrollRows' | transloco }}</td>
               </tr>
               <tr *ngFor="let r of payrollCtrl.pageRows()">
                 <td class="pay-check-col">
                   <input type="checkbox" [checked]="isSelected(r.userId)" (change)="toggleUserSelection(r.userId, $any($event.target).checked)">
                 </td>
-                <td><strong>{{ r.employee }}</strong><span>{{ r.employeeNumber || 'Employee record' }}</span></td>
+                <td><strong>{{ r.employee }}</strong><span>{{ r.employeeNumber || ('adminPayroll.employeeRecordFallback' | transloco) }}</span></td>
                 <td>{{ r.entries }}</td>
                 <td>{{ r.hours.toFixed(2) }}</td>
                 <td>{{ r.gross | currency:moneyCurrency() }}</td>
@@ -173,14 +174,14 @@ type PayrollRow = {
                 <td>{{ r.exceptions }}</td>
                 <td>
                   <button *ngIf="r.exceptions > 0" class="pay-row-btn pay-review-btn" type="button" (click)="reviewInTimesheets(r.userId)">
-                    <mat-icon>flag</mat-icon> Review ({{ r.exceptions }})
+                    <mat-icon>flag</mat-icon> {{ 'adminPayroll.review' | transloco: { count: r.exceptions } }}
                   </button>
-                  <em *ngIf="r.exceptions === 0">Ready</em>
+                  <em *ngIf="r.exceptions === 0">{{ 'adminPayroll.ready' | transloco }}</em>
                 </td>
                 <td>
                   <button class="pay-row-btn" (click)="printPayslip(r.userId)">
                     <mat-icon>picture_as_pdf</mat-icon>
-                    PDF
+                    {{ 'adminPayroll.pdf' | transloco }}
                   </button>
                 </td>
               </tr>
@@ -192,22 +193,22 @@ type PayrollRow = {
 
       <section class="pay-admin-card pay-table-card" *ngIf="orgId">
         <div class="pay-admin-card-head">
-          <h2>Payroll Detail Rows</h2>
-          <span>{{ entries().length }} time entries</span>
+          <h2>{{ 'adminPayroll.payrollDetailRows' | transloco }}</h2>
+          <span>{{ 'adminPayroll.timeEntriesCount' | transloco: { count: entries().length } }}</span>
         </div>
         <div class="pay-table-shell">
           <table>
             <thead>
               <tr>
-                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('employee')">Employee {{ detailCtrl.sortIndicator('employee') }}</th>
-                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('date')">Date {{ detailCtrl.sortIndicator('date') }}</th>
-                <th>Shift</th>
-                <th>Check In</th>
-                <th>Check Out</th>
-                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('hours')">Hours {{ detailCtrl.sortIndicator('hours') }}</th>
-                <th>Rate</th>
-                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('gross')">Gross {{ detailCtrl.sortIndicator('gross') }}</th>
-                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('status')">Status {{ detailCtrl.sortIndicator('status') }}</th>
+                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('employee')">{{ 'adminPayroll.colEmployee' | transloco }} {{ detailCtrl.sortIndicator('employee') }}</th>
+                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('date')">{{ 'adminPayroll.colDate' | transloco }} {{ detailCtrl.sortIndicator('date') }}</th>
+                <th>{{ 'adminPayroll.colShift' | transloco }}</th>
+                <th>{{ 'adminPayroll.colCheckIn' | transloco }}</th>
+                <th>{{ 'adminPayroll.colCheckOut' | transloco }}</th>
+                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('hours')">{{ 'adminPayroll.colHours' | transloco }} {{ detailCtrl.sortIndicator('hours') }}</th>
+                <th>{{ 'adminPayroll.colRate' | transloco }}</th>
+                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('gross')">{{ 'adminPayroll.colGross' | transloco }} {{ detailCtrl.sortIndicator('gross') }}</th>
+                <th class="pay-th-sort" (click)="detailCtrl.toggleSort('status')">{{ 'adminPayroll.colStatus' | transloco }} {{ detailCtrl.sortIndicator('status') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -667,8 +668,8 @@ export class AdminPayrollPage implements OnDestroy {
   totalEmployerContributions() { return Math.round(Array.from(this.employerContributionsByUser.values()).reduce((sum, v) => sum + v, 0) * 100) / 100; }
   exceptionStatusCount(status: string) { return this.entries().filter((e) => e.exceptionStatus === status).length; }
   openPunchCount() { return this.entries().filter((e) => !e.checkOutAt).length; }
-  payrollStatus() { return this.totalExceptions() ? 'Review required' : 'Ready'; }
-  payrollRunLabel() { return this.payrollFinalized ? 'Finalized' : this.payrollStatus(); }
+  payrollStatus() { return this.totalExceptions() ? 'adminPayroll.reviewRequired' : 'adminPayroll.ready'; }
+  payrollRunLabel() { return this.payrollFinalized ? 'adminPayroll.finalized' : this.payrollStatus(); }
   moneyCurrency() { return this.ctx.currencyCode() || 'USD'; }
 
   exportPayroll() {

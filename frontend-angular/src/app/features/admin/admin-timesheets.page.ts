@@ -17,24 +17,25 @@ import { ToastService } from '../../core/ui/toast.service';
 import { PrintLauncherService } from '../../core/ui/print-launcher.service';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
+import { TranslocoModule } from '@jsverse/transloco';
 
 import { MatIconModule } from '@angular/material/icon';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, TablePaginatorComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, TablePaginatorComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad">
       <!-- Header -->
       <div class="vs-page-header">
         <div class="vs-page-title">
-          <h1 class="vs-title">Timesheets</h1>
-          <p class="vs-page-subtitle">Review, export, and manage staff time entries</p>
+          <h1 class="vs-title">{{ 'timesheets.title' | transloco }}</h1>
+          <p class="vs-page-subtitle">{{ 'timesheets.subtitle' | transloco }}</p>
         </div>
       </div>
 
       <div *ngIf="!orgId" class="ad-no-org vs-glass">
-        <mat-icon>warning_amber</mat-icon> Missing org context.
+        <mat-icon>warning_amber</mat-icon> {{ 'timesheets.missingOrgContext' | transloco }}
       </div>
 
       <div *ngIf="orgId" class="ts-content">
@@ -42,78 +43,78 @@ import { MatIconModule } from '@angular/material/icon';
         <div class="vs-glass-strong ts-filters">
           <div class="vs-form-row ts-filters-grid">
             <div>
-              <label class="vs-field-label">Staff Member</label>
+              <label class="vs-field-label">{{ 'timesheets.staffMember' | transloco }}</label>
               <select class="vs-select" [(ngModel)]="selectedUid">
-                <option value="">Select user</option>
+                <option value="">{{ 'timesheets.selectUser' | transloco }}</option>
                 <option *ngFor="let u of users()" [value]="u.uid">
-                  {{ u.displayName || u.email || 'Staff member' }} — {{ u.jobRole || '—' }}
+                  {{ u.displayName || u.email || ('timesheets.staffMemberFallback' | transloco) }} — {{ u.jobRole || '—' }}
                 </option>
               </select>
             </div>
             <div>
-              <label class="vs-field-label">From</label>
+              <label class="vs-field-label">{{ 'timesheets.from' | transloco }}</label>
               <input type="date" class="vs-input" [(ngModel)]="fromDate">
             </div>
             <div>
-              <label class="vs-field-label">To</label>
+              <label class="vs-field-label">{{ 'timesheets.to' | transloco }}</label>
               <input type="date" class="vs-input" [(ngModel)]="toDate">
             </div>
             <div class="ts-actions">
               <button class="vs-btn-ghost ts-action-btn" (click)="openPrint()" [disabled]="!selectedUid">
-                <mat-icon style="font-size:18px;">print</mat-icon> Print
+                <mat-icon style="font-size:18px;">print</mat-icon> {{ 'timesheets.print' | transloco }}
               </button>
               <button class="vs-btn-primary ts-action-btn" (click)="exportCsv()" [disabled]="rows().length===0">
-                <mat-icon style="font-size:18px;">download</mat-icon> CSV
+                <mat-icon style="font-size:18px;">download</mat-icon> {{ 'timesheets.csv' | transloco }}
               </button>
             </div>
           </div>
         </div>
 
         <div class="ts-meta" *ngIf="rows().length > 0 || selectedUid">
-          <span>{{ rows().length }} entries found</span>
+          <span>{{ 'timesheets.entriesFound' | transloco: { count: rows().length } }}</span>
         </div>
 
         <div class="vs-glass-strong ts-fix" *ngIf="orgId">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Attendance Management</div>
-              <div class="vs-panel-subtitle">Fix missed punch by setting corrected in/out times</div>
+              <div class="vs-panel-title">{{ 'timesheets.attendanceManagement' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'timesheets.fixMissedPunch' | transloco }}</div>
             </div>
           </div>
           <div class="ts-fix-help" *ngIf="!fixEntryId">
-            Select a row in the table with <strong>Fix</strong>, or pick a pending request below.
+            {{ 'timesheets.selectRowHelpPre' | transloco }} <strong>{{ 'timesheets.fixAction' | transloco }}</strong>{{ 'timesheets.selectRowHelpPost' | transloco }}
           </div>
 
           <div class="ts-fix-pending" *ngIf="pendingEntries().length > 0 && !fixEntryId">
-            <div class="ts-fix-pending-title">Pending correction requests</div>
+            <div class="ts-fix-pending-title">{{ 'timesheets.pendingCorrectionRequests' | transloco }}</div>
             <div class="ts-fix-pending-list">
               <button class="vs-btn-ghost ts-pending-chip" *ngFor="let p of pendingEntries()" (click)="startFixFromPending(p)">
-                {{ staffLabel(p.userId) }} • Assigned shift
+                {{ staffLabel(p.userId) }} • {{ 'timesheets.assignedShift' | transloco }}
               </button>
             </div>
           </div>
 
           <div class="ts-fix-target" *ngIf="fixEntryId">
-            <span class="vs-badge">Selected correction</span>
-            <span class="ts-target-meta" *ngIf="fixUserId">Staff: {{ staffLabel(fixUserId) }}</span>
-            <span class="ts-target-meta" *ngIf="fixShiftId">Shift: Assigned shift</span>
+            <span class="vs-badge">{{ 'timesheets.selectedCorrection' | transloco }}</span>
+            <span class="ts-target-meta" *ngIf="fixUserId">{{ 'timesheets.staffColon' | transloco }} {{ staffLabel(fixUserId) }}</span>
+            <span class="ts-target-meta" *ngIf="fixShiftId">{{ 'timesheets.shiftColon' | transloco }} {{ 'timesheets.assignedShift' | transloco }}</span>
           </div>
 
           <div *ngIf="fixEntryId">
           <div class="vs-form-row vs-form-row--2">
             <div>
-              <label class="vs-field-label">Corrected Check In</label>
+              <label class="vs-field-label">{{ 'timesheets.correctedCheckIn' | transloco }}</label>
               <input type="datetime-local" class="vs-input" [(ngModel)]="fixCheckInLocal">
             </div>
             <div>
-              <label class="vs-field-label">Corrected Check Out</label>
+              <label class="vs-field-label">{{ 'timesheets.correctedCheckOut' | transloco }}</label>
               <input type="datetime-local" class="vs-input" [(ngModel)]="fixCheckOutLocal">
             </div>
           </div>
           <div class="ts-fix-actions">
-            <button class="vs-btn-ghost" (click)="cancelFix()" [disabled]="fixBusy">Cancel</button>
-            <button class="vs-btn-ghost" (click)="rejectFix()" [disabled]="fixBusy">Reject</button>
-            <button class="vs-btn-primary" (click)="applyFix()" [disabled]="fixBusy">Apply Fix</button>
+            <button class="vs-btn-ghost" (click)="cancelFix()" [disabled]="fixBusy">{{ 'timesheets.cancel' | transloco }}</button>
+            <button class="vs-btn-ghost" (click)="rejectFix()" [disabled]="fixBusy">{{ 'timesheets.reject' | transloco }}</button>
+            <button class="vs-btn-primary" (click)="applyFix()" [disabled]="fixBusy">{{ 'timesheets.applyFix' | transloco }}</button>
           </div>
           </div>
         </div>
@@ -124,7 +125,7 @@ import { MatIconModule } from '@angular/material/icon';
             type="search"
             class="vs-input"
             style="max-width:320px;"
-            placeholder="Search shift title or status…"
+            [placeholder]="'timesheets.searchPlaceholder' | transloco"
             [value]="rowsCtrl.filterText()"
             (input)="rowsCtrl.setFilter($any($event.target).value)">
         </div>
@@ -132,13 +133,13 @@ import { MatIconModule } from '@angular/material/icon';
           <table class="vs-table ts-table">
             <thead>
               <tr>
-                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('shiftTitle')">Shift Title {{ rowsCtrl.sortIndicator('shiftTitle') }}</th>
-                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('checkIn')">Check In {{ rowsCtrl.sortIndicator('checkIn') }}</th>
-                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('checkOut')">Check Out {{ rowsCtrl.sortIndicator('checkOut') }}</th>
-                <th>Break</th>
-                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('hours')">Hours {{ rowsCtrl.sortIndicator('hours') }}</th>
-                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('status')">Status {{ rowsCtrl.sortIndicator('status') }}</th>
-                <th class="ts-right">Actions</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('shiftTitle')">{{ 'timesheets.colShiftTitle' | transloco }} {{ rowsCtrl.sortIndicator('shiftTitle') }}</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('checkIn')">{{ 'timesheets.colCheckIn' | transloco }} {{ rowsCtrl.sortIndicator('checkIn') }}</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('checkOut')">{{ 'timesheets.colCheckOut' | transloco }} {{ rowsCtrl.sortIndicator('checkOut') }}</th>
+                <th>{{ 'timesheets.colBreak' | transloco }}</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('hours')">{{ 'timesheets.colHours' | transloco }} {{ rowsCtrl.sortIndicator('hours') }}</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('status')">{{ 'timesheets.colStatus' | transloco }} {{ rowsCtrl.sortIndicator('status') }}</th>
+                <th class="ts-right">{{ 'timesheets.colActions' | transloco }}</th>
               </tr>
             </thead>
             <tbody>
@@ -157,8 +158,8 @@ import { MatIconModule } from '@angular/material/icon';
                   </span>
                 </td>
                 <td class="ts-right">
-                  <button class="vs-btn-ghost ts-fix-btn" (click)="startFix(r)">Fix</button>
-                  <button class="vs-btn-ghost ts-fix-btn ts-delete-btn" [disabled]="deleteBusyId === r.entryId" (click)="deleteEntry(r)">Delete</button>
+                  <button class="vs-btn-ghost ts-fix-btn" (click)="startFix(r)">{{ 'timesheets.fixAction' | transloco }}</button>
+                  <button class="vs-btn-ghost ts-fix-btn ts-delete-btn" [disabled]="deleteBusyId === r.entryId" (click)="deleteEntry(r)">{{ 'timesheets.delete' | transloco }}</button>
                 </td>
               </tr>
             </tbody>
@@ -169,8 +170,8 @@ import { MatIconModule } from '@angular/material/icon';
         <div *ngIf="rows().length === 0 && selectedUid" class="ts-empty vs-glass">
           <mat-icon>search_off</mat-icon>
           <div>
-            <strong>No timesheet entries found.</strong>
-            <p>Try adjusting the date range or selecting a different employee.</p>
+            <strong>{{ 'timesheets.noEntriesFound' | transloco }}</strong>
+            <p>{{ 'timesheets.adjustDateRange' | transloco }}</p>
           </div>
         </div>
       </div>
