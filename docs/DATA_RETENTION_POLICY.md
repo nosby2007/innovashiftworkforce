@@ -24,11 +24,11 @@ relevant jurisdiction(s).
 
 | Data category | Where it lives | Retention period | Basis | Automated? |
 |---|---|---|---|---|
-| Time entries (clock in/out, GPS, breaks) | `orgs/{orgId}/timeEntries` | 7 years from `checkInAt` | Covers FLSA (29 CFR 516.5–516.6: 2–3 yrs) and IRS employment tax records (4 yrs) with margin for stricter states (e.g. NY: 6 yrs) | Not yet — see §3 |
-| Payroll runs (period locks) | `orgs/{orgId}/payrollRuns` | 7 years from period end | Same basis as time entries — these are the payroll register for that period | Not yet — see §3 |
-| PTO/accrual ledger | `orgs/{orgId}/accrualLedger` | 7 years from `createdAt` | Same basis — part of the payroll record trail | Not yet — see §3 |
-| Time-off requests | `orgs/{orgId}/requests` | 7 years from `createdAt` | Same basis — decision trail behind paid leave | Not yet — see §3 |
-| Employee identity/tax documents (W-4, W-2, ID, certifications) | `orgs/{orgId}/employeeDocuments` + Storage `.../documents/**` | 7 years after employment ends (`revokedAt`) | Aligned with payroll record retention; these documents substantiate payroll/tax filings for the employment period | Not yet — see §3 |
+| Time entries (clock in/out, GPS, breaks) | `orgs/{orgId}/timeEntries` | Suggested default 7 years from `checkInAt` (covers FLSA 29 CFR 516.5–516.6: 2–3 yrs, and IRS employment tax records: 4 yrs, with margin for stricter states like NY: 6 yrs) | Org-confirmed figure required — see §3 | **Org opt-in** — `enforceDataRetention`, only once `dataRetention.timeEntriesYears` is set |
+| Payroll runs (period locks) | `orgs/{orgId}/payrollRuns` | Suggested default 7 years from period end | Same basis as time entries | **Org opt-in** — `dataRetention.payrollRunsYears` |
+| PTO/accrual ledger | `orgs/{orgId}/accrualLedger` | Suggested default 7 years from `createdAt` | Same basis — part of the payroll record trail | **Org opt-in** — `dataRetention.accrualLedgerYears` |
+| Time-off requests | `orgs/{orgId}/requests` | Suggested default 7 years from `createdAt` | Same basis — decision trail behind paid leave | **Org opt-in** — `dataRetention.timeOffRequestsYears` |
+| Employee identity/tax documents (W-4, W-2, ID, certifications) | `orgs/{orgId}/employeeDocuments` + Storage `.../documents/**` | Suggested default 7 years after employment ends (`revokedAt`) | Aligned with payroll record retention | **Org opt-in** — `dataRetention.employeeDocumentsYearsAfterTermination` |
 | **Direct deposit bank account info** | `orgs/{orgId}/users/{uid}/private/bankInfo` | **90 days after termination** (`revokedAt`) | No legal retention requirement for raw account/routing numbers once employment and final pay are settled — the single highest-sensitivity field in the app, so it gets the shortest window by design (data minimization) | **Yes** — `enforceDataRetention` |
 | Audit logs | `orgs/{orgId}/auditLogs` | 6 years from `createdAt` | HIPAA Security Rule documentation retention ceiling, 45 CFR §164.316(b)(2)(i) | **Yes** — `enforceDataRetention` |
 | Client-side error logs | `clientErrorLogs` (root) | 1 year from `createdAt` | Pure diagnostics, no legal floor — capped for hygiene | **Yes** — `enforceDataRetention` |
@@ -58,31 +58,44 @@ suspension, but flag it if that assumption doesn't hold for a real case.
 
 ## 3. What's automated today vs. what's still manual
 
-`enforceDataRetention` (new scheduled Cloud Function, runs daily) currently
-purges only the four categories marked "Yes" above: direct deposit,
-expired audit logs, expired client error logs, and expired rate locks.
-These were chosen first because none of them carry a real legal retention
-floor that a wrong number could violate — audit-log purging only removes
-records *past* HIPAA's own 6-year ceiling, and the other three have no
-floor at all.
+`enforceDataRetention` (scheduled Cloud Function, runs daily) always purges
+the four categories with no legal retention floor to get wrong: direct
+deposit, expired audit logs (only past HIPAA's 6-year ceiling), expired
+client error logs, and expired rate locks.
 
 Time entries, payroll runs, the PTO ledger, time-off requests, and employee
-documents are **not yet auto-deleted**, on purpose: those are the
-categories with an actual legal minimum, and getting the number wrong in
-either direction is a real problem — too short is a compliance violation,
-too long defeats the point of having a policy. Enabling automated deletion
-for those requires:
+documents are different — those carry a real, jurisdiction-varying legal
+minimum, so nothing about them is ever auto-deleted **by default**. Instead,
+`orgs/{orgId}.dataRetention` holds five optional `*Years` fields (one per
+category — see `admin-org-settings.page.ts`'s "Data Retention" section),
+each defaulting to `null` (= keep forever). `enforceDataRetention` only
+purges a category for an org once that org has explicitly set a number —
+which should only happen after:
 
-1. Confirming the exact retention figure per org (or per org's
-   `countryCode`/`taxProfile`, since a US org and a Cameroon org may have
-   different legal floors) — likely needs a per-org override field on
-   `orgs/{orgId}` similar to how tax defaults already work, rather than one
-   global constant.
-2. Legal sign-off on the confirmed figures.
-3. Only then extending `enforceDataRetention` (or a follow-up function) to
-   cover them, almost certainly behind an explicit "retention enforcement
-   enabled" toggle per org so a customer's legal/finance team opts in
-   deliberately rather than records disappearing by default.
+1. Confirming the exact retention figure with legal/compliance counsel for
+   that org's jurisdiction (a US org and a Cameroon org may have very
+   different legal floors — this app deliberately does not guess a number
+   per `countryCode`/`taxProfile`, since none of those jurisdictions'
+   specific retention laws have been researched here).
+2. An admin/hr user entering that confirmed figure in Org Settings and
+   clicking "Mark these figures as legally confirmed" (stamps
+   `dataRetention.confirmedBy`/`confirmedAt` for an audit trail of who
+   signed off and when — this stamp is informational only and does not
+   gate enforcement; enforcement is gated purely by a `*Years` field being
+   set).
+
+Two extra safety details in the implementation:
+- **Time entries**: never purges an entry with no `checkOutAt` (an open,
+  unfinished punch), regardless of how old `checkInAt` is.
+- **Time-off requests**: never purges a `status: 'pending'` request,
+  regardless of age — a stale-but-unresolved request should surface as a
+  data hygiene problem for the org, not silently disappear.
+- **Employee documents**: only ever purges documents belonging to an
+  already-terminated (`active: false`) user, past their
+  `employeeDocumentsYearsAfterTermination` window from `revokedAt` — an
+  active employee's documents are never touched regardless of age. This
+  also deletes the underlying Cloud Storage file at the document's
+  `storagePath`, not just the Firestore record.
 
 ## 4. Deletion mechanics
 
@@ -90,7 +103,11 @@ for those requires:
 `cleanupArchivedNotifications` sweep: an `onSchedule` Cloud Function running
 once daily, walking `orgs/{orgId}` and its subcollections rather than a
 Firestore collection-group query, so it doesn't require any new composite
-or collection-group index. Deletions are hard deletes (not soft/archive),
-since everything it currently touches is either past a compliance ceiling
-(audit logs) or has no retention value at all (bank info post-termination,
-diagnostics, rate locks).
+or collection-group index. Deletions are hard deletes (not soft/archive) —
+for the unconditional categories because there's nothing left worth
+keeping (past a compliance ceiling, or no retention value at all), and for
+the confirmed-only categories because an org that set a `*Years` figure
+has, by construction, already confirmed that figure is the legally correct
+point to delete. Every purge in the confirmed-only tier writes a
+`writeAudit()` entry (`RETENTION_PURGE_*`) so there's a permanent record of
+what was deleted, when, and under which policy.

@@ -63,7 +63,8 @@ service cloud.firestore {
         'overtimeMultiplier',
         'overtimeWeeklyThresholdHours',
         'holidayWorkMultiplier',
-        'holidays'
+        'holidays',
+        'dataRetention'
       ]);
     }
 
