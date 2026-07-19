@@ -42,8 +42,30 @@ service cloud.firestore {
       return isAdmin() || isHR();
     }
 
-    // Caller belongs to this org AND is an admin-like role
-    function isOrgAdmin(o)   { return isOrgMember(o) && isOrgAdminLike(); }
+    // Manager/scheduler may edit non-payroll org settings (locations, general
+    // preferences, etc.) but must not touch payroll-sensitive fields — those
+    // are admin/hr territory, same tier as payroll runs and employee
+    // documents elsewhere in this file. diff().affectedKeys() only reports
+    // keys whose value actually changed, so resubmitting the full settings
+    // object with these fields untouched is still allowed.
+    function isSafeOrgSettingsUpdate() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'defaultFederalTaxPercent',
+        'defaultStateTaxPercent',
+        'defaultSocialSecurityPercent',
+        'defaultMedicarePercent',
+        'default401kMatchPercent',
+        'default401kProvider',
+        'benefitPlans',
+        'defaultPayRate',
+        'payFrequency',
+        'overtimeEnabled',
+        'overtimeMultiplier',
+        'overtimeWeeklyThresholdHours',
+        'holidayWorkMultiplier',
+        'holidays'
+      ]);
+    }
 
     function isSafeSelfUserProfileUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -117,8 +139,14 @@ service cloud.firestore {
     match /orgs/{orgId} {
       // Org metadata (name, plan, planStatus, etc.)
       allow read:  if signedIn() && (isSuperAdmin() || isOrgMember(orgId));
-      // Only admins within that org or super-admin may update org settings
-      allow update: if signedIn() && (isSuperAdmin() || isOrgAdmin(orgId));
+      // Admin/hr may update any org setting; manager/scheduler may update
+      // non-payroll settings only (isSafeOrgSettingsUpdate gates the
+      // payroll-sensitive field list above).
+      allow update: if signedIn() && (
+        isSuperAdmin() ||
+        (isOrgMember(orgId) && isAdminOrHR()) ||
+        (isOrgMember(orgId) && isOrgAdminLike() && isSafeOrgSettingsUpdate())
+      );
       allow create: if isSuperAdmin();
       allow delete: if isSuperAdmin();
 
@@ -205,14 +233,12 @@ service cloud.firestore {
           isSuperAdmin() ||
           (isOrgMember(orgId) && hasPlan(orgId) && uid() == request.resource.data.userId)
         );
-        allow update: if signedIn() && (
-          isSuperAdmin() ||
-          (isOrgMember(orgId) && isOrgAdminLike())
-        );
-        allow delete: if signedIn() && (
-          isSuperAdmin() ||
-          (isOrgMember(orgId) && isAdmin())
-        );
+        // Corrections, deletions/voids, and payroll-period locking must go
+        // through checkIn/checkOut/approveTimeCorrection/deleteTimeEntry so
+        // audit logging and finalized-period locks stay consistent — no
+        // legitimate client path writes here directly.
+        allow update: if false;
+        allow delete: if false;
       }
 
       // ── Leave / Time-off Requests ────────────────
@@ -221,9 +247,21 @@ service cloud.firestore {
           isSuperAdmin() ||
           (isOrgMember(orgId) && (isAdminOrHR() || uid() == resource.data.userId))
         );
+        // A self-submitted request must start pending and unpriced — approval
+        // (status, paid, payRate, decidedAt/By) is only ever set server-side
+        // by decideTimeOffRequest, never by the client that created the doc.
         allow create: if signedIn() && (
           isSuperAdmin() ||
-          (isOrgMember(orgId) && uid() == request.resource.data.userId)
+          (
+            isOrgMember(orgId) &&
+            request.resource.data.orgId == orgId &&
+            request.resource.data.userId == uid() &&
+            request.resource.data.status == 'pending' &&
+            !('paid' in request.resource.data) &&
+            !('payRate' in request.resource.data) &&
+            !('decidedAt' in request.resource.data) &&
+            !('decidedBy' in request.resource.data)
+          )
         );
         // Approve/reject go through decideTimeOffRequest so shift unassignment,
         // balance/ledger updates, and notifications stay consistent.

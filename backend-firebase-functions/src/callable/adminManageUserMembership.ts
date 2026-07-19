@@ -59,6 +59,13 @@ export async function runMembershipAction(input: RunMembershipActionInput) {
     if (!scopedOrgId || scopedOrgId !== currentOrgId) {
       throw new HttpsError('permission-denied', 'Cross-organization membership update is not allowed.');
     }
+
+    // A manager/scheduler is org-admin-like but must not be able to
+    // revoke/suspend an admin or hr account — only an admin (or hr, for
+    // other hr accounts) may act on peer/higher-privilege users.
+    if (['admin', 'hr'].includes(currentAccessRole) && !['admin', 'hr'].includes(String(caller.accessRole))) {
+      throw new HttpsError('permission-denied', 'Only admin/hr can modify an admin or hr account.');
+    }
   }
 
   if (action === 'transfer') {
