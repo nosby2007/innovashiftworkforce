@@ -7,59 +7,60 @@ import { NotificationsRepo, UserNotification, NOTIFICATION_ARCHIVE_RETENTION_DAY
 import { ToastService } from '../../core/ui/toast.service';
 import { PushNotificationsService } from '../../core/push/push-notifications.service';
 import { formatDateTime } from '../../shared/utils/date.util';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule],
+  imports: [CommonModule, FormsModule, MatIconModule, TranslocoModule],
   template: `
     <div class="ntf-center">
       <header class="ntf-top">
-        <h1>Control Center</h1>
+        <h1>{{ 'notifications.controlCenter' | transloco }}</h1>
         <div class="ntf-top-actions">
           <button *ngIf="pushSupported && !pushEnabled" type="button" (click)="enablePush()" [disabled]="pushBusy">
-            <mat-icon>notifications_active</mat-icon><span>{{ pushBusy ? 'Enabling…' : 'Enable Push' }}</span>
+            <mat-icon>notifications_active</mat-icon><span>{{ (pushBusy ? 'notifications.enabling' : 'notifications.enablePush') | transloco }}</span>
           </button>
           <button type="button" (click)="markFilteredRead()" [disabled]="busy || unreadFilteredIds().length === 0">
-            <mat-icon>done_all</mat-icon><span>Mark Read</span>
+            <mat-icon>done_all</mat-icon><span>{{ 'notifications.markRead' | transloco }}</span>
           </button>
           <button type="button" (click)="activeCategory = 'unread'; selectedIndex = 0">
-            <mat-icon>filter_alt</mat-icon><span>Unread</span>
+            <mat-icon>filter_alt</mat-icon><span>{{ 'notifications.unread' | transloco }}</span>
           </button>
           <button type="button" (click)="activeCategory = 'all'; selectedIndex = 0">
-            <mat-icon>select_all</mat-icon><span>All</span>
+            <mat-icon>select_all</mat-icon><span>{{ 'notifications.all' | transloco }}</span>
           </button>
         </div>
       </header>
 
       <div *ngIf="!orgId" class="ntf-no-org">
-        <mat-icon>warning_amber</mat-icon> Missing org context.
+        <mat-icon>warning_amber</mat-icon> {{ 'notifications.missingOrgContext' | transloco }}
       </div>
 
       <section class="ntf-shell" *ngIf="orgId">
         <aside class="ntf-cats">
-          <div class="ntf-cat-title">Categories</div>
+          <div class="ntf-cat-title">{{ 'notifications.categories' | transloco }}</div>
           <button *ngFor="let c of categories()"
                   [class.is-active]="activeCategory === c.key"
                   (click)="activeCategory = c.key; selectedIndex = 0">
             <strong>{{ c.count }}</strong>
-            <span>{{ c.label }}</span>
+            <span>{{ c.label | transloco }}</span>
           </button>
         </aside>
 
         <main class="ntf-main">
           <div class="ntf-filter">
-            <span>Filter:</span>
+            <span>{{ 'notifications.filter' | transloco }}</span>
             <select [(ngModel)]="activeCategory">
-              <option value="all">No Status, Cancel Submitted</option>
-              <option value="unread">Unread</option>
-              <option value="system">System Messages</option>
-              <option value="shift">Shift Updates</option>
-              <option value="time">Timekeeping Requests</option>
+              <option value="all">{{ 'notifications.filterAll' | transloco }}</option>
+              <option value="unread">{{ 'notifications.filterUnread' | transloco }}</option>
+              <option value="system">{{ 'notifications.filterSystem' | transloco }}</option>
+              <option value="shift">{{ 'notifications.filterShift' | transloco }}</option>
+              <option value="time">{{ 'notifications.filterTime' | transloco }}</option>
             </select>
           </div>
 
           <div class="ntf-empty" *ngIf="filteredItems().length===0">
-            There are no notifications to display for selected criteria.
+            {{ 'notifications.noNotifications' | transloco }}
           </div>
 
           <button *ngFor="let n of filteredItems(); let i = index"
@@ -72,44 +73,44 @@ import { formatDateTime } from '../../shared/utils/date.util';
               <span>{{ n.body }}</span>
               <em>{{ fmt(n.createdAt) }}</em>
             </div>
-            <b *ngIf="!n.read">New</b>
+            <b *ngIf="!n.read">{{ 'notifications.new' | transloco }}</b>
           </button>
         </main>
 
         <aside class="ntf-detail">
-          <h2>Details</h2>
+          <h2>{{ 'notifications.details' | transloco }}</h2>
           <ng-container *ngIf="selectedItem() as n; else noDetail">
             <div class="ntf-detail-card">
               <mat-icon>{{ getIcon(n.type) }}</mat-icon>
               <div>
                 <strong>{{ n.title }}</strong>
-                <span>{{ n.read ? 'Read' : 'New' }}</span>
+                <span>{{ (n.read ? 'notifications.read' : 'notifications.new') | transloco }}</span>
               </div>
             </div>
             <div class="ntf-detail-block">
-              <span>Subject</span>
+              <span>{{ 'notifications.subject' | transloco }}</span>
               <strong>{{ n.title }}</strong>
             </div>
             <div class="ntf-detail-block">
-              <span>Body</span>
+              <span>{{ 'notifications.body' | transloco }}</span>
               <p>{{ n.body }}</p>
             </div>
             <div class="ntf-detail-block">
-              <span>Created</span>
+              <span>{{ 'notifications.created' | transloco }}</span>
               <strong>{{ fmt(n.createdAt) }}</strong>
             </div>
             <button class="ntf-detail-action" type="button" (click)="markOneRead(n)" [disabled]="busy || n.read">
               <mat-icon>done</mat-icon>
-              {{ n.read ? 'Already read' : 'Mark as read' }}
+              {{ (n.read ? 'notifications.alreadyRead' : 'notifications.markAsRead') | transloco }}
             </button>
             <button class="ntf-detail-action ntf-detail-action--danger" type="button" (click)="deleteNotification(n)" [disabled]="busy">
               <mat-icon>delete_outline</mat-icon>
-              Delete
+              {{ 'notifications.delete' | transloco }}
             </button>
-            <p class="ntf-detail-hint">Deleted notifications are removed from this list right away and permanently erased after {{ retentionDays }} days.</p>
+            <p class="ntf-detail-hint">{{ 'notifications.deleteHint' | transloco: { days: retentionDays } }}</p>
           </ng-container>
           <ng-template #noDetail>
-            <div class="ntf-muted">Select a notification to review details.</div>
+            <div class="ntf-muted">{{ 'notifications.selectToReview' | transloco }}</div>
           </ng-template>
         </aside>
       </section>
@@ -177,7 +178,8 @@ export class NotificationsPage implements OnDestroy {
     private ctx: OrgContextService,
     private repo: NotificationsRepo,
     private toast: ToastService,
-    private push: PushNotificationsService
+    private push: PushNotificationsService,
+    private i18n: TranslocoService,
   ) {
     this.pushSupported = this.push.isSupportedPlatform();
     this.pushEnabled = this.push.isEnabled();
@@ -203,12 +205,12 @@ export class NotificationsPage implements OnDestroy {
       const ok = await this.push.enable();
       this.pushEnabled = ok;
       if (ok) {
-        this.toast.success('Push notifications enabled — you\'ll be alerted when a matching shift opens up.');
+        this.toast.success(this.i18n.translate('notifications.pushEnabled'));
       } else {
-        this.toast.error('Could not enable push notifications. Check that notification permission is allowed for this app.');
+        this.toast.error(this.i18n.translate('notifications.pushEnableFailed'));
       }
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Unable to enable push notifications.');
+      this.toast.errorFrom(e, this.i18n.translate('notifications.pushEnableError'));
     } finally {
       this.pushBusy = false;
     }
@@ -229,12 +231,12 @@ export class NotificationsPage implements OnDestroy {
 
   categories() {
     return [
-      { key: 'all', label: 'My Requests', count: this.items().length },
-      { key: 'unread', label: 'Unread', count: this.items().filter((x) => !x.read).length },
-      { key: 'system', label: 'System Messages', count: this.items().filter((x) => x.type === 'system').length },
-      { key: 'shift', label: 'Open Shift Available', count: this.items().filter((x) => String(x.type).includes('shift')).length },
-      { key: 'time', label: 'Timekeeping Requ...', count: this.items().filter((x) => String(x.type).includes('time')).length },
-      { key: 'employee', label: 'Employee Requests', count: this.items().filter((x) => !x.read).length },
+      { key: 'all', label: 'notifications.catMyRequests', count: this.items().length },
+      { key: 'unread', label: 'notifications.catUnread', count: this.items().filter((x) => !x.read).length },
+      { key: 'system', label: 'notifications.catSystemMessages', count: this.items().filter((x) => x.type === 'system').length },
+      { key: 'shift', label: 'notifications.catOpenShift', count: this.items().filter((x) => String(x.type).includes('shift')).length },
+      { key: 'time', label: 'notifications.catTimekeeping', count: this.items().filter((x) => String(x.type).includes('time')).length },
+      { key: 'employee', label: 'notifications.catEmployeeRequests', count: this.items().filter((x) => !x.read).length },
     ];
   }
 
@@ -268,9 +270,9 @@ export class NotificationsPage implements OnDestroy {
     this.busy = true;
     try {
       await this.repo.markAllRead(this.orgId, this.uid, ids);
-      this.toast.success(`${ids.length} notification(s) marked read.`);
+      this.toast.success(this.i18n.translate('notifications.notificationsMarkedRead', { count: ids.length }));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Unable to update notifications.');
+      this.toast.errorFrom(e, this.i18n.translate('notifications.updateFailed'));
     } finally {
       this.busy = false;
     }
@@ -281,9 +283,9 @@ export class NotificationsPage implements OnDestroy {
     this.busy = true;
     try {
       await this.repo.markRead(this.orgId, this.uid, notification.id);
-      if (showToast) this.toast.success('Notification marked read.');
+      if (showToast) this.toast.success(this.i18n.translate('notifications.notificationMarkedRead'));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Unable to update notification.');
+      this.toast.errorFrom(e, this.i18n.translate('notifications.notificationUpdateFailed'));
     } finally {
       this.busy = false;
     }
@@ -296,9 +298,9 @@ export class NotificationsPage implements OnDestroy {
       await this.repo.archive(this.orgId, this.uid, notification.id);
       this.items.set(this.items().filter((n) => n.id !== notification.id));
       this.selectedIndex = 0;
-      this.toast.success('Notification deleted.');
+      this.toast.success(this.i18n.translate('notifications.notificationDeleted'));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Unable to delete notification.');
+      this.toast.errorFrom(e, this.i18n.translate('notifications.notificationDeleteFailed'));
     } finally {
       this.busy = false;
     }

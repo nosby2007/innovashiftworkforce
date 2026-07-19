@@ -10,6 +10,7 @@ import { profileCompletion } from '../../shared/utils/profile-completion.util';
 import { EmployeeDocumentRecord, EmployeeDocumentType, EmployeeDocumentsRepo } from '../../core/repos/employee-documents.repo';
 import { ToastService } from '../../core/ui/toast.service';
 import { DocumentScanService } from '../../core/camera/document-scan.service';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 type DocumentTile = {
   title: string;
@@ -21,24 +22,24 @@ type DocumentTile = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, MatIconModule],
+  imports: [CommonModule, RouterLink, FormsModule, MatIconModule, TranslocoModule],
   template: `
     <div class="doc-page">
       <header class="doc-hero">
         <div>
-          <span>Staff Document Center</span>
-          <h1>My Documents</h1>
-          <p>Payroll, tax, identity, and employment records in one place.</p>
+          <span>{{ 'documents.kicker' | transloco }}</span>
+          <h1>{{ 'documents.title' | transloco }}</h1>
+          <p>{{ 'documents.subtitle' | transloco }}</p>
         </div>
         <a class="doc-primary" routerLink="/app/profile">
           <mat-icon>edit</mat-icon>
-          Update Profile
+          {{ 'documents.updateProfile' | transloco }}
         </a>
       </header>
 
       <div *ngIf="!orgId || !uid" class="doc-alert">
         <mat-icon>warning_amber</mat-icon>
-        Missing organization or user context.
+        {{ 'documents.missingContext' | transloco }}
       </div>
 
       <ng-container *ngIf="orgId && uid">
@@ -46,19 +47,19 @@ type DocumentTile = {
           <article class="doc-score">
             <div class="doc-ring" [style.--score]="completion().score + '%'">{{ completion().score }}%</div>
             <div>
-              <h2>Profile readiness</h2>
-              <p>{{ completionCopy() }}</p>
+              <h2>{{ 'documents.profileReadiness' | transloco }}</h2>
+              <p>{{ completionCopy() | transloco }}</p>
               <div class="doc-missing" *ngIf="completion().missing.length">
                 <span *ngFor="let item of completion().missing.slice(0, 4)">{{ item }}</span>
               </div>
             </div>
           </article>
           <article class="doc-checklist">
-            <h2>Required records</h2>
+            <h2>{{ 'documents.requiredRecords' | transloco }}</h2>
             <div class="doc-check-row" *ngFor="let row of checklist()">
               <mat-icon>{{ row.ok ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
-              <span>{{ row.label }}</span>
-              <strong>{{ row.ok ? 'Complete' : 'Needs review' }}</strong>
+              <span>{{ row.label | transloco }}</span>
+              <strong>{{ (row.ok ? 'documents.complete' : 'documents.needsReview') | transloco }}</strong>
             </div>
           </article>
         </section>
@@ -70,47 +71,47 @@ type DocumentTile = {
              [class.is-attention]="tile.status === 'attention'"
              [class.is-locked]="tile.status === 'locked'">
             <span class="doc-app-icon"><mat-icon>{{ tile.icon }}</mat-icon></span>
-            <strong>{{ tile.title }}</strong>
-            <small>{{ tile.subtitle }}</small>
-            <em>{{ statusLabel(tile.status) }}</em>
+            <strong>{{ tile.title | transloco }}</strong>
+            <small>{{ tile.subtitle | transloco }}</small>
+            <em>{{ statusLabel(tile.status) | transloco }}</em>
           </a>
         </section>
 
         <section class="doc-record doc-upload-panel">
           <div class="doc-record-head">
-            <h2>Document Verification</h2>
-            <span>{{ pendingDocuments() }} pending</span>
+            <h2>{{ 'documents.documentVerification' | transloco }}</h2>
+            <span>{{ 'documents.pendingCount' | transloco: { count: pendingDocuments() } }}</span>
           </div>
           <div class="doc-upload-body">
             <div class="doc-upload-form">
               <label>
-                <span>Document type</span>
+                <span>{{ 'documents.documentType' | transloco }}</span>
                 <select class="doc-input" [(ngModel)]="uploadType">
-                  <option value="identity">Identity Document</option>
-                  <option value="w4">W-4 Withholding</option>
-                  <option value="w2">W-2 Document</option>
-                  <option value="certification">License or Certification</option>
-                  <option value="payroll">Payroll Document</option>
-                  <option value="policy">Policy Acknowledgement</option>
-                  <option value="other">Other Document</option>
+                  <option value="identity">{{ 'documents.typeIdentity' | transloco }}</option>
+                  <option value="w4">{{ 'documents.typeW4' | transloco }}</option>
+                  <option value="w2">{{ 'documents.typeW2' | transloco }}</option>
+                  <option value="certification">{{ 'documents.typeCertification' | transloco }}</option>
+                  <option value="payroll">{{ 'documents.typePayroll' | transloco }}</option>
+                  <option value="policy">{{ 'documents.typePolicy' | transloco }}</option>
+                  <option value="other">{{ 'documents.typeOther' | transloco }}</option>
                 </select>
               </label>
               <label>
-                <span>Title</span>
-                <input class="doc-input" [(ngModel)]="uploadTitle" placeholder="e.g. RN license renewal">
+                <span>{{ 'documents.titleLabel' | transloco }}</span>
+                <input class="doc-input" [(ngModel)]="uploadTitle" [placeholder]="'documents.titlePlaceholder' | transloco">
               </label>
               <label>
-                <span>File</span>
+                <span>{{ 'documents.file' | transloco }}</span>
                 <div class="doc-file-row">
                   <input class="doc-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" (change)="selectFile($event)">
-                  <button class="doc-scan-btn" type="button" (click)="scanDocument()" [disabled]="scanBusy" title="Scan with camera">
+                  <button class="doc-scan-btn" type="button" (click)="scanDocument()" [disabled]="scanBusy" [title]="'documents.scanTooltip' | transloco">
                     <mat-icon>{{ scanBusy ? 'hourglass_empty' : 'photo_camera' }}</mat-icon>
                   </button>
                 </div>
               </label>
               <button class="doc-primary doc-upload-btn" type="button" (click)="uploadDocument()" [disabled]="uploadBusy || !selectedFile">
                 <mat-icon>{{ uploadBusy ? 'hourglass_empty' : 'upload_file' }}</mat-icon>
-                {{ uploadBusy ? 'Uploading...' : 'Submit for Review' }}
+                {{ (uploadBusy ? 'documents.uploading' : 'documents.submitForReview') | transloco }}
               </button>
             </div>
 
@@ -119,9 +120,9 @@ type DocumentTile = {
               <mat-icon *ngIf="!previewUrl()" class="doc-preview-icon">description</mat-icon>
               <div>
                 <strong>{{ selectedFile.name }}</strong>
-                <span>{{ formatFileSize(selectedFile.size) }} — ready to submit</span>
+                <span>{{ formatFileSize(selectedFile.size) }} — {{ 'documents.readyToSubmit' | transloco }}</span>
               </div>
-              <button type="button" class="doc-preview-clear" (click)="clearSelection()" title="Remove">
+              <button type="button" class="doc-preview-clear" (click)="clearSelection()" [title]="'documents.removeTooltip' | transloco">
                 <mat-icon>close</mat-icon>
               </button>
             </div>
@@ -132,30 +133,30 @@ type DocumentTile = {
                   <strong>{{ item.title || docLabel(item.type) }}</strong>
                   <span>{{ docLabel(item.type) }} · {{ item.fileName }}</span>
                 </div>
-                <em [class.is-ok]="item.status === 'verified'" [class.is-bad]="item.status === 'rejected'">{{ statusText(item.status) }}</em>
-                <button type="button" class="doc-open" (click)="openDocument(item)" title="Open document">
+                <em [class.is-ok]="item.status === 'verified'" [class.is-bad]="item.status === 'rejected'">{{ statusText(item.status) | transloco }}</em>
+                <button type="button" class="doc-open" (click)="openDocument(item)" [title]="'documents.openTooltip' | transloco">
                   <mat-icon>open_in_new</mat-icon>
                 </button>
               </div>
             </div>
             <ng-template #noDocuments>
-              <div class="doc-empty-state">No documents submitted yet.</div>
+              <div class="doc-empty-state">{{ 'documents.noDocumentsSubmitted' | transloco }}</div>
             </ng-template>
           </div>
         </section>
 
         <section class="doc-record">
           <div class="doc-record-head">
-            <h2>Employment Record</h2>
+            <h2>{{ 'documents.employmentRecord' | transloco }}</h2>
             <span>{{ employeeNumber() }}</span>
           </div>
           <div class="doc-record-grid">
-            <div><span>Name</span><strong>{{ user()?.displayName || 'Not set' }}</strong></div>
-            <div><span>Email</span><strong>{{ user()?.email || 'Not set' }}</strong></div>
-            <div><span>Role</span><strong>{{ user()?.jobRole || user()?.title || 'Not set' }}</strong></div>
-            <div><span>Department</span><strong>{{ profileValue('department') || 'Not set' }}</strong></div>
-            <div><span>Location</span><strong>{{ profileValue('locationName') || 'Not set' }}</strong></div>
-            <div><span>W-2 Delivery</span><strong>{{ user()?.w2?.delivery || 'Not set' }}</strong></div>
+            <div><span>{{ 'documents.name' | transloco }}</span><strong>{{ user()?.displayName || ('documents.notSet' | transloco) }}</strong></div>
+            <div><span>{{ 'documents.email' | transloco }}</span><strong>{{ user()?.email || ('documents.notSet' | transloco) }}</strong></div>
+            <div><span>{{ 'documents.role' | transloco }}</span><strong>{{ user()?.jobRole || user()?.title || ('documents.notSet' | transloco) }}</strong></div>
+            <div><span>{{ 'documents.department' | transloco }}</span><strong>{{ profileValue('department') || ('documents.notSet' | transloco) }}</strong></div>
+            <div><span>{{ 'documents.location' | transloco }}</span><strong>{{ profileValue('locationName') || ('documents.notSet' | transloco) }}</strong></div>
+            <div><span>{{ 'documents.w2Delivery' | transloco }}</span><strong>{{ user()?.w2?.delivery || ('documents.notSet' | transloco) }}</strong></div>
           </div>
         </section>
       </ng-container>
@@ -253,6 +254,7 @@ export class StaffDocumentsPage implements OnDestroy {
     private docsRepo: EmployeeDocumentsRepo,
     private toast: ToastService,
     private docScan: DocumentScanService,
+    private i18n: TranslocoService,
   ) {
     this.orgId = this.ctx.orgId();
     this.uid = this.ctx.uid();
@@ -288,19 +290,19 @@ export class StaffDocumentsPage implements OnDestroy {
 
   completionCopy(): string {
     const c = this.completion();
-    if (c.status === 'complete') return 'Your profile is complete for payroll and workforce workflows.';
-    if (c.status === 'needs_attention') return 'Your profile is mostly complete. Review the missing records below.';
-    return 'Finish your profile before payroll, W-2, and HR records are fully ready.';
+    if (c.status === 'complete') return 'documents.completionComplete';
+    if (c.status === 'needs_attention') return 'documents.completionNeedsAttention';
+    return 'documents.completionIncomplete';
   }
 
   checklist() {
     const u = this.user() || {};
     return [
-      { label: 'Personal contact information', ok: !!u.displayName && !!u.email && !!(u.phone || u.profile?.phone) },
-      { label: 'Mailing address', ok: !!(u.address?.line1 || u.profile?.address?.line1) },
-      { label: 'W-4 withholding certification', ok: u.taxWithholding?.certified === true },
-      { label: 'W-2 delivery preference', ok: !!u.w2?.delivery && !!u.w2?.email },
-      { label: 'Emergency contact', ok: !!(u.emergencyContact?.name || u.profile?.emergencyContact?.name) },
+      { label: 'documents.check1', ok: !!u.displayName && !!u.email && !!(u.phone || u.profile?.phone) },
+      { label: 'documents.check2', ok: !!(u.address?.line1 || u.profile?.address?.line1) },
+      { label: 'documents.check3', ok: u.taxWithholding?.certified === true },
+      { label: 'documents.check4', ok: !!u.w2?.delivery && !!u.w2?.email },
+      { label: 'documents.check5', ok: !!(u.emergencyContact?.name || u.profile?.emergencyContact?.name) },
     ];
   }
 
@@ -308,14 +310,14 @@ export class StaffDocumentsPage implements OnDestroy {
     const u = this.user() || {};
     const c = this.completion();
     return [
-      { title: 'Personal Information', subtitle: 'Name, address, contact, emergency record', icon: 'badge', status: c.score >= 75 ? 'ready' : 'attention', link: '/app/profile' },
-      { title: 'W-4 Withholding', subtitle: 'Federal or local withholding preferences', icon: 'fact_check', status: u.taxWithholding?.certified ? 'ready' : 'attention', link: '/app/profile' },
-      { title: 'Employee W-2', subtitle: 'Tax document delivery preference', icon: 'description', status: u.w2?.delivery ? 'ready' : 'attention', link: '/app/profile' },
-      { title: 'Online Payslip', subtitle: 'Pay statements and printable PDF view', icon: 'payments', status: 'ready', link: '/app/payroll' },
-      { title: 'Dependents', subtitle: 'Benefits and tax dependent records', icon: 'family_restroom', status: Array.isArray(u.dependents) && u.dependents.length ? 'ready' : 'attention', link: '/app/profile' },
-      { title: 'Time-Off Records', subtitle: 'PTO, sick balance, and request history', icon: 'event_available', status: 'ready', link: '/app/accruals' },
-      { title: 'Timecard Inquiry', subtitle: 'Punches, exceptions, and corrections', icon: 'receipt_long', status: 'ready', link: '/app/attendance' },
-      { title: 'Company Policies', subtitle: 'Organization documents and acknowledgements', icon: 'policy', status: 'locked' },
+      { title: 'documents.tile1Title', subtitle: 'documents.tile1Sub', icon: 'badge', status: c.score >= 75 ? 'ready' : 'attention', link: '/app/profile' },
+      { title: 'documents.tile2Title', subtitle: 'documents.tile2Sub', icon: 'fact_check', status: u.taxWithholding?.certified ? 'ready' : 'attention', link: '/app/profile' },
+      { title: 'documents.tile3Title', subtitle: 'documents.tile3Sub', icon: 'description', status: u.w2?.delivery ? 'ready' : 'attention', link: '/app/profile' },
+      { title: 'documents.tile4Title', subtitle: 'documents.tile4Sub', icon: 'payments', status: 'ready', link: '/app/payroll' },
+      { title: 'documents.tile5Title', subtitle: 'documents.tile5Sub', icon: 'family_restroom', status: Array.isArray(u.dependents) && u.dependents.length ? 'ready' : 'attention', link: '/app/profile' },
+      { title: 'documents.tile6Title', subtitle: 'documents.tile6Sub', icon: 'event_available', status: 'ready', link: '/app/accruals' },
+      { title: 'documents.tile7Title', subtitle: 'documents.tile7Sub', icon: 'receipt_long', status: 'ready', link: '/app/attendance' },
+      { title: 'documents.tile8Title', subtitle: 'documents.tile8Sub', icon: 'policy', status: 'locked' },
     ];
   }
 
@@ -333,7 +335,7 @@ export class StaffDocumentsPage implements OnDestroy {
         this.applySelectedFile(file);
       }
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Unable to capture a photo.');
+      this.toast.errorFrom(e, this.i18n.translate('documents.captureFailed'));
     } finally {
       this.scanBusy = false;
     }
@@ -382,11 +384,11 @@ export class StaffDocumentsPage implements OnDestroy {
         title: this.uploadTitle || this.docLabel(this.uploadType),
         file: this.selectedFile,
       });
-      this.toast.success('Document submitted for review.');
+      this.toast.success(this.i18n.translate('documents.documentSubmitted'));
       this.applySelectedFile(null);
       this.uploadTitle = '';
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Failed to upload document.');
+      this.toast.errorFrom(e, this.i18n.translate('documents.uploadFailed'));
     } finally {
       this.uploadBusy = false;
     }
@@ -396,7 +398,7 @@ export class StaffDocumentsPage implements OnDestroy {
     try {
       window.open(await this.docsRepo.getDocumentUrl(item), '_blank', 'noopener');
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Unable to open document.');
+      this.toast.errorFrom(e, this.i18n.translate('documents.openFailed'));
     }
   }
 
@@ -409,19 +411,19 @@ export class StaffDocumentsPage implements OnDestroy {
   }
 
   statusText(status: string) {
-    if (status === 'verified') return 'Verified';
-    if (status === 'rejected') return 'Needs update';
-    return 'Pending review';
+    if (status === 'verified') return 'documents.statusVerified';
+    if (status === 'rejected') return 'documents.statusNeedsUpdate';
+    return 'documents.statusPendingReview';
   }
 
   statusLabel(status: DocumentTile['status']) {
-    if (status === 'ready') return 'Ready';
-    if (status === 'attention') return 'Needs review';
-    return 'Admin managed';
+    if (status === 'ready') return 'documents.statusReady';
+    if (status === 'attention') return 'documents.statusAttention';
+    return 'documents.statusLocked';
   }
 
   employeeNumber() {
-    return this.user()?.employeeNumber || this.user()?.profile?.employeeNumber || 'Employee ID pending';
+    return this.user()?.employeeNumber || this.user()?.profile?.employeeNumber || this.i18n.translate('documents.employeeIdPending');
   }
 
   profileValue(key: string) {

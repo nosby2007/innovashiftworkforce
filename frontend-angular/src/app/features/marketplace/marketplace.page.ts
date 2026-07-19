@@ -15,51 +15,52 @@ import { mapAttendancePolicyError } from '../../shared/utils/attendance-policy-e
 import { getCurrentWeekRange, fmtShiftDate, fmtShiftTime, canClaimShift, shiftHours } from '../../shared/utils/shift-lifecycle.utils';
 import { scoreShiftMatch, ShiftMatchLabel } from '../../shared/utils/shift-match.util';
 import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, CurrencyPipe, TipCardComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, CurrencyPipe, TipCardComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad mk-page">
       <header class="mk-header">
         <div>
-          <div class="mk-eyebrow">Staff Marketplace</div>
-          <h1>Open Shifts</h1>
-          <p>Find available shifts, claim extra hours, and manage switch requests.</p>
+          <div class="mk-eyebrow">{{ 'marketplace.eyebrow' | transloco }}</div>
+          <h1>{{ 'marketplace.title' | transloco }}</h1>
+          <p>{{ 'marketplace.subtitle' | transloco }}</p>
         </div>
         <div class="mk-header-actions">
           <button class="vs-btn-ghost mk-nav-btn" type="button" (click)="prevWeek()">
             <mat-icon>chevron_left</mat-icon>
-            Previous
+            {{ 'marketplace.previous' | transloco }}
           </button>
           <button class="vs-btn-secondary mk-nav-btn" type="button" (click)="thisWeek()">
             <mat-icon>today</mat-icon>
-            This week
+            {{ 'marketplace.thisWeek' | transloco }}
           </button>
           <button class="vs-btn-ghost mk-nav-btn" type="button" (click)="nextWeek()">
-            Next
+            {{ 'marketplace.next' | transloco }}
             <mat-icon>chevron_right</mat-icon>
           </button>
         </div>
       </header>
 
-      <app-tip-card tipId="marketplace-intro" title="Finding your best-fit shift" icon="stars">
-        Shifts are sorted for you — "Great fit" ones match your role with no schedule conflict, while shifts with a conflict or tight turnaround sink lower and are flagged, not hidden.
+      <app-tip-card tipId="marketplace-intro" [title]="'marketplace.tipTitle' | transloco" icon="stars">
+        {{ 'marketplace.tipBody' | transloco }}
       </app-tip-card>
 
       <div *ngIf="!orgId" class="mk-no-org vs-glass">
-        <mat-icon>warning_amber</mat-icon> Missing org context.
+        <mat-icon>warning_amber</mat-icon> {{ 'marketplace.missingOrgContext' | transloco }}
       </div>
 
       <ng-container *ngIf="orgId">
         <section class="mk-current-banner vs-glass-strong" *ngIf="currentShift() as cs">
           <div class="mk-current-inner">
-            <span class="vs-badge vs-badge--warning">In Progress</span>
+            <span class="vs-badge vs-badge--warning">{{ 'marketplace.inProgress' | transloco }}</span>
             <strong>{{ cs.title }}</strong>
             <span class="mk-current-time">{{ fmtTime(cs.startAt) }} - {{ fmtTime(cs.endAt) }}</span>
           </div>
           <button class="vs-btn-primary mk-btn" (click)="goToAttendance()">
-            <mat-icon>timer</mat-icon> Clock Out
+            <mat-icon>timer</mat-icon> {{ 'marketplace.clockOut' | transloco }}
           </button>
         </section>
 
@@ -67,28 +68,28 @@ import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
           <div class="mk-summary-card">
             <mat-icon>event_available</mat-icon>
             <div>
-              <span>Available</span>
+              <span>{{ 'marketplace.available' | transloco }}</span>
               <strong>{{ items().length }}</strong>
             </div>
           </div>
           <div class="mk-summary-card">
             <mat-icon>schedule</mat-icon>
             <div>
-              <span>Open Hours</span>
+              <span>{{ 'marketplace.openHours' | transloco }}</span>
               <strong>{{ availableHours().toFixed(1) }}</strong>
             </div>
           </div>
           <div class="mk-summary-card">
             <mat-icon>sync_alt</mat-icon>
             <div>
-              <span>My Requests</span>
+              <span>{{ 'marketplace.myRequests' | transloco }}</span>
               <strong>{{ userRequestCount() }}</strong>
             </div>
           </div>
           <div class="mk-summary-card">
             <mat-icon>calendar_month</mat-icon>
             <div>
-              <span>Week</span>
+              <span>{{ 'marketplace.week' | transloco }}</span>
               <strong class="mk-summary-date">{{ weekLabel }}</strong>
             </div>
           </div>
@@ -97,24 +98,24 @@ import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
         <section class="mk-tools vs-glass-strong">
           <div class="mk-search">
             <mat-icon>search</mat-icon>
-            <input class="mk-search-input" [(ngModel)]="marketQuery" placeholder="Search shift, location, or role">
+            <input class="mk-search-input" [(ngModel)]="marketQuery" [placeholder]="'marketplace.searchPlaceholder' | transloco">
           </div>
           <select class="vs-select mk-role-filter" [(ngModel)]="roleFilter">
-            <option value="">All roles</option>
+            <option value="">{{ 'marketplace.allRoles' | transloco }}</option>
             <option *ngFor="let role of roleOptions()" [value]="role">{{ role }}</option>
           </select>
           <div class="mk-tabs" role="tablist">
             <button type="button" [class.is-active]="marketView === 'available'" (click)="marketView='available'">
-              <mat-icon>storefront</mat-icon> Available
+              <mat-icon>storefront</mat-icon> {{ 'marketplace.tabAvailable' | transloco }}
             </button>
             <button type="button" [class.is-active]="marketView === 'requests'" (click)="marketView='requests'">
-              <mat-icon>swap_horiz</mat-icon> Requests
+              <mat-icon>swap_horiz</mat-icon> {{ 'marketplace.tabRequests' | transloco }}
             </button>
             <button type="button" [class.is-active]="marketView === 'activity'" (click)="marketView='activity'">
-              <mat-icon>notifications</mat-icon> Activity
+              <mat-icon>notifications</mat-icon> {{ 'marketplace.tabActivity' | transloco }}
             </button>
             <button type="button" *ngIf="isAdminLike" [class.is-active]="marketView === 'approvals'" (click)="marketView='approvals'">
-              <mat-icon>verified</mat-icon> Approvals
+              <mat-icon>verified</mat-icon> {{ 'marketplace.tabApprovals' | transloco }}
             </button>
           </div>
         </section>
@@ -122,20 +123,20 @@ import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
         <section class="mk-board" *ngIf="marketView === 'available'">
           <div class="mk-state" *ngIf="marketLoading()">
             <mat-icon>hourglass_top</mat-icon>
-            <strong>Loading open shifts</strong>
-            <span>Checking this week’s available schedule.</span>
+            <strong>{{ 'marketplace.loadingOpenShifts' | transloco }}</strong>
+            <span>{{ 'marketplace.checkingSchedule' | transloco }}</span>
           </div>
 
           <div class="mk-state mk-state--error" *ngIf="!marketLoading() && marketError()">
             <mat-icon>error_outline</mat-icon>
-            <strong>Marketplace unavailable</strong>
-            <span>{{ marketError() }}</span>
+            <strong>{{ 'marketplace.marketplaceUnavailable' | transloco }}</strong>
+            <span>{{ marketError() | transloco }}</span>
           </div>
 
           <div class="mk-state" *ngIf="!marketLoading() && !marketError() && filteredItems().length === 0">
             <mat-icon>event_busy</mat-icon>
-            <strong>No matching open shifts</strong>
-            <span>Try another role, search term, or week.</span>
+            <strong>{{ 'marketplace.noMatchingShifts' | transloco }}</strong>
+            <span>{{ 'marketplace.tryAnother' | transloco }}</span>
           </div>
 
           <div class="mk-shift-grid" *ngIf="!marketLoading() && !marketError() && filteredItems().length > 0">
@@ -147,26 +148,26 @@ import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
                 </div>
                 <div class="mk-shift-title">
                   <h2>{{ s.title }}</h2>
-                  <span>{{ s.locationName || 'Location TBD' }}</span>
+                  <span>{{ s.locationName || ('marketplace.locationTbd' | transloco) }}</span>
                 </div>
                 <span class="vs-badge vs-badge--primary" *ngIf="shiftRole(s)">{{ shiftRole(s) }}</span>
               </div>
               <div class="mk-match" *ngIf="matchBadge(s) as mb" [ngClass]="mb.cls">
-                <mat-icon>{{ mb.icon }}</mat-icon>{{ mb.label }}
+                <mat-icon>{{ mb.icon }}</mat-icon>{{ mb.label | transloco }}
               </div>
               <div class="mk-shift-meta">
                 <span><mat-icon>schedule</mat-icon>{{ fmtTime(s.startAt) }} - {{ fmtTime(s.endAt) }}</span>
                 <span><mat-icon>access_time</mat-icon>{{ hrs(s) }}h</span>
-                <span><mat-icon>payments</mat-icon>{{ s.payRate ? (s.payRate | currency:moneyCurrency()) + '/hr' : 'Rate TBD' }}</span>
+                <span><mat-icon>payments</mat-icon>{{ s.payRate ? ((s.payRate | currency:moneyCurrency()) + ('marketplace.perHour' | transloco)) : ('marketplace.rateTbd' | transloco) }}</span>
               </div>
               <div class="mk-shift-actions">
                 <div>
-                  <strong>{{ claimLabel(s) }}</strong>
-                  <span>{{ isNightShift(s) ? 'Night shift' : 'Day shift' }}</span>
+                  <strong>{{ claimLabel(s) | transloco }}</strong>
+                  <span>{{ (isNightShift(s) ? 'marketplace.nightShift' : 'marketplace.dayShift') | transloco }}</span>
                 </div>
                 <button class="vs-btn-primary mk-claim-btn" (click)="claim(s.id)" [disabled]="busyId === s.id || !canClaim(s)">
                   <mat-icon>add_circle</mat-icon>
-                  {{ busyId === s.id ? 'Claiming...' : 'Claim Shift' }}
+                  {{ (busyId === s.id ? 'marketplace.claiming' : 'marketplace.claimShift') | transloco }}
                 </button>
               </div>
             </article>
@@ -176,37 +177,37 @@ import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
         <section class="mk-board" *ngIf="marketView === 'requests'">
           <div class="mk-section-head">
             <div>
-              <h2>{{ isAdminLike ? 'Shift Switch Requests' : 'My Shift Requests' }}</h2>
-              <p>Review pending covers and trades.</p>
+              <h2>{{ (isAdminLike ? 'marketplace.shiftSwitchRequests' : 'marketplace.myShiftRequests') | transloco }}</h2>
+              <p>{{ 'marketplace.reviewRequestsSub' | transloco }}</p>
             </div>
             <button class="vs-btn-secondary" type="button" (click)="refreshSwapRequests()" [disabled]="swapLoading">
-              <mat-icon>refresh</mat-icon>{{ swapLoading ? 'Loading' : 'Refresh' }}
+              <mat-icon>refresh</mat-icon>{{ (swapLoading ? 'marketplace.loading' : 'marketplace.refresh') | transloco }}
             </button>
           </div>
           <div class="mk-state mk-state--error" *ngIf="swapError">
             <mat-icon>error_outline</mat-icon>
-            <strong>Requests unavailable</strong>
-            <span>{{ swapError }}</span>
+            <strong>{{ 'marketplace.requestsUnavailable' | transloco }}</strong>
+            <span>{{ swapError | transloco }}</span>
           </div>
           <div class="mk-state" *ngIf="!swapError && swapRequests.length === 0">
             <mat-icon>swap_horiz</mat-icon>
-            <strong>No shift requests yet</strong>
-            <span>Your cover and trade requests will appear here.</span>
+            <strong>{{ 'marketplace.noShiftRequestsYet' | transloco }}</strong>
+            <span>{{ 'marketplace.requestsWillAppear' | transloco }}</span>
           </div>
           <div class="mk-request-list" *ngIf="!swapError && swapRequests.length > 0">
             <article class="mk-request-row" *ngFor="let r of swapRequests">
-              <div class="mk-person-dot">{{ initials(swapCounterparty(r)) }}</div>
+              <div class="mk-person-dot">{{ initials(swapCounterparty(r) | transloco) }}</div>
               <div class="mk-request-main">
-                <strong>{{ swapKindLabel(r) }} - {{ r.shiftTitle }}</strong>
-                <span>{{ swapCounterparty(r) }} - {{ fmtMsRange(r.sourceStartAtMs, r.sourceEndAtMs) }}</span>
+                <strong>{{ swapKindLabel(r) | transloco }} - {{ r.shiftTitle }}</strong>
+                <span>{{ swapCounterparty(r) | transloco }} - {{ fmtMsRange(r.sourceStartAtMs, r.sourceEndAtMs) }}</span>
               </div>
               <span class="vs-badge" [class.vs-badge--warning]="r.status === 'pending'" [class.vs-badge--success]="r.status === 'approved'" [class.vs-badge--danger]="r.status === 'rejected' || r.status === 'cancelled'">
                 {{ r.status }}
               </span>
               <div class="mk-request-actions" *ngIf="r.status === 'pending'">
-                <button class="vs-btn-secondary" *ngIf="canApproveSwap(r)" (click)="respondSwap(r, 'reject')" [disabled]="swapBusyId === r.requestId">Decline</button>
-                <button class="vs-btn-primary" *ngIf="canApproveSwap(r)" (click)="respondSwap(r, 'accept')" [disabled]="swapBusyId === r.requestId">Accept</button>
-                <button class="vs-btn-secondary" *ngIf="canCancelSwap(r)" (click)="respondSwap(r, 'cancel')" [disabled]="swapBusyId === r.requestId">Cancel</button>
+                <button class="vs-btn-secondary" *ngIf="canApproveSwap(r)" (click)="respondSwap(r, 'reject')" [disabled]="swapBusyId === r.requestId">{{ 'marketplace.decline' | transloco }}</button>
+                <button class="vs-btn-primary" *ngIf="canApproveSwap(r)" (click)="respondSwap(r, 'accept')" [disabled]="swapBusyId === r.requestId">{{ 'marketplace.accept' | transloco }}</button>
+                <button class="vs-btn-secondary" *ngIf="canCancelSwap(r)" (click)="respondSwap(r, 'cancel')" [disabled]="swapBusyId === r.requestId">{{ 'marketplace.cancel' | transloco }}</button>
               </div>
             </article>
           </div>
@@ -215,24 +216,24 @@ import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
         <section class="mk-board" *ngIf="marketView === 'activity'">
           <div class="mk-section-head">
             <div>
-              <h2>Team Activity</h2>
-              <p>Recent marketplace and schedule updates.</p>
+              <h2>{{ 'marketplace.teamActivity' | transloco }}</h2>
+              <p>{{ 'marketplace.teamActivitySub' | transloco }}</p>
             </div>
             <button class="vs-btn-secondary" type="button" (click)="goToNotifications()">
-              <mat-icon>notifications</mat-icon> Notifications
+              <mat-icon>notifications</mat-icon> {{ 'marketplace.notifications' | transloco }}
             </button>
           </div>
           <div class="mk-state" *ngIf="teamActivityItems().length === 0">
             <mat-icon>notifications_none</mat-icon>
-            <strong>No recent activity</strong>
-            <span>New shift updates will appear here.</span>
+            <strong>{{ 'marketplace.noRecentActivity' | transloco }}</strong>
+            <span>{{ 'marketplace.newUpdatesAppear' | transloco }}</span>
           </div>
           <div class="mk-request-list" *ngIf="teamActivityItems().length > 0">
             <article class="mk-request-row" *ngFor="let a of teamActivityItems()">
               <div class="mk-person-dot mk-person-dot--blue">{{ initials(a.title) }}</div>
               <div class="mk-request-main">
                 <strong>{{ a.title }}</strong>
-                <span>{{ a.body || 'Schedule activity updated.' }}</span>
+                <span>{{ a.body || ('marketplace.scheduleActivityUpdated' | transloco) }}</span>
               </div>
               <small>{{ fmtActivity(a.createdAt) }}</small>
             </article>
@@ -242,28 +243,28 @@ import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
         <section class="mk-board" *ngIf="marketView === 'approvals' && isAdminLike">
           <div class="mk-section-head">
             <div>
-              <h2>Quick Approvals</h2>
-              <p>Manager review for pending cover and trade requests.</p>
+              <h2>{{ 'marketplace.quickApprovals' | transloco }}</h2>
+              <p>{{ 'marketplace.quickApprovalsSub' | transloco }}</p>
             </div>
             <button class="vs-btn-secondary" type="button" (click)="refreshSwapRequests()">
-              <mat-icon>refresh</mat-icon> Refresh
+              <mat-icon>refresh</mat-icon> {{ 'marketplace.refresh' | transloco }}
             </button>
           </div>
           <div class="mk-state" *ngIf="quickApprovals().length === 0">
             <mat-icon>done_all</mat-icon>
-            <strong>No pending approvals</strong>
-            <span>All shift requests are handled.</span>
+            <strong>{{ 'marketplace.noPendingApprovals' | transloco }}</strong>
+            <span>{{ 'marketplace.allHandled' | transloco }}</span>
           </div>
           <div class="mk-request-list" *ngIf="quickApprovals().length > 0">
             <article class="mk-request-row" *ngFor="let r of quickApprovals()">
               <div class="mk-person-dot mk-person-dot--warm">{{ initials(r.requesterName || r.requesterUid) }}</div>
               <div class="mk-request-main">
-                <strong>{{ r.requesterName || 'Staff member' }} -> {{ r.targetName || 'Staff member' }}</strong>
-                <span>{{ swapKindLabel(r) }} - {{ fmtMsRange(r.sourceStartAtMs, r.sourceEndAtMs) }}</span>
+                <strong>{{ r.requesterName || ('marketplace.staffMemberFallback' | transloco) }} -> {{ r.targetName || ('marketplace.staffMemberFallback' | transloco) }}</strong>
+                <span>{{ swapKindLabel(r) | transloco }} - {{ fmtMsRange(r.sourceStartAtMs, r.sourceEndAtMs) }}</span>
               </div>
               <div class="mk-request-actions">
-                <button class="vs-btn-secondary" (click)="respondSwap(r, 'reject')" [disabled]="swapBusyId === r.requestId">Decline</button>
-                <button class="vs-btn-primary" (click)="respondSwap(r, 'accept')" [disabled]="swapBusyId === r.requestId">Approve</button>
+                <button class="vs-btn-secondary" (click)="respondSwap(r, 'reject')" [disabled]="swapBusyId === r.requestId">{{ 'marketplace.decline' | transloco }}</button>
+                <button class="vs-btn-primary" (click)="respondSwap(r, 'accept')" [disabled]="swapBusyId === r.requestId">{{ 'marketplace.approve' | transloco }}</button>
               </div>
             </article>
           </div>
@@ -1197,7 +1198,8 @@ export class MarketplacePage implements OnDestroy {
     private notifications: NotificationsRepo,
     private router: Router,
     private route: ActivatedRoute,
-    private toast: ToastService
+    private toast: ToastService,
+    private i18n: TranslocoService,
   ) {
     this.handlePushActionRedirect();
     this.ctxEffect = effect(() => {
@@ -1248,14 +1250,14 @@ export class MarketplacePage implements OnDestroy {
     if (!pushAction) return;
 
     if (pushAction === 'claimed') {
-      this.toast.success('Shift claimed from your notification.');
+      this.toast.success(this.i18n.translate('marketplace.shiftClaimedFromNotification'));
     } else if (pushAction === 'error') {
       const reason = params.get('reason') || '';
       const message = reason === 'already_used'
-        ? 'That notification link was already used.'
+        ? this.i18n.translate('marketplace.notificationLinkUsed')
         : reason.includes('claimed by another')
           ? reason
-          : 'Unable to claim that shift from the notification — it may no longer be available.';
+          : this.i18n.translate('marketplace.claimFromNotificationFailed');
       this.toast.error(message);
     }
 
@@ -1292,7 +1294,7 @@ export class MarketplacePage implements OnDestroy {
         },
         100,
         () => {
-          this.marketError.set('Open shifts could not be loaded. Ask an administrator to deploy the latest Firestore indexes.');
+          this.marketError.set('marketplace.openShiftsLoadFailed');
           this.marketLoading.set(false);
         }
       );
@@ -1379,10 +1381,10 @@ export class MarketplacePage implements OnDestroy {
   matchBadge(s: Shift): { label: string; icon: string; cls: string } | null {
     const label: ShiftMatchLabel = this.matchFor(s).label;
     switch (label) {
-      case 'great_fit': return { label: 'Great fit', icon: 'stars', cls: 'mk-match--good' };
-      case 'conflict': return { label: 'Conflicts with your schedule', icon: 'event_busy', cls: 'mk-match--bad' };
-      case 'tight_turnaround': return { label: 'Tight turnaround', icon: 'schedule', cls: 'mk-match--warn' };
-      case 'role_mismatch': return { label: 'Different role', icon: 'info', cls: 'mk-match--neutral' };
+      case 'great_fit': return { label: 'marketplace.matchGreatFit', icon: 'stars', cls: 'mk-match--good' };
+      case 'conflict': return { label: 'marketplace.matchConflict', icon: 'event_busy', cls: 'mk-match--bad' };
+      case 'tight_turnaround': return { label: 'marketplace.matchTightTurnaround', icon: 'schedule', cls: 'mk-match--warn' };
+      case 'role_mismatch': return { label: 'marketplace.matchRoleMismatch', icon: 'info', cls: 'mk-match--neutral' };
       default: return null;
     }
   }
@@ -1393,8 +1395,8 @@ export class MarketplacePage implements OnDestroy {
   }
 
   claimLabel(s: Shift) {
-    if (!this.uid) return 'Sign in required';
-    return canClaimShift(s, this.uid) ? 'Ready to claim' : 'Not available';
+    if (!this.uid) return 'marketplace.signInRequired';
+    return canClaimShift(s, this.uid) ? 'marketplace.readyToClaim' : 'marketplace.notAvailable';
   }
 
   visibleOpenShifts() {
@@ -1415,8 +1417,8 @@ export class MarketplacePage implements OnDestroy {
       const res: any = await this.cmd.listShiftSwapRequests('', 50);
       this.swapRequests = Array.isArray(res?.items) ? res.items : [];
     } catch (e: any) {
-      this.swapError = 'Shift switch requests could not be loaded.';
-      this.toast.errorFrom(e, 'Unable to load swap requests.');
+      this.swapError = 'marketplace.swapRequestsLoadFailed';
+      this.toast.errorFrom(e, this.i18n.translate('marketplace.unableLoadSwapRequests'));
     } finally {
       this.swapLoading = false;
     }
@@ -1455,24 +1457,24 @@ export class MarketplacePage implements OnDestroy {
     this.swapBusyId = r.requestId;
     try {
       await this.cmd.respondShiftSwap(r.requestId, decision);
-      const label = decision === 'accept' ? 'approved' : decision === 'reject' ? 'declined' : 'cancelled';
-      this.toast.success(`Swap request ${label}.`);
+      const labelKey = decision === 'accept' ? 'marketplace.swapApproved' : decision === 'reject' ? 'marketplace.swapDeclined' : 'marketplace.swapCancelled';
+      this.toast.success(this.i18n.translate('marketplace.swapRequestUpdated', { label: this.i18n.translate(labelKey) }));
       await this.refreshSwapRequests();
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Swap request update failed.');
+      this.toast.errorFrom(e, this.i18n.translate('marketplace.swapUpdateFailed'));
     } finally {
       this.swapBusyId = null;
     }
   }
 
   swapCounterparty(r: any) {
-    if (!r) return 'Staff';
-    if (r.requesterUid === this.uid) return r.targetName || 'Staff';
-    return r.requesterName || r.requesterUid || 'Staff';
+    if (!r) return 'marketplace.staffFallback';
+    if (r.requesterUid === this.uid) return r.targetName || 'marketplace.staffFallback';
+    return r.requesterName || r.requesterUid || 'marketplace.staffFallback';
   }
 
   swapKindLabel(r: any) {
-    return r?.kind === 'swap' ? 'Swap Request' : 'Open Shift Filled';
+    return r?.kind === 'swap' ? 'marketplace.swapRequest' : 'marketplace.openShiftFilled';
   }
 
   initials(value: any) {
@@ -1533,10 +1535,10 @@ export class MarketplacePage implements OnDestroy {
     this.busyId = shiftId;
     try {
       await this.cmd.claimShift(shiftId);
-      this.toast.success('Shift claimed! Check your schedule.');
+      this.toast.success(this.i18n.translate('marketplace.shiftClaimed'));
       await this.router.navigate(['/app/shift-chat'], { queryParams: { shiftId } });
     } catch (e: any) {
-      this.toast.errorFrom(e, mapAttendancePolicyError(e, 'Claim failed.'));
+      this.toast.errorFrom(e, mapAttendancePolicyError(e, this.i18n.translate('marketplace.claimFailed')));
     } finally {
       this.busyId = null;
     }
