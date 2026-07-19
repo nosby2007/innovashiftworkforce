@@ -26,5 +26,8 @@
   },
   "functions": {
     "source": "functions"
+  },
+  "overrides": {
+    "websocket-driver": "0.7.5"
   }
 }
