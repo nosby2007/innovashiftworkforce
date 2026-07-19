@@ -49,6 +49,7 @@ import { shiftActionFromNotification } from './http/shiftActionFromNotification'
 import { aiAssistantChat } from './callable/aiAssistantChat';
 import { dailyDigest } from './scheduled/dailyDigest';
 import { cleanupArchivedNotifications } from './scheduled/cleanupArchivedNotifications';
+import { enforceDataRetention } from './scheduled/enforceDataRetention';
 import { superAdminCreateUsers } from './callable/superAdminCreateUsers';
 import { listContactRequests } from './callable/listContactRequests';
 import { updateContactRequestStatus } from './callable/updateContactRequestStatus';
@@ -116,6 +117,7 @@ export {
   aiAssistantChat,
   dailyDigest,
   cleanupArchivedNotifications,
+  enforceDataRetention,
   superAdminCreateUsers,
   listContactRequests,
   updateContactRequestStatus,
