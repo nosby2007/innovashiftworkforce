@@ -129,11 +129,43 @@ all green after the changes.
    session-idle timeout in addition to the existing app-lock.
 
 ### Organizational — not code, needs a human decision/signature
-5. **Sign a Business Associate Agreement (BAA) with Google Cloud/Firebase.**
-   Required before any customer can be told this app is "HIPAA compliant"
-   — GCP offers a standard BAA, but it must be actively executed per
-   Google Cloud project (`atlanta-e04aa`). Nothing in the codebase can
-   substitute for this.
+5. **[IN PROGRESS] Sign a Business Associate Agreement (BAA) with Google
+   Cloud/Firebase.** This has to be done by a human with the right GCP
+   access — an AI agent has no console session and, more importantly, no
+   authority to bind the company to a legal agreement. Steps, as of this
+   writing:
+   - **Google Cloud Console** (covers Firestore, Cloud Storage, Cloud
+     Functions): sign in as an Organization Administrator or Project Owner
+     on the `atlanta-e04aa` project → **IAM & Admin** → select the project
+     → find **"Google Cloud Platform HIPAA Business Associate Addendum"**
+     → **Review and Accept**. You only need to accept it once per Google
+     Cloud account, not per project.
+   - **Google Workspace/Cloud Identity Admin console**, if the org's Google
+     account is on Workspace (needed if Workspace apps ever touch PHI):
+     **Admin console** → **Account settings** → **Legal and compliance** →
+     **Security and Privacy Additional Terms** → **Google
+     Workspace/Cloud Identity HIPAA Business Associate Amendment** →
+     **Review and Accept**.
+   - Screenshot the acceptance confirmation and keep it — that screenshot
+     *is* your proof of a signed BAA; Google doesn't issue a separate
+     countersigned PDF for the self-service flow.
+   - **⚠️ Critical follow-up, found while researching this**: HIPAA
+     coverage under Google's BAA only extends to Google's published list of
+     *Covered Products*. **Firestore, Cloud Storage, and Cloud Functions are
+     covered — but plain Firebase Authentication is not.** The HIPAA-eligible
+     equivalent is **Identity Platform** (the same underlying auth service,
+     API-compatible with Firebase Auth). This app currently authenticates
+     every user through plain Firebase Authentication
+     (`frontend-angular/src/app/core/firebase/firebase.app.ts` +
+     `admin.auth()` server-side). **Signing the BAA alone does not make
+     this app HIPAA-covered while auth stays on the non-covered product** —
+     migrating to Identity Platform needs to happen too, and should be
+     scoped as its own follow-up (verify the current GCP-published Covered
+     Products list before starting, since it does get updated).
+     Firebase Hosting was also not on the covered list found during this
+     research — lower risk than Auth since Hosting only serves the static
+     JS bundle rather than storing PHI at rest, but confirm before relying
+     on it for anything that renders PHI server-side.
 6. **Sign or confirm a BAA with OpenAI** (used by `aiAssistantChat` — org
    user/shift names and timesheet summaries are sent to the OpenAI API as
    tool-call results). If a customer's data is PHI-adjacent, this needs
@@ -151,10 +183,19 @@ all green after the changes.
    This needs an actual written runbook (who decides it's a breach, who
    drafts notifications, who contacts HHS) — not something code can
    provide.
-10. **Data retention & deletion policy.** Define how long time entries,
-    audit logs, and terminated-employee records are kept, and build (or
-    schedule) the deletion/archival job once that policy is decided. Audit
-    logs currently accumulate indefinitely with no TTL.
+10. **[IN PROGRESS] Data retention & deletion policy.** Full policy and
+    rationale now live in `docs/DATA_RETENTION_POLICY.md`. Automated
+    enforcement (`enforceDataRetention`, a daily scheduled function) is
+    shipped for the categories with no legal retention floor to get wrong —
+    direct-deposit bank info (purged 90 days post-termination), audit logs
+    (purged only past HIPAA's own 6-year ceiling), client error logs, and
+    expired contact-form rate locks. **Still open**: time entries, payroll
+    runs, the PTO ledger, time-off requests, and employee documents all have
+    real legal retention floors that vary by jurisdiction (this app spans
+    US/Canada/Cameroon/Nigeria/Ghana/Kenya/South Africa/UAE tax profiles) —
+    automating their deletion needs a confirmed, likely per-org figure and
+    legal sign-off before it's safe to enable. See that doc's §3 for the
+    exact gap.
 11. **Workforce security training.** HIPAA's Security Rule requires
     documented security awareness training for anyone with access to PHI
     — this applies to the customer organizations' own admin/hr users, not
