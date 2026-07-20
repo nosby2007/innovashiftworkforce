@@ -1,6 +1,7 @@
 import { Component, effect, EffectRef, OnDestroy, signal } from '@angular/core';
 import { CommonModule, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { Timestamp } from 'firebase/firestore';
 import { MatIconModule } from '@angular/material/icon';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
@@ -19,7 +20,7 @@ import { TranslocoModule } from '@jsverse/transloco';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule, TablePaginatorComponent, TranslocoModule],
+  imports: [CommonModule, FormsModule, RouterLink, CurrencyPipe, MatIconModule, TablePaginatorComponent, TranslocoModule],
   template: `
     <div class="pay-page">
       <header class="pay-hero">
@@ -39,6 +40,10 @@ import { TranslocoModule } from '@jsverse/transloco';
             <mat-icon>picture_as_pdf</mat-icon>
             {{ 'payroll.printSavePdf' | transloco }}
           </button>
+          <a class="pay-print-btn" routerLink="/app/payroll/history">
+            <mat-icon>receipt_long</mat-icon>
+            {{ 'payroll.viewAllPaystubs' | transloco }}
+          </a>
         </div>
       </header>
 
@@ -155,7 +160,7 @@ import { TranslocoModule } from '@jsverse/transloco';
     .pay-period label { color:rgba(255,255,255,.75); font-size:12px; font-weight:800; }
     .pay-period div { display:flex; align-items:center; gap:8px; }
     .pay-period input { height:38px; border:1px solid rgba(255,255,255,.34); border-radius:6px; background:#fff; color:#111827; padding:0 9px; }
-    .pay-print-btn { height:38px; border:1px solid rgba(255,255,255,.8); border-radius:6px; background:#fff; color:#07533f; display:inline-flex; align-items:center; justify-content:center; gap:7px; font-weight:800; cursor:pointer; }
+    .pay-print-btn { height:38px; border:1px solid rgba(255,255,255,.8); border-radius:6px; background:#fff; color:#07533f; display:inline-flex; align-items:center; justify-content:center; gap:7px; font-weight:800; cursor:pointer; padding:0 14px; text-decoration:none; }
     .pay-alert { display:flex; gap:10px; padding:14px 16px; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; color:#92400e; font-weight:800; }
     .pay-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:16px; }
     .pay-kpis article, .pay-card { border:1px solid rgba(15,23,42,.12); border-radius:8px; background:rgba(255,255,255,.94); box-shadow:0 12px 28px rgba(15,23,42,.07); }

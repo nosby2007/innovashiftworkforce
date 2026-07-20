@@ -15,6 +15,10 @@ export interface OrgContext {
   currencyCode?: string | null;
   payFrequency?: string | null;
   taxProfile?: string | null;
+  // Set only for a revoked/former employee: the org they used to belong to,
+  // kept so they can still reach their own historical payslips after their
+  // live membership (orgId/accessRole) has been nulled out.
+  formerOrgId?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -33,6 +37,7 @@ export class OrgContextService {
   readonly currencyCode= signal<string | null>(null);
   readonly payFrequency= signal<string | null>(null);
   readonly taxProfile  = signal<string | null>(null);
+  readonly formerOrgId = signal<string | null>(null);
 
   setContext(ctx: OrgContext) {
     this.orgId.set(ctx.orgId);
@@ -49,13 +54,14 @@ export class OrgContextService {
     this.currencyCode.set(ctx.currencyCode ?? null);
     this.payFrequency.set(ctx.payFrequency ?? null);
     this.taxProfile.set(ctx.taxProfile ?? null);
+    this.formerOrgId.set(ctx.formerOrgId ?? null);
   }
 
   clear() {
     this.setContext({
       orgId: null, uid: null, accessRole: null, platformRole: null,
       displayName: null, email: null, photoURL: null, jobRole: null, plan: null, planStatus: null,
-      countryCode: null, currencyCode: null, payFrequency: null, taxProfile: null,
+      countryCode: null, currencyCode: null, payFrequency: null, taxProfile: null, formerOrgId: null,
     });
   }
 }

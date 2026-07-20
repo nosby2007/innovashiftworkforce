@@ -3,9 +3,11 @@ import { CommonModule, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { doc, getDoc, getFirestore, onSnapshot, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { MatIconModule } from '@angular/material/icon';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { PrintLauncherService } from '../../core/ui/print-launcher.service';
+import { ToastService } from '../../core/ui/toast.service';
 import { TimeEntriesRepo } from '../../core/repos/time-entries.repo';
 import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
@@ -18,7 +20,7 @@ import {
   computeEmployeeGross, workedDateSet, payrollHolidayOffHours, payrollHolidayOffGross,
   DEFAULT_OVERTIME_POLICY, OvertimePolicy, OrgHoliday, EmployeeGrossBreakdown,
   computeDeductions, resolveDeductionElections, DEFAULT_DEDUCTION_ELECTIONS, DeductionElections, DeductionOverrides,
-  defaultDeductionElectionsForCountry,
+  defaultDeductionElectionsForCountry, DeductionBreakdown,
 } from '../../shared/utils/payroll.util';
 import { PayFrequency } from '../../core/tenancy/org-finance.model';
 import { toCsv, downloadTextFile } from '../../shared/utils/csv.util';
@@ -36,6 +38,15 @@ type PayrollRow = {
   deductions: number;
   net: number;
   exceptions: number;
+};
+
+type PayslipEarningLine = {
+  description: string;
+  hours: number;
+  rate: number;
+  amount: number;
+  department: string | null;
+  location: string | null;
 };
 
 @Component({
@@ -102,8 +113,12 @@ type PayrollRow = {
             <mat-icon>print</mat-icon>
             {{ 'adminPayroll.printSelectedPdf' | transloco }}
           </button>
+          <div class="pay-run-paydate" *ngIf="!payrollFinalized">
+            <label for="payDateInput">{{ 'adminPayroll.payDate' | transloco }}</label>
+            <input id="payDateInput" type="date" [(ngModel)]="payDate">
+          </div>
           <div class="pay-run-actions">
-            <button class="pay-secondary" type="button" (click)="finalizePayroll()" [disabled]="rows.length === 0 || totalExceptions() > 0 || payrollFinalized || payrollBusy">
+            <button class="pay-secondary" type="button" (click)="finalizePayroll()" [disabled]="rows.length === 0 || totalExceptions() > 0 || payrollFinalized || payrollBusy || !payDate">
               <mat-icon>verified</mat-icon>
               {{ (payrollBusy ? 'adminPayroll.saving' : 'adminPayroll.finalizePayroll') | transloco }}
             </button>
@@ -268,6 +283,9 @@ type PayrollRow = {
     .pay-primary { margin:16px; height:42px; border:0; border-radius:6px; background:#047857; color:#fff; display:inline-flex; align-items:center; justify-content:center; gap:8px; font-weight:800; padding:0 16px; cursor:pointer; }
     .pay-primary-alt { margin-top:0; background:#0f766e; }
     .pay-primary:disabled { opacity:.55; cursor:not-allowed; }
+    .pay-run-paydate { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 16px 12px; }
+    .pay-run-paydate label { font-size:12px; font-weight:800; color:#475569; }
+    .pay-run-paydate input { height:34px; border:1px solid #cbd5e1; border-radius:6px; padding:0 10px; color:#111827; background:#fff; }
     .pay-run-actions { display:flex; gap:8px; padding:0 16px 16px; flex-wrap:wrap; }
     .pay-secondary { height:38px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#07533f; display:inline-flex; align-items:center; justify-content:center; gap:7px; font-weight:800; padding:0 12px; cursor:pointer; }
     .pay-secondary:disabled { opacity:.5; cursor:not-allowed; }
@@ -298,6 +316,7 @@ export class AdminPayrollPage implements OnDestroy {
   orgId: string | null = null;
   fromDate = '';
   toDate = '';
+  payDate = '';
   query = '';
   users = signal<OrgUser[]>([]);
   entries = signal<TimeEntry[]>([]);
@@ -352,6 +371,7 @@ export class AdminPayrollPage implements OnDestroy {
   private breakdownsByUser = new Map<string, EmployeeGrossBreakdown>();
   private holidayAwards: Array<{ userId: string; holiday: OrgHoliday; hours: number; rate: number; gross: number }> = [];
   private employerContributionsByUser = new Map<string, number>();
+  private deductionBreakdownByUser = new Map<string, DeductionBreakdown>();
 
   constructor(
     private zone: NgZone,
@@ -361,11 +381,13 @@ export class AdminPayrollPage implements OnDestroy {
     private shiftsRepo: ShiftsRepo,
     private accruals: AccrualsRepo,
     private printLauncher: PrintLauncherService,
+    private toast: ToastService,
     private router: Router,
   ) {
     const period = currentPayrollPeriod((this.ctx.payFrequency() as PayFrequency) || 'biweekly');
     this.fromDate = dateInputValue(period.start);
     this.toDate = dateInputValue(period.end);
+    this.payDate = this.toDate;
     this.bind();
     setTimeout(() => this.bind(), 800);
   }
@@ -529,12 +551,14 @@ export class AdminPayrollPage implements OnDestroy {
     // Tax/benefit deductions apply once per paycheck against total gross,
     // not per line item — computed here after all gross sources are summed.
     this.employerContributionsByUser = new Map<string, number>();
+    this.deductionBreakdownByUser = new Map<string, DeductionBreakdown>();
     for (const [uid, row] of grouped) {
       const elections = resolveDeductionElections(this.orgDeductionDefaults, this.employeeDeductionOverrides(uid));
       const deductionBreakdown = computeDeductions(row.gross, elections);
       row.deductions = deductionBreakdown.totalDeductions;
       row.net = deductionBreakdown.netPay;
       this.employerContributionsByUser.set(uid, deductionBreakdown.employerContributionsTotal);
+      this.deductionBreakdownByUser.set(uid, deductionBreakdown);
       grouped.set(uid, row);
     }
 
@@ -723,25 +747,76 @@ export class AdminPayrollPage implements OnDestroy {
     });
   }
 
+  private earningsForUser(uid: string): PayslipEarningLine[] {
+    const user: any = this.users().find((u) => u.uid === uid);
+    const department = user?.department || null;
+    const location = user?.locationName || null;
+    const lines: PayslipEarningLine[] = [];
+
+    const breakdown = this.breakdownsByUser.get(uid);
+    if (breakdown) {
+      for (const line of breakdown.lines) {
+        lines.push({
+          description: `${line.shiftTitle}${AdminPayrollPage.LINE_TYPE_SUFFIX[line.type] || ''}`,
+          hours: line.hours,
+          rate: line.rate,
+          amount: line.gross,
+          department,
+          location,
+        });
+      }
+    }
+
+    for (const request of this.leaveRequests().filter((r) => r.userId === uid && this.isPayrollLeave(r))) {
+      lines.push({
+        description: `${request.requestType.toUpperCase()} approved leave`,
+        hours: payrollLeaveHours(request, this.fromDate, this.toDate),
+        rate: Number(request.payRate || 0),
+        amount: payrollLeaveGross(request, this.fromDate, this.toDate),
+        department,
+        location,
+      });
+    }
+
+    for (const award of this.holidayAwards.filter((a) => a.userId === uid)) {
+      lines.push({
+        description: `${award.holiday.name} (Holiday Pay)`,
+        hours: award.hours,
+        rate: award.rate,
+        amount: award.gross,
+        department,
+        location,
+      });
+    }
+
+    return lines;
+  }
+
   async finalizePayroll() {
-    if (!this.orgId || this.payrollFinalized || this.totalExceptions() > 0 || this.rows.length === 0) return;
+    if (!this.orgId || this.payrollFinalized || this.totalExceptions() > 0 || this.rows.length === 0 || !this.payDate) return;
     this.payrollBusy = true;
     try {
-      await setDoc(doc(getFirestore(), `orgs/${this.orgId}/payrollRuns/${this.payrollRunId()}`), {
+      const fns = getFunctions(undefined, 'us-east1');
+      const finalize = httpsCallable<any, any>(fns, 'finalizePayrollRun');
+      await finalize({
         orgId: this.orgId,
         periodStart: this.fromDate,
         periodEnd: this.toDate,
-        status: 'finalized',
+        payDate: this.payDate,
         currencyCode: this.moneyCurrency(),
-        employees: this.rows.length,
-        totalHours: this.totalHours(),
-        gross: this.totalGross(),
-        deductions: this.totalDeductions(),
-        net: this.totalNet(),
-        exceptions: this.totalExceptions(),
-        finalizedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
+        rows: this.rows.map((row) => ({
+          userId: row.userId,
+          employeeName: row.employee,
+          employeeNumber: row.employeeNumber || null,
+          totalHours: row.hours,
+          grossPay: row.gross,
+          deductionBreakdown: this.deductionBreakdownByUser.get(row.userId),
+          earnings: this.earningsForUser(row.userId),
+        })),
+      });
+      this.toast.success('Payroll finalized — pay stubs issued.');
+    } catch (err: any) {
+      this.toast.errorFrom(err, 'Failed to finalize payroll.');
     } finally {
       this.payrollBusy = false;
     }
