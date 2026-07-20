@@ -1,8 +1,9 @@
 import { Component, signal, inject } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { combineLatest } from 'rxjs';
 import { SeoService } from '../../../core/seo/seo.service';
 
 @Component({
@@ -106,7 +107,7 @@ import { SeoService } from '../../../core/seo/seo.service';
               <div class="contact-success__icon">✅</div>
               <h2 class="contact-success__h2">{{ 'publicContact.requestSent' | transloco }}</h2>
               <p class="contact-success__sub">{{ 'publicContact.successSubPre' | transloco }} <strong>{{ submittedEmail() }}</strong> {{ 'publicContact.successSubPost' | transloco }}</p>
-              <a routerLink="/" class="btn-ghost" id="contact-success-home">{{ 'publicContact.backToHome' | transloco }}</a>
+              <a routerLink=".." class="btn-ghost" id="contact-success-home">{{ 'publicContact.backToHome' | transloco }}</a>
             </div>
           }
         </div>
@@ -190,12 +191,15 @@ import { SeoService } from '../../../core/seo/seo.service';
 export class ContactPage {
   private fb = inject(FormBuilder);
   private i18n = inject(TranslocoService);
+  private route = inject(ActivatedRoute);
 
   constructor(seo: SeoService) {
-    seo.setPage({
-      title: 'Contact Us — Book a Demo',
-      description: 'Talk to InnovaShift Workforce about scheduling, shift marketplace, time tracking, and payroll for your healthcare team. Request a demo or start a free trial.',
-      path: '/contact',
+    const locale = (this.route.snapshot.parent?.data['locale'] as 'en' | 'fr') ?? 'en';
+    combineLatest([
+      this.i18n.selectTranslate('publicContact.seoTitle'),
+      this.i18n.selectTranslate('publicContact.seoDescription'),
+    ]).subscribe(([title, description]) => {
+      seo.setPage({ title, description, path: '/contact', locale });
     });
   }
 

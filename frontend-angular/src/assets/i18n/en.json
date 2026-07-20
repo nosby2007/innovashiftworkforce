@@ -1066,6 +1066,8 @@
     "footerBottom": "© {{year}} INNOVASHIFT · Healthcare Workforce Management"
   },
   "landing": {
+    "seoTitle": "Healthcare Workforce Scheduling & Shift Management Software",
+    "seoDescription": "InnovaShift Workforce unifies shift scheduling, a staff shift marketplace, GPS time & attendance tracking, and payroll in one platform built for healthcare teams. Trusted by 150+ healthcare organizations.",
     "heroBadge": "🏥 Trusted by 150+ Healthcare Orgs",
     "heroH1Line1": "The smarter way to",
     "heroH1Grad": "manage your workforce",
@@ -1119,6 +1121,8 @@
     "ctaViewPricing": "View Pricing"
   },
   "publicFeatures": {
+    "seoTitle": "Features — Scheduling, Shift Marketplace, Time Tracking & Payroll",
+    "seoDescription": "Explore InnovaShift Workforce features: shift marketplace, smart scheduling with conflict detection, GPS-verified attendance, admin analytics, role-based access, and enterprise security.",
     "kicker": "Everything you need",
     "h1Line1": "Powerful features,",
     "h1Grad": "built for healthcare",
@@ -1147,6 +1151,8 @@
     "f9Desc": "Firebase Authentication, JWT-secured APIs, Firestore security rules, and full audit logging on every sensitive action."
   },
   "publicPricing": {
+    "seoTitle": "Pricing — Plans for Every Healthcare Team Size",
+    "seoDescription": "Simple, transparent pricing for InnovaShift Workforce. Starter, Pro, and Enterprise plans that scale from small teams to large multi-site healthcare organizations.",
     "kicker": "Transparent Pricing",
     "h1Line1": "Plans that grow",
     "h1Grad": "with your team",
@@ -1187,6 +1193,8 @@
     "enterpriseCta": "Contact Sales"
   },
   "publicContact": {
+    "seoTitle": "Contact Us — Book a Demo",
+    "seoDescription": "Talk to InnovaShift Workforce about scheduling, shift marketplace, time tracking, and payroll for your healthcare team. Request a demo or start a free trial.",
     "kicker": "Get in Touch",
     "h1Line1": "Let's get your",
     "h1Grad": "team shifting",

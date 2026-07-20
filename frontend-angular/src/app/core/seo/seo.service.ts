@@ -10,17 +10,20 @@ export interface PageMeta {
   /** Page-specific title, without the site name suffix — that's added automatically. */
   title: string;
   description: string;
-  /** Path starting with '/', e.g. '/features'. Used to build the canonical URL and og:url. */
+  /** Unprefixed English path starting with '/', e.g. '/features'. The French
+   *  counterpart is always this path under '/fr' — used to build the
+   *  canonical URL, og:url, <html lang>, and hreflang alternates. */
   path: string;
+  locale: 'en' | 'fr';
   image?: string;
 }
 
 /**
- * Sets document title, meta description, canonical link, and Open
- * Graph/Twitter Card tags for the current route. Only meaningful for the
- * public marketing pages (landing/features/pricing/contact) — the
- * authenticated app shell has no reason to distinguish itself in search
- * results or link previews.
+ * Sets document title, meta description, canonical link, hreflang
+ * alternates, <html lang>, and Open Graph/Twitter Card tags for the
+ * current route. Only meaningful for the public marketing pages
+ * (landing/features/pricing/contact) — the authenticated app shell has
+ * no reason to distinguish itself in search results or link previews.
  *
  * Note: this only affects the DOM after Angular bootstraps and runs.
  * Crawlers/bots that don't execute JavaScript (most social-link-preview
@@ -36,8 +39,12 @@ export class SeoService {
 
   setPage(page: PageMeta): void {
     const fullTitle = page.title.includes(SITE_NAME) ? page.title : `${page.title} | ${SITE_NAME}`;
-    const url = `${SITE_URL}${page.path}`;
+    const enUrl = `${SITE_URL}${page.path}`;
+    const frUrl = `${SITE_URL}/fr${page.path === '/' ? '' : page.path}`;
+    const url = page.locale === 'fr' ? frUrl : enUrl;
     const image = page.image || DEFAULT_OG_IMAGE;
+
+    this.doc.documentElement.setAttribute('lang', page.locale);
 
     this.titleService.setTitle(fullTitle);
 
@@ -49,6 +56,7 @@ export class SeoService {
     this.meta.updateTag({ property: 'og:image', content: image });
     this.meta.updateTag({ property: 'og:type', content: 'website' });
     this.meta.updateTag({ property: 'og:site_name', content: SITE_NAME });
+    this.meta.updateTag({ property: 'og:locale', content: page.locale === 'fr' ? 'fr_FR' : 'en_US' });
 
     this.meta.updateTag({ name: 'twitter:card', content: 'summary_large_image' });
     this.meta.updateTag({ name: 'twitter:title', content: fullTitle });
@@ -56,6 +64,9 @@ export class SeoService {
     this.meta.updateTag({ name: 'twitter:image', content: image });
 
     this.setCanonical(url);
+    this.setAlternate('en', enUrl);
+    this.setAlternate('fr', frUrl);
+    this.setAlternate('x-default', enUrl);
   }
 
   private setCanonical(url: string): void {
@@ -63,6 +74,17 @@ export class SeoService {
     if (!link) {
       link = this.doc.createElement('link');
       link.setAttribute('rel', 'canonical');
+      this.doc.head.appendChild(link);
+    }
+    link.setAttribute('href', url);
+  }
+
+  private setAlternate(hreflang: string, url: string): void {
+    let link = this.doc.head.querySelector<HTMLLinkElement>(`link[rel="alternate"][hreflang="${hreflang}"]`);
+    if (!link) {
+      link = this.doc.createElement('link');
+      link.setAttribute('rel', 'alternate');
+      link.setAttribute('hreflang', hreflang);
       this.doc.head.appendChild(link);
     }
     link.setAttribute('href', url);

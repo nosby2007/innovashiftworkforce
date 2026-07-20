@@ -1,6 +1,7 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { TranslocoModule } from '@jsverse/transloco';
+import { Component, inject } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { combineLatest } from 'rxjs';
 import { SeoService } from '../../../core/seo/seo.service';
 
 const FEATURES = [
@@ -31,7 +32,7 @@ const FEATURES = [
           <h1 class="feat-hero__h1">{{ 'publicFeatures.h1Line1' | transloco }}<br><span class="grad">{{ 'publicFeatures.h1Grad' | transloco }}</span></h1>
           <p class="feat-hero__sub">{{ 'publicFeatures.sub' | transloco }}</p>
           <div class="feat-hero__actions">
-            <a routerLink="/contact" class="btn-primary" id="feat-cta">{{ 'publicFeatures.requestDemo' | transloco }}</a>
+            <a routerLink="../contact" class="btn-primary" id="feat-cta">{{ 'publicFeatures.requestDemo' | transloco }}</a>
           </div>
           <div class="feat-hero__img-wrap">
             <div class="feat-hero__img-glow" aria-hidden="true"></div>
@@ -58,8 +59,8 @@ const FEATURES = [
         <div class="feat-cta__inner">
           <h2 class="feat-cta__h2">{{ 'publicFeatures.bottomCtaH2' | transloco }}</h2>
           <div class="feat-cta__btns">
-            <a routerLink="/contact" class="btn-primary" id="feat-bottom-demo">{{ 'publicFeatures.bookDemo' | transloco }}</a>
-            <a routerLink="/pricing" class="btn-ghost"   id="feat-bottom-pricing">{{ 'publicFeatures.seePricing' | transloco }}</a>
+            <a routerLink="../contact" class="btn-primary" id="feat-bottom-demo">{{ 'publicFeatures.bookDemo' | transloco }}</a>
+            <a routerLink="../pricing" class="btn-ghost"   id="feat-bottom-pricing">{{ 'publicFeatures.seePricing' | transloco }}</a>
           </div>
         </div>
       </section>
@@ -123,13 +124,18 @@ const FEATURES = [
   `]
 })
 export class FeaturesPage {
+  private route = inject(ActivatedRoute);
+  private i18n = inject(TranslocoService);
+
   features = FEATURES;
 
   constructor(seo: SeoService) {
-    seo.setPage({
-      title: 'Features — Scheduling, Shift Marketplace, Time Tracking & Payroll',
-      description: 'Explore InnovaShift Workforce features: shift marketplace, smart scheduling with conflict detection, GPS-verified attendance, admin analytics, role-based access, and enterprise security.',
-      path: '/features',
+    const locale = (this.route.snapshot.parent?.data['locale'] as 'en' | 'fr') ?? 'en';
+    combineLatest([
+      this.i18n.selectTranslate('publicFeatures.seoTitle'),
+      this.i18n.selectTranslate('publicFeatures.seoDescription'),
+    ]).subscribe(([title, description]) => {
+      seo.setPage({ title, description, path: '/features', locale });
     });
   }
 }

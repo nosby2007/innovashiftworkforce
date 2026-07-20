@@ -22,7 +22,10 @@
               "src/robots.txt",
               "src/sitemap.xml"
             ],
-            "styles": ["src/material-theme.scss", "src/styles.scss"],
+            "styles": [
+              "src/material-theme.scss",
+              "src/styles.scss"
+            ],
             "scripts": [],
             "serviceWorker": true,
             "ngswConfigPath": "ngsw-config.json",
@@ -92,7 +95,16 @@
           "builder": "@angular-devkit/build-angular:prerender",
           "options": {
             "discoverRoutes": false,
-            "routes": ["/", "/features", "/pricing", "/contact"]
+            "routes": [
+              "/",
+              "/features",
+              "/pricing",
+              "/contact",
+              "/fr",
+              "/fr/features",
+              "/fr/pricing",
+              "/fr/contact"
+            ]
           },
           "configurations": {
             "production": {

@@ -1,6 +1,6 @@
 import { ApplicationConfig, APP_INITIALIZER, ErrorHandler, importProvidersFrom, isDevMode } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withFetch } from '@angular/common/http';
 import { provideServiceWorker } from '@angular/service-worker';
 import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
 import { provideTransloco } from '@jsverse/transloco';
@@ -32,7 +32,7 @@ import { ModalHostComponent } from './shared/ui/modal/modal-host.component';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(APP_ROUTES),
-    provideHttpClient(),
+    provideHttpClient(withFetch()),
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),

@@ -70,9 +70,25 @@ export const APP_ROUTES: Routes = [
   },
 
   // ── Public (no auth required) ──────────────────────────────────────────────
+  // French mirrors the same components under a /fr prefix, purely for
+  // per-locale prerendering/SEO (see docs/SSR.md). PublicLayoutComponent
+  // reads `data.locale` off its own route to activate the right Transloco
+  // language — there's no equivalent /fr tree for the authenticated app.
   {
     path: '',
     component: PublicLayoutComponent,
+    data: { locale: 'en' },
+    children: [
+      { path: '',         component: LandingPage,  pathMatch: 'full' },
+      { path: 'features', component: FeaturesPage },
+      { path: 'pricing',  component: PricingPage },
+      { path: 'contact',  component: ContactPage },
+    ],
+  },
+  {
+    path: 'fr',
+    component: PublicLayoutComponent,
+    data: { locale: 'fr' },
     children: [
       { path: '',         component: LandingPage,  pathMatch: 'full' },
       { path: 'features', component: FeaturesPage },

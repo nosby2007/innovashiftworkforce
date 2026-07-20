@@ -1,6 +1,7 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { TranslocoModule } from '@jsverse/transloco';
+import { Component, inject } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { combineLatest } from 'rxjs';
 import { SeoService } from '../../../core/seo/seo.service';
 
 // Cloudinary image assets
@@ -38,8 +39,8 @@ const IMG = {
               {{ 'landing.heroSub' | transloco }}
             </p>
             <div class="hero__actions">
-              <a routerLink="/contact" class="btn-primary" id="hero-get-started">{{ 'landing.startFreeTrial' | transloco }}</a>
-              <a routerLink="/features" class="btn-ghost"  id="hero-features">{{ 'landing.seeFeatures' | transloco }}</a>
+              <a routerLink="contact" class="btn-primary" id="hero-get-started">{{ 'landing.startFreeTrial' | transloco }}</a>
+              <a routerLink="features" class="btn-ghost"  id="hero-features">{{ 'landing.seeFeatures' | transloco }}</a>
             </div>
             <div class="hero__trust">
               <div class="hero__trust-item"><span class="hero__trust-num">10k+</span><span class="hero__trust-lbl">{{ 'landing.trustShifts' | transloco }}</span></div>
@@ -79,7 +80,7 @@ const IMG = {
               <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.shiftsFeat3' | transloco }}</li>
               <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.shiftsFeat4' | transloco }}</li>
             </ul>
-            <a routerLink="/features" class="feat-row__link" id="shifts-learn-more">{{ 'landing.learnMore' | transloco }}</a>
+            <a routerLink="features" class="feat-row__link" id="shifts-learn-more">{{ 'landing.learnMore' | transloco }}</a>
           </div>
         </div>
       </section>
@@ -103,7 +104,7 @@ const IMG = {
               <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.timesheetsFeat3' | transloco }}</li>
               <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.timesheetsFeat4' | transloco }}</li>
             </ul>
-            <a routerLink="/features" class="feat-row__link" id="timesheets-learn-more">{{ 'landing.learnMore' | transloco }}</a>
+            <a routerLink="features" class="feat-row__link" id="timesheets-learn-more">{{ 'landing.learnMore' | transloco }}</a>
           </div>
         </div>
       </section>
@@ -127,7 +128,7 @@ const IMG = {
               <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.multisiteFeat3' | transloco }}</li>
               <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.multisiteFeat4' | transloco }}</li>
             </ul>
-            <a routerLink="/features" class="feat-row__link" id="multisite-learn-more">{{ 'landing.learnMore' | transloco }}</a>
+            <a routerLink="features" class="feat-row__link" id="multisite-learn-more">{{ 'landing.learnMore' | transloco }}</a>
           </div>
         </div>
       </section>
@@ -151,7 +152,7 @@ const IMG = {
               <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.leaveFeat3' | transloco }}</li>
               <li class="feat-list__item"><span class="feat-list__dot"></span>{{ 'landing.leaveFeat4' | transloco }}</li>
             </ul>
-            <a routerLink="/features" class="feat-row__link" id="leave-learn-more">{{ 'landing.learnMore' | transloco }}</a>
+            <a routerLink="features" class="feat-row__link" id="leave-learn-more">{{ 'landing.learnMore' | transloco }}</a>
           </div>
         </div>
       </section>
@@ -178,8 +179,8 @@ const IMG = {
           <h2 class="cta-band__h2">{{ 'landing.ctaH2' | transloco }}</h2>
           <p class="cta-band__sub">{{ 'landing.ctaSub' | transloco }}</p>
           <div class="cta-band__btns">
-            <a routerLink="/contact" class="btn-primary" id="cta-demo">{{ 'landing.ctaRequestDemo' | transloco }}</a>
-            <a routerLink="/pricing" class="btn-ghost"   id="cta-pricing">{{ 'landing.ctaViewPricing' | transloco }}</a>
+            <a routerLink="contact" class="btn-primary" id="cta-demo">{{ 'landing.ctaRequestDemo' | transloco }}</a>
+            <a routerLink="pricing" class="btn-ghost"   id="cta-pricing">{{ 'landing.ctaViewPricing' | transloco }}</a>
           </div>
         </div>
       </section>
@@ -419,13 +420,22 @@ const IMG = {
   `]
 })
 export class LandingPage {
+  private route = inject(ActivatedRoute);
+  private i18n = inject(TranslocoService);
+
   img = IMG;
 
   constructor(seo: SeoService) {
-    seo.setPage({
-      title: 'Healthcare Workforce Scheduling & Shift Management Software',
-      description: 'InnovaShift Workforce unifies shift scheduling, a staff shift marketplace, GPS time & attendance tracking, and payroll in one platform built for healthcare teams. Trusted by 150+ healthcare organizations.',
-      path: '/',
+    const locale = (this.route.snapshot.parent?.data['locale'] as 'en' | 'fr') ?? 'en';
+    // selectTranslate (not translate()) waits for the translation to
+    // actually be loaded — translate() returns synchronously and would
+    // bake in the raw key if this runs before loading finishes, which it
+    // reliably does during prerendering.
+    combineLatest([
+      this.i18n.selectTranslate('landing.seoTitle'),
+      this.i18n.selectTranslate('landing.seoDescription'),
+    ]).subscribe(([title, description]) => {
+      seo.setPage({ title, description, path: '/', locale });
     });
   }
 }

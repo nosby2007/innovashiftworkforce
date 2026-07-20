@@ -3,6 +3,10 @@ Allow: /
 Allow: /features
 Allow: /pricing
 Allow: /contact
+Allow: /fr
+Allow: /fr/features
+Allow: /fr/pricing
+Allow: /fr/contact
 Disallow: /app/
 Disallow: /admin/
 Disallow: /platform/

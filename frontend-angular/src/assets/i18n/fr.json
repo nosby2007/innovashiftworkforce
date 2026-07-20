@@ -1066,6 +1066,8 @@
     "footerBottom": "© {{year}} INNOVASHIFT · Gestion de la main-d'œuvre en santé"
   },
   "landing": {
+    "seoTitle": "Logiciel de planification et de gestion des quarts pour la santé",
+    "seoDescription": "InnovaShift Workforce unifie la planification des quarts, une bourse aux quarts pour le personnel, le suivi du temps et de présence par GPS, et la paie en une seule plateforme conçue pour les équipes de santé. Approuvé par plus de 150 organisations de santé.",
     "heroBadge": "🏥 Approuvé par plus de 150 organisations de santé",
     "heroH1Line1": "La manière intelligente de",
     "heroH1Grad": "gérer votre main-d'œuvre",
@@ -1119,6 +1121,8 @@
     "ctaViewPricing": "Voir les tarifs"
   },
   "publicFeatures": {
+    "seoTitle": "Fonctionnalités — Planification, bourse aux quarts, suivi du temps et paie",
+    "seoDescription": "Découvrez les fonctionnalités d'InnovaShift Workforce : bourse aux quarts, planification intelligente avec détection des conflits, présence vérifiée par GPS, analytique administrative, accès basé sur les rôles et sécurité de niveau entreprise.",
     "kicker": "Tout ce dont vous avez besoin",
     "h1Line1": "Des fonctionnalités puissantes,",
     "h1Grad": "conçues pour la santé",
@@ -1147,6 +1151,8 @@
     "f9Desc": "Authentification Firebase, API sécurisées par JWT, règles de sécurité Firestore et journalisation d'audit complète sur chaque action sensible."
   },
   "publicPricing": {
+    "seoTitle": "Tarifs — Des forfaits pour chaque taille d'équipe de santé",
+    "seoDescription": "Une tarification simple et transparente pour InnovaShift Workforce. Des forfaits Starter, Pro et Enterprise qui s'adaptent, des petites équipes aux grandes organisations de santé multi-sites.",
     "kicker": "Tarification transparente",
     "h1Line1": "Des forfaits qui grandissent",
     "h1Grad": "avec votre équipe",
@@ -1187,6 +1193,8 @@
     "enterpriseCta": "Contacter les ventes"
   },
   "publicContact": {
+    "seoTitle": "Contactez-nous — Réservez une démo",
+    "seoDescription": "Discutez avec InnovaShift Workforce de la planification, de la bourse aux quarts, du suivi du temps et de la paie pour votre équipe de santé. Demandez une démo ou commencez un essai gratuit.",
     "kicker": "Contactez-nous",
     "h1Line1": "Faisons décoller",
     "h1Grad": "votre équipe",
