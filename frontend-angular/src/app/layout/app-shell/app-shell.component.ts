@@ -564,6 +564,15 @@ const ROUTE_TITLES: Record<string, string> = {
       min-height: calc(100vh - 58px);
     }
 
+    /* Printing a page (e.g. View Check) should show only that page's own
+       content — not the shell's sidebar/top bar around it. */
+    @media print {
+      .l-sidenav, .l-toolbar { display: none !important; }
+      .l-shell { height: auto !important; display: block !important; }
+      .l-content { margin-left: 0 !important; height: auto !important; overflow: visible !important; }
+      .l-page { padding: 0 !important; min-height: 0 !important; }
+    }
+
     @media (max-width: 900px) {
       .l-page { padding: 14px 12px; }
       .l-user-name { display: none; }
