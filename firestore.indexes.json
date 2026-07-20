@@ -201,14 +201,6 @@
         { "fieldPath": "requiredJobRole", "mode": "ASCENDING" },
         { "fieldPath": "startAt", "mode": "ASCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "payslips",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "userId", "mode": "ASCENDING" },
-        { "fieldPath": "payDate", "mode": "DESCENDING" }
-      ]
     }
   ],
   "fieldOverrides": [

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, limit, onSnapshot, query, where } from 'firebase/firestore';
 import { FirestoreClient } from '../firestore/firestore.client';
 import { DeductionBreakdown } from '../../shared/utils/payroll.util';
 
@@ -47,17 +47,21 @@ export interface Payslip {
 export class PayslipsRepo {
   constructor(private fs: FirestoreClient) {}
 
-  /** Newest-first pay history for one employee, optionally scoped to a calendar year. */
-  watchPayslips(orgId: string, userId: string, cb: (items: Payslip[]) => void, year?: number, max = 100): () => void {
+  /**
+   * Newest-first pay history for one employee, optionally scoped to a
+   * calendar year. Only filters by userId server-side (a single-field
+   * equality query needs no composite index) — sorting and the year filter
+   * both happen here in memory, since one employee's lifetime payslip count
+   * is small and this sidesteps waiting on a composite index to build for
+   * equality(userId) + range(payDate), which is otherwise required.
+   */
+  watchPayslips(orgId: string, userId: string, cb: (items: Payslip[]) => void, year?: number, max = 200): () => void {
     const col = collection(this.fs.db, `orgs/${orgId}/payslips`);
-    const constraints = [where('userId', '==', userId)];
-    if (year) {
-      constraints.push(where('payDate', '>=', `${year}-01-01`));
-      constraints.push(where('payDate', '<=', `${year}-12-31`));
-    }
-    const q = query(col, ...constraints, orderBy('payDate', 'desc'), limit(max));
+    const q = query(col, where('userId', '==', userId), limit(max));
     return onSnapshot(q, (snap) => {
-      const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }) as Payslip);
+      let items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }) as Payslip);
+      if (year) items = items.filter((p) => p.payDate.startsWith(String(year)));
+      items.sort((a, b) => b.payDate.localeCompare(a.payDate));
       this.fs.run(() => cb(items));
     }, (error) => {
       console.warn('[InnovaShift] Payslips listener failed.', error);

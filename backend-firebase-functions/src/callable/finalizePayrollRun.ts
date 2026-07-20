@@ -99,6 +99,15 @@ function sanitizeRow(raw: any): PayrollRowInput {
  * docs/PAY_HISTORY.md.
  */
 export const finalizePayrollRun = onCall(async (req) => {
+  try {
+    return await finalizePayrollRunImpl(req);
+  } catch (err: any) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError('internal', err?.message || 'Unexpected error finalizing payroll.');
+  }
+});
+
+async function finalizePayrollRunImpl(req: any) {
   const ctx = await resolveTenantWithFallback(req);
   if (!ctx.isAdminOrHr) {
     throw new HttpsError('permission-denied', 'Admin/HR privileges required.');
@@ -132,18 +141,20 @@ export const finalizePayrollRun = onCall(async (req) => {
   const now = Timestamp.now();
 
   // YTD net pay for each employee = sum of their already-issued payslips
-  // this calendar year, plus this new one. Bounded by how many payslips
-  // an org issues per employee per year (a handful), so a direct query
-  // per employee is cheap and simpler than threading a running total
-  // through the org doc.
+  // this calendar year, plus this new one. Bounded by how many payslips an
+  // org issues per employee per year (a handful), so fetching every payslip
+  // this employee has ever had and filtering the year in memory is cheap —
+  // and avoids needing a composite index for equality(userId) + range(payDate),
+  // which Firestore requires (see the timeEntries index for the same pattern).
   const ytdByUser = new Map<string, number>();
   await Promise.all(rows.map(async (row) => {
     const snap = await db.collection(`orgs/${orgId}/payslips`)
       .where('userId', '==', row.userId)
-      .where('payDate', '>=', `${payDateYear}-01-01`)
-      .where('payDate', '<=', `${payDateYear}-12-31`)
       .get();
-    const priorYtd = snap.docs.reduce((sum, d) => sum + num((d.data() as any).netPay), 0);
+    const priorYtd = snap.docs.reduce((sum, d) => {
+      const data = d.data() as any;
+      return String(data.payDate || '').startsWith(payDateYear) ? sum + num(data.netPay) : sum;
+    }, 0);
     ytdByUser.set(row.userId, num(priorYtd + row.deductionBreakdown.netPay));
   }));
 
@@ -236,4 +247,4 @@ export const finalizePayrollRun = onCall(async (req) => {
   });
 
   return { ok: true, runId, employees: rows.length, checkNumbers };
-});
+}
