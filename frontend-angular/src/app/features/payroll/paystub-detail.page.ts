@@ -7,6 +7,7 @@ import { TranslocoModule } from '@jsverse/transloco';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { PayslipsRepo, Payslip } from '../../core/repos/payslips.repo';
 import { maskLast4 } from '../../core/repos/direct-deposit.repo';
+import { PrintLauncherService } from '../../core/ui/print-launcher.service';
 
 @Component({
   standalone: true,
@@ -156,14 +157,18 @@ export class PayStubDetailPage implements OnDestroy {
   loading = true;
   private ctxEffect: EffectRef;
   private isStandalone = false;
+  private autoPrintArmed = false;
+  private autoPrintDone = false;
 
   constructor(
     private ctx: OrgContextService,
     private route: ActivatedRoute,
     private router: Router,
     private payslipsRepo: PayslipsRepo,
+    private printLauncher: PrintLauncherService,
   ) {
     this.isStandalone = this.router.url.startsWith('/pay-history');
+    this.autoPrintArmed = this.route.snapshot.queryParamMap.get('print') === '1';
     this.ctxEffect = effect(() => {
       this.orgId = this.ctx.orgId() || this.ctx.formerOrgId();
       void this.load();
@@ -179,14 +184,33 @@ export class PayStubDetailPage implements OnDestroy {
     const found = await this.payslipsRepo.getPayslip(this.orgId, id);
     this.payslip = found && found.userId === uid ? found : null;
     this.loading = false;
+    this.tryAutoPrint();
+  }
+
+  private tryAutoPrint() {
+    if (!this.autoPrintArmed || this.autoPrintDone || !this.payslip) return;
+    this.autoPrintDone = true;
+    setTimeout(() => window.print(), 350);
   }
 
   maskLast4(last4: string) {
     return last4 ? `•••• ${last4}` : '';
   }
 
+  /**
+   * Printing needs a chrome-less page — the standalone /pay-history mount
+   * already is one, but the in-shell /app/payroll/history mount is wrapped
+   * by AppLayoutComponent's sidebar/top bar, which this page's own print
+   * styles can't reach. So from in-shell, pop the same detail page open at
+   * its standalone route instead — same pattern PayslipPrintPage uses.
+   */
   viewCheck() {
-    window.print();
+    if (this.isStandalone) {
+      window.print();
+      return;
+    }
+    const id = this.route.snapshot.paramMap.get('payslipId');
+    this.printLauncher.open(`/pay-history/${id}`, {}, 'paystub-check');
   }
 
   back() {
