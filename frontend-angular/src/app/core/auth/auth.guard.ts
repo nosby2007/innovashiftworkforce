@@ -34,7 +34,12 @@ export const authGuard: CanActivateFn = async () => {
       currencyCode: fallback.currencyCode ?? null,
       payFrequency: fallback.payFrequency ?? null,
       taxProfile: fallback.taxProfile ?? null,
+      formerOrgId: fallback.formerOrgId ?? null,
     });
+  }
+
+  if (!ctx.orgId()) {
+    return ctx.formerOrgId() ? router.parseUrl('/pay-history') : router.parseUrl('/login');
   }
 
   return true;

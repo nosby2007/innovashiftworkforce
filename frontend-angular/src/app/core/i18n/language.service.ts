@@ -1,4 +1,5 @@
 import { EffectRef, Injectable, effect, inject } from '@angular/core';
+import { Location } from '@angular/common';
 import { doc, getDoc, getFirestore, serverTimestamp, setDoc } from 'firebase/firestore';
 import { TranslocoService } from '@jsverse/transloco';
 import { OrgContextService } from '../tenancy/org-context.service';
@@ -21,6 +22,7 @@ export interface LanguageOption {
 export class LanguageService {
   private transloco = inject(TranslocoService);
   private ctx = inject(OrgContextService);
+  private location = inject(Location);
   private effectRef?: EffectRef;
   private loadedForUid: string | null = null;
 
@@ -64,7 +66,15 @@ export class LanguageService {
   }
 
   private resolveInitialLang(): string {
-    if (typeof window === 'undefined') return 'en';
+    if (typeof window === 'undefined') {
+      // No localStorage/browser-language signal on the server — resolve
+      // straight from the requested URL so prerendering the /fr public
+      // routes never needs a post-bootstrap language switch (which would
+      // race with — and interrupt — the initial translation load already
+      // kicked off by this same call).
+      const path = this.location.path(true);
+      return path === '/fr' || path.startsWith('/fr/') ? 'fr' : 'en';
+    }
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored && LanguageService.SUPPORTED.includes(stored)) return stored;
     const browserLang = (navigator.language || 'en').slice(0, 2).toLowerCase();

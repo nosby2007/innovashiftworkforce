@@ -40,6 +40,7 @@ import { listShifts } from './callable/listShifts';
 import { expireShifts } from './callable/expireShifts';
 import { contactIntake } from './http/contactIntake';
 import { decideTimeOffRequest } from './callable/decideTimeOffRequest';
+import { finalizePayrollRun } from './callable/finalizePayrollRun';
 import { accrueTimeOff } from './callable/accrueTimeOff';
 import { callOutShift } from './callable/callOutShift';
 import { updateShift } from './callable/updateShift';
@@ -108,6 +109,7 @@ export {
   expireShifts,
   contactIntake,
   decideTimeOffRequest,
+  finalizePayrollRun,
   accrueTimeOff,
   callOutShift,
   updateShift,

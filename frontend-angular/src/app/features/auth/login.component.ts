@@ -507,7 +507,11 @@ export class LoginComponent {
       ? '/platform'
       : orgId && isAdminLikeRole(accessRole)
         ? '/admin'
-        : '/app/dashboard';
+        : orgId
+          ? '/app/dashboard'
+          : fallback.formerOrgId
+            ? '/pay-history'
+            : '/app/dashboard';
     await this.router.navigateByUrl(target);
   }
 }

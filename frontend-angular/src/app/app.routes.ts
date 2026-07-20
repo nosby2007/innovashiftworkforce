@@ -16,6 +16,9 @@ import { NotificationsPage }from './features/notifications/notifications.page';
 import { AccrualsPage }     from './features/accruals/accruals.page';
 import { StaffPayrollPage } from './features/payroll/staff-payroll.page';
 import { PayslipPrintPage } from './features/payroll/payslip-print.page';
+import { PayStubListPage } from './features/payroll/paystub-list.page';
+import { PayStubDetailPage } from './features/payroll/paystub-detail.page';
+import { PayHistoryLayoutComponent } from './features/payroll/pay-history-layout.component';
 import { StaffProfilePage } from './features/profile/staff-profile.page';
 import { StaffDocumentsPage } from './features/documents/staff-documents.page';
 import { StaffOnboardingPage } from './features/onboarding/staff-onboarding.page';
@@ -70,9 +73,25 @@ export const APP_ROUTES: Routes = [
   },
 
   // ── Public (no auth required) ──────────────────────────────────────────────
+  // French mirrors the same components under a /fr prefix, purely for
+  // per-locale prerendering/SEO (see docs/SSR.md). PublicLayoutComponent
+  // reads `data.locale` off its own route to activate the right Transloco
+  // language — there's no equivalent /fr tree for the authenticated app.
   {
     path: '',
     component: PublicLayoutComponent,
+    data: { locale: 'en' },
+    children: [
+      { path: '',         component: LandingPage,  pathMatch: 'full' },
+      { path: 'features', component: FeaturesPage },
+      { path: 'pricing',  component: PricingPage },
+      { path: 'contact',  component: ContactPage },
+    ],
+  },
+  {
+    path: 'fr',
+    component: PublicLayoutComponent,
+    data: { locale: 'fr' },
     children: [
       { path: '',         component: LandingPage,  pathMatch: 'full' },
       { path: 'features', component: FeaturesPage },
@@ -93,6 +112,20 @@ export const APP_ROUTES: Routes = [
   {
     path: 'register',
     loadComponent: () => import('./features/auth/register.component').then(m => m.RegisterComponent),
+  },
+
+  // ── Standalone pay history (/pay-history) ────────────────────────────────
+  // No AppLayoutComponent chrome — this is the one place a revoked employee
+  // (no live org membership) can still land after signing in, to view/print
+  // their own historical pay stubs for tax purposes.
+  {
+    path: 'pay-history',
+    component: PayHistoryLayoutComponent,
+    canActivate: [authGuard],
+    children: [
+      { path: '', component: PayStubListPage },
+      { path: ':payslipId', component: PayStubDetailPage },
+    ],
   },
 
   // ── Authenticated app shell (/app/…) ────────────────────────────────────────
@@ -123,6 +156,8 @@ export const APP_ROUTES: Routes = [
       { path: 'accruals',      component: AccrualsPage },
       { path: 'payroll',       component: StaffPayrollPage },
       { path: 'payroll/payslip', component: PayslipPrintPage },
+      { path: 'payroll/history', component: PayStubListPage },
+      { path: 'payroll/history/:payslipId', component: PayStubDetailPage },
       { path: 'profile',       component: StaffProfilePage },
       { path: 'documents',     component: StaffDocumentsPage },
       { path: 'messages',      component: MessagesPage },

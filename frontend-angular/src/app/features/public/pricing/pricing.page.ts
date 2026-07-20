@@ -1,6 +1,7 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { TranslocoModule } from '@jsverse/transloco';
+import { Component, inject } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { combineLatest } from 'rxjs';
 import { SeoService } from '../../../core/seo/seo.service';
 
 const PLANS = [
@@ -129,7 +130,7 @@ const PLANS = [
         <div class="price-faq__inner">
           <h2 class="price-faq__h2">{{ 'publicPricing.faqH2' | transloco }}</h2>
           <p class="price-faq__sub">{{ 'publicPricing.faqSub' | transloco }}</p>
-          <a routerLink="/contact" class="btn-primary" id="pricing-contact-cta">{{ 'publicPricing.talkToSales' | transloco }}</a>
+          <a routerLink="../contact" class="btn-primary" id="pricing-contact-cta">{{ 'publicPricing.talkToSales' | transloco }}</a>
         </div>
       </section>
     </div>
@@ -213,13 +214,18 @@ const PLANS = [
   `]
 })
 export class PricingPage {
+  private route = inject(ActivatedRoute);
+  private i18n = inject(TranslocoService);
+
   plans = PLANS;
 
   constructor(seo: SeoService) {
-    seo.setPage({
-      title: 'Pricing — Plans for Every Healthcare Team Size',
-      description: 'Simple, transparent pricing for InnovaShift Workforce. Starter, Pro, and Enterprise plans that scale from small teams to large multi-site healthcare organizations.',
-      path: '/pricing',
+    const locale = (this.route.snapshot.parent?.data['locale'] as 'en' | 'fr') ?? 'en';
+    combineLatest([
+      this.i18n.selectTranslate('publicPricing.seoTitle'),
+      this.i18n.selectTranslate('publicPricing.seoDescription'),
+    ]).subscribe(([title, description]) => {
+      seo.setPage({ title, description, path: '/pricing', locale });
     });
   }
 }

@@ -26,6 +26,13 @@ service cloud.firestore {
     function isSuperAdmin()  { return signedIn() && (platformRole() == 'superAdmin' || isBootstrapSuperAdmin()); }
     function isOrgMember(o)  { return signedIn() && (tokenOrgId() == o || rootOrgId() == o); }
 
+    // A revoked (former-employee) user keeps a signed-in Auth account but
+    // no live org membership — orgId()/isOrgMember() correctly deny them
+    // everywhere. formerOrgId() is the one narrow exception: it's the org
+    // they used to belong to, set at revoke time, used only to let them
+    // keep reading their own historical payslips for tax purposes.
+    function formerOrgId()   { return rootUserExists() ? get(/databases/$(database)/documents/users/$(uid())).data.get('formerOrgId', '') : ''; }
+
     function isAdmin()       { return signedIn() && accessRole() == 'admin'; }
     function isManager()     { return signedIn() && accessRole() == 'manager'; }
     function isScheduler()   { return signedIn() && accessRole() == 'scheduler'; }
@@ -425,6 +432,21 @@ service cloud.firestore {
           isSuperAdmin() ||
           (isOrgMember(orgId) && isAdmin())
         );
+      }
+
+      // ── Payslips (immutable per-employee snapshot, one per finalized
+      // payroll run) ──────
+      // Written only by the finalizePayrollRun Cloud Function — a payslip
+      // is a tax/legal record, never editable once issued, not even by
+      // admin/hr. A revoked employee (formerOrgId() == orgId) can still
+      // read their own, same as an active employee reading their own.
+      match /payslips/{payslipId} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (isAdminOrHR() || uid() == resource.data.userId)) ||
+          (uid() == resource.data.userId && formerOrgId() == orgId)
+        );
+        allow create, update, delete: if false;
       }
 
       // ── User Notifications (per-user inbox) ──────

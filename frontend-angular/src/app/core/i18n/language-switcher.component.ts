@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, Input, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatIconModule } from '@angular/material/icon';
@@ -35,11 +35,23 @@ export class LanguageSwitcherComponent {
   lang = inject(LanguageService);
   private transloco = inject(TranslocoService);
 
+  /**
+   * Override for the default select() behavior. The public marketing site
+   * passes one that navigates to the locale-prefixed URL instead of just
+   * flipping Transloco's active lang in place (see PublicLayoutComponent) —
+   * everywhere else (the authenticated app shell) leaves this unset.
+   */
+  @Input() onSelect?: (code: string) => void;
+
   activeLang() {
     return this.transloco.getActiveLang();
   }
 
   select(code: string) {
+    if (this.onSelect) {
+      this.onSelect(code);
+      return;
+    }
     void this.lang.setLanguage(code);
   }
 }

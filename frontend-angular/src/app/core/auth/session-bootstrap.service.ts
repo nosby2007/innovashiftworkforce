@@ -78,6 +78,7 @@ export class SessionBootstrapService {
             currencyCode:fallback.currencyCode?? null,
             payFrequency:fallback.payFrequency?? null,
             taxProfile:  fallback.taxProfile  ?? null,
+            formerOrgId: fallback.formerOrgId ?? null,
           });
         } finally {
           if (first) {

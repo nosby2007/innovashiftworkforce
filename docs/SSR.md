@@ -3,11 +3,13 @@
 ## What this is
 
 The four public marketing routes — `/`, `/features`, `/pricing`, `/contact`
-— are prerendered at build time into static HTML using Angular's classic
-Universal-style server builders (`@angular-devkit/build-angular:server` /
-`:prerender`). This is build-time static generation (SSG), not a live SSR
-server: there's no Node process rendering pages on request in production.
-Firebase Hosting keeps serving plain static files, same as before.
+— plus their French counterparts at `/fr`, `/fr/features`, `/fr/pricing`,
+`/fr/contact`, are prerendered at build time into static HTML using
+Angular's classic Universal-style server builders
+(`@angular-devkit/build-angular:server` / `:prerender`). This is
+build-time static generation (SSG), not a live SSR server: there's no Node
+process rendering pages on request in production. Firebase Hosting keeps
+serving plain static files, same as before.
 
 Everything else in the app — `/app/*`, `/admin/*`, `/login`, `/register`,
 `/print/*`, `/platform/*` — is unaffected and stays client-side rendered
@@ -25,9 +27,6 @@ plus the per-page `<title>`/meta description already set by `SeoService`.
 
 ## What's out of scope
 
-- **No per-locale URLs.** Prerendering only renders the default (`en`)
-  locale. There's no `/fr/features` route — see `docs/I18N.md` for the
-  French-content limitation this leaves in place.
 - **No SSR of the authenticated app.** `/app/*` and `/admin/*` remain pure
   CSR. Server-rendering them would require every service and component
   reachable from those routes to be SSR-safe (see "Gotchas" below), which
@@ -43,20 +42,38 @@ plus the per-page `<title>`/meta description already set by `SeoService`.
 `npm run prerender` (`ng run innovacare-shift-frontend:prerender`) runs the
 browser build, then boots the app in Node once per configured route,
 capturing the rendered HTML. The `prerender` target in `angular.json` sets
-`discoverRoutes: false` with an explicit `routes` array of exactly the four
-public pages — Angular's prerender builder defaults to auto-discovering and
-prerendering *every* statically-resolvable route in the whole router config
-(all 48 routes across `/app` and `/admin`), so this override is required to
-keep prerendering scoped to the public site.
+`discoverRoutes: false` with an explicit `routes` array of exactly the
+eight public pages (English + French) — Angular's prerender builder
+defaults to auto-discovering and prerendering *every* statically-resolvable
+route in the whole router config (all 48+ routes across `/app` and
+`/admin`), so this override is required to keep prerendering scoped to the
+public site.
 
 Output lands in `dist/innovacare-shift-frontend/browser/`, alongside the
 normal browser build: `index.html`, `features/index.html`,
-`pricing/index.html`, and `contact/index.html` are the prerendered pages;
-everything else (JS chunks, assets, `ngsw.json`, etc.) is the same output a
-plain `ng build` produces. `firebase.json`'s `hosting.public` and
-`capacitor.config.ts`'s `webDir` both point at this `browser/` subdirectory
-(the classic server builder wants a separate `browser`/`server` output
-split, which is why the path grew a segment).
+`pricing/index.html`, `contact/index.html`, and their `fr/`-prefixed
+counterparts are the prerendered pages; everything else (JS chunks,
+assets, `ngsw.json`, etc.) is the same output a plain `ng build` produces.
+`firebase.json`'s `hosting.public` and `capacitor.config.ts`'s `webDir`
+both point at this `browser/` subdirectory (the classic server builder
+wants a separate `browser`/`server` output split, which is why the path
+grew a segment).
+
+**Locale routing**: `app.routes.ts` mounts the same four page components
+twice — once under `path: ''` (English) and once under `path: 'fr'`
+(French) — each parent route carrying static `data: { locale }`.
+`PublicLayoutComponent`, which sits at that route level, reads its own
+`data.locale` and activates the matching Transloco language directly
+(bypassing `LanguageService`'s `localStorage`/Firestore-preference
+resolution, which stays in charge for the authenticated app). Internal
+nav/footer/CTA links inside the public pages use Angular's relative
+`routerLink` resolution (e.g. `routerLink="features"` from
+`PublicLayoutComponent`, `routerLink="../pricing"` from a leaf page)
+instead of absolute paths, so they automatically resolve under whichever
+locale branch is active. `SeoService.setPage()` takes a `locale` and emits
+`<html lang>`, `og:locale`, and `hreflang` alternates linking each page to
+its counterpart. See `docs/I18N.md` for how the language switcher and
+`LanguageService` fit in.
 
 CI (`ci.yml`) and the deploy workflow (`deploy.yml`) both run
 `npm run prerender` instead of `npm run build`, so every merge to `main`
@@ -100,3 +117,32 @@ Any future root-level service or `APP_INITIALIZER` that touches
 needs the same `isPlatformBrowser` treatment, or it will break the
 prerender build (and therefore CI) even if it's only ever used from an
 authenticated, CSR-only page.
+
+3. **`HttpClient.get('/assets/i18n/en.json')` doesn't work in Node.**
+   `TranslocoHttpLoader` fetches translation JSON via a leading-slash
+   relative URL, which browsers resolve against the current origin — Node
+   has no such context, so both the XHR polyfill and native `fetch` fail
+   to resolve it (`provideHttpClient(withFetch())` in `app.config.ts`
+   surfaces this as a clean `Failed to parse URL` error; the app still
+   uses `withFetch()` since it's the better default for SSR generally).
+   Fixed with a **server-only loader** (`TranslocoServerLoader`,
+   `provideTranslocoLoader(...)` in `app.config.server.ts`) that reads the
+   same JSON files straight off disk instead of over HTTP — they're
+   already sitting in `browser/assets/i18n/` next to the server bundle by
+   the time prerendering runs. It reads with **synchronous** `fs.readFileSync`
+   (wrapped in an already-resolved `Promise`), not `fs/promises` or even
+   callback-style `fs.readFile`: zone.js's Node patch (which the prerender
+   builder relies on to know the app is still doing async work) only
+   tracks the classic callback fs API, not `fs/promises`, and in practice
+   even a callback-based read wasn't reliably awaited before the render
+   snapshot was captured. A synchronous read has no async gap for zone
+   tracking to miss in the first place.
+4. **`TranslocoService.translate(key)` is synchronous — don't use it for
+   anything that must reflect the *loaded* translation.** It returns
+   immediately, falling back to the raw key if the translation hasn't
+   loaded yet. Each public page's `SeoService.setPage()` call needs the
+   *actual* translated title/description, so it uses the reactive
+   `selectTranslate(key)` (via `combineLatest(...).subscribe(...)`)
+   instead, which only calls `setPage()` once the translation is really
+   available — the same requirement the `transloco` template pipe already
+   satisfies reactively for the rest of each page's copy.

@@ -1,6 +1,6 @@
-import { Component } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
-import { TranslocoModule } from '@jsverse/transloco';
+import { Component, inject } from '@angular/core';
+import { ActivatedRoute, Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { LanguageSwitcherComponent } from '../../../core/i18n/language-switcher.component';
 
 @Component({
@@ -10,30 +10,30 @@ import { LanguageSwitcherComponent } from '../../../core/i18n/language-switcher.
   template: `
     <header class="pub-nav" id="pub-navbar">
       <div class="pub-nav__inner">
-        <a routerLink="/" class="pub-nav__brand" id="pub-nav-brand">
+        <a routerLink="." class="pub-nav__brand" id="pub-nav-brand">
           <div class="pub-nav__logo">IS</div>
           <span class="pub-nav__name">INNO<span class="pub-nav__accent">VASHIFT</span></span>
         </a>
         <nav class="pub-nav__links">
-          <a routerLink="/features" routerLinkActive="active" class="pub-nav__link" id="nav-features">{{ 'publicLayout.navFeatures' | transloco }}</a>
-          <a routerLink="/pricing"  routerLinkActive="active" class="pub-nav__link" id="nav-pricing">{{ 'publicLayout.navPricing' | transloco }}</a>
-          <a routerLink="/contact"  routerLinkActive="active" class="pub-nav__link" id="nav-contact">{{ 'publicLayout.navContact' | transloco }}</a>
+          <a routerLink="features" routerLinkActive="active" class="pub-nav__link" id="nav-features">{{ 'publicLayout.navFeatures' | transloco }}</a>
+          <a routerLink="pricing"  routerLinkActive="active" class="pub-nav__link" id="nav-pricing">{{ 'publicLayout.navPricing' | transloco }}</a>
+          <a routerLink="contact"  routerLinkActive="active" class="pub-nav__link" id="nav-contact">{{ 'publicLayout.navContact' | transloco }}</a>
         </nav>
         <div class="pub-nav__actions">
-          <app-language-switcher></app-language-switcher>
-          <a routerLink="/login"   class="pub-nav__signin" id="nav-signin">{{ 'publicLayout.signIn' | transloco }}</a>
-          <a routerLink="/contact" class="pub-nav__cta"    id="nav-get-started">{{ 'publicLayout.getStarted' | transloco }}</a>
+          <app-language-switcher [onSelect]="switchLocale"></app-language-switcher>
+          <a routerLink="/login" class="pub-nav__signin" id="nav-signin">{{ 'publicLayout.signIn' | transloco }}</a>
+          <a routerLink="contact" class="pub-nav__cta"   id="nav-get-started">{{ 'publicLayout.getStarted' | transloco }}</a>
         </div>
         <button class="pub-nav__burger" [class.open]="open" (click)="open=!open" id="pub-hamburger" [attr.aria-label]="'publicLayout.menuAria' | transloco">
           <span></span><span></span><span></span>
         </button>
       </div>
       <div class="pub-nav__drawer" [class.open]="open" id="pub-mobile-menu">
-        <a routerLink="/features" (click)="open=false" class="pub-nav__dl">{{ 'publicLayout.navFeatures' | transloco }}</a>
-        <a routerLink="/pricing"  (click)="open=false" class="pub-nav__dl">{{ 'publicLayout.navPricing' | transloco }}</a>
-        <a routerLink="/contact"  (click)="open=false" class="pub-nav__dl">{{ 'publicLayout.navContact' | transloco }}</a>
-        <a routerLink="/login"    (click)="open=false" class="pub-nav__dl">{{ 'publicLayout.signIn' | transloco }}</a>
-        <a routerLink="/contact"  (click)="open=false" class="pub-nav__dcta">{{ 'publicLayout.getStartedArrow' | transloco }}</a>
+        <a routerLink="features" (click)="open=false" class="pub-nav__dl">{{ 'publicLayout.navFeatures' | transloco }}</a>
+        <a routerLink="pricing"  (click)="open=false" class="pub-nav__dl">{{ 'publicLayout.navPricing' | transloco }}</a>
+        <a routerLink="contact"  (click)="open=false" class="pub-nav__dl">{{ 'publicLayout.navContact' | transloco }}</a>
+        <a routerLink="/login"   (click)="open=false" class="pub-nav__dl">{{ 'publicLayout.signIn' | transloco }}</a>
+        <a routerLink="contact"  (click)="open=false" class="pub-nav__dcta">{{ 'publicLayout.getStartedArrow' | transloco }}</a>
       </div>
     </header>
 
@@ -51,14 +51,14 @@ import { LanguageSwitcherComponent } from '../../../core/i18n/language-switcher.
         <div class="pub-footer__cols">
           <div class="pub-footer__col">
             <p class="pub-footer__ht">{{ 'publicLayout.footerProduct' | transloco }}</p>
-            <a routerLink="/features" class="pub-footer__lk">{{ 'publicLayout.navFeatures' | transloco }}</a>
-            <a routerLink="/pricing"  class="pub-footer__lk">{{ 'publicLayout.navPricing' | transloco }}</a>
-            <a routerLink="/contact"  class="pub-footer__lk">{{ 'publicLayout.footerRequestDemo' | transloco }}</a>
+            <a routerLink="features" class="pub-footer__lk">{{ 'publicLayout.navFeatures' | transloco }}</a>
+            <a routerLink="pricing"  class="pub-footer__lk">{{ 'publicLayout.navPricing' | transloco }}</a>
+            <a routerLink="contact"  class="pub-footer__lk">{{ 'publicLayout.footerRequestDemo' | transloco }}</a>
           </div>
           <div class="pub-footer__col">
             <p class="pub-footer__ht">{{ 'publicLayout.footerCompany' | transloco }}</p>
-            <a routerLink="/contact" class="pub-footer__lk">{{ 'publicLayout.navContact' | transloco }}</a>
-            <a routerLink="/"        class="pub-footer__lk">{{ 'publicLayout.footerAbout' | transloco }}</a>
+            <a routerLink="contact" class="pub-footer__lk">{{ 'publicLayout.navContact' | transloco }}</a>
+            <a routerLink="."       class="pub-footer__lk">{{ 'publicLayout.footerAbout' | transloco }}</a>
           </div>
           <div class="pub-footer__col">
             <p class="pub-footer__ht">{{ 'publicLayout.footerWorkspace' | transloco }}</p>
@@ -139,6 +139,39 @@ import { LanguageSwitcherComponent } from '../../../core/i18n/language-switcher.
   `]
 })
 export class PublicLayoutComponent {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private transloco = inject(TranslocoService);
+
   open = false;
   year = new Date().getFullYear();
+
+  /** Set by the matched route's `data.locale` — see app.routes.ts. */
+  readonly locale: string = this.route.snapshot.data['locale'] ?? 'en';
+
+  constructor() {
+    const initialLang = this.transloco.getActiveLang();
+    if (this.locale === initialLang) return;
+
+    // APP_INITIALIZER already kicked off loading `initialLang` before this
+    // component exists — switching languages immediately would unsubscribe
+    // that in-flight HTTP request mid-flight, and Transloco surfaces the
+    // interruption as a load error for it. Let it settle first, then switch.
+    this.transloco.load(initialLang).subscribe({
+      complete: () => this.transloco.setActiveLang(this.locale),
+      error: () => this.transloco.setActiveLang(this.locale),
+    });
+  }
+
+  /**
+   * Passed to the language switcher instead of its default in-place flip:
+   * on the public site, switching language means navigating to the
+   * locale-prefixed URL (e.g. /pricing -> /fr/pricing) so the choice
+   * survives a refresh and search engines see it as a distinct page.
+   */
+  readonly switchLocale = (code: string) => {
+    const unprefixed = this.router.url.replace(/^\/fr(\/|$)/, '/');
+    const target = code === 'fr' ? `/fr${unprefixed === '/' ? '' : unprefixed}` : unprefixed;
+    void this.router.navigateByUrl(target);
+  };
 }
