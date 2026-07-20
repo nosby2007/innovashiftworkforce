@@ -1,10 +1,12 @@
-import { AfterViewInit, Component, NgZone, OnDestroy, TemplateRef, ViewChild, signal } from '@angular/core';
+import { AfterViewInit, Component, EffectRef, NgZone, OnDestroy, TemplateRef, ViewChild, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Timestamp } from 'firebase/firestore';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { PayPeriodService } from '../../core/tenancy/pay-period.service';
+import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
 import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
 import { SchedulerCommands } from '../../core/commands/scheduler.commands';
@@ -18,7 +20,7 @@ import { ToastService } from '../../core/ui/toast.service';
 import { mapAttendancePolicyError } from '../../shared/utils/attendance-policy-error.util';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
 
-import { FullCalendarModule } from '@fullcalendar/angular';
+import { FullCalendarComponent, FullCalendarModule } from '@fullcalendar/angular';
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -35,7 +37,7 @@ interface OrgSite {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FullCalendarModule, DrawerComponent, FormsModule, MatIconModule, TipCardComponent, TranslocoModule],
+  imports: [CommonModule, FullCalendarModule, DrawerComponent, FormsModule, MatIconModule, TipCardComponent, PayPeriodSelectorComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad sch-page">
       <!-- Header -->
@@ -121,6 +123,7 @@ interface OrgSite {
               <option value="unassigned">{{ 'scheduler.unassigned' | transloco }}</option>
             </select>
           </div>
+          <app-pay-period-selector></app-pay-period-selector>
           <div class="sch-toolbar-bottom">
             <div class="sch-legend">
               <span class="sch-legend-item" *ngFor="let item of statusLegend">
@@ -149,6 +152,7 @@ interface OrgSite {
           </div>
 
           <full-calendar
+            #calendar
             [options]="calendarOptions"
             class="vs-calendar">
           </full-calendar>
@@ -986,9 +990,13 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   // permanently empty once orgId did load.
   @ViewChild('shiftActionsTpl') shiftActionsTpl!: TemplateRef<any>;
   @ViewChild('staffPickerTpl') staffPickerTpl!: TemplateRef<any>;
+  @ViewChild('calendar') calendarRef!: FullCalendarComponent;
+
+  private periodEffect!: EffectRef;
 
   constructor(
     private ctx: OrgContextService,
+    private payPeriod: PayPeriodService,
     private repo: ShiftsRepo,
     private cmd: SchedulerCommands,
     private adminCmd: ShiftAdminCommands,
@@ -999,29 +1007,39 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     private toast: ToastService,
     private i18n: TranslocoService,
   ) {
+    // Sites/users are org-readiness concerns, unrelated to pay period —
+    // keep the existing bind-once-per-org-id retry pattern for those.
     const bind = () => {
       const orgId = this.ctx.orgId();
       this.orgId = orgId;
       if (!orgId) return;
-      if (this.unsub) return;
-
-      const start = Timestamp.fromMillis(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const end = Timestamp.fromMillis(Date.now() + 14 * 24 * 60 * 60 * 1000);
       void this.loadSites(orgId);
-
       if (!this.unsubUsers) {
         this.unsubUsers = this.usersRepo.watchOrgUsers(orgId, (u) => this.users.set(u));
       }
+    };
+    bind();
+    setTimeout(bind, 800);
+    setTimeout(bind, 2200);
 
+    // Shift data IS period-scoped: unsubscribe/resubscribe whenever orgId
+    // or the selected pay period changes.
+    this.periodEffect = effect(() => {
+      const orgId = this.ctx.orgId();
+      const period = this.payPeriod.selectedPeriod();
+      this.unsub?.();
+      this.unsub = null;
+      if (!orgId) return;
+
+      const start = Timestamp.fromDate(period.start);
+      const end = Timestamp.fromDate(period.end);
       this.unsub = this.repo.watchOrgRange(orgId, start, end, (items) => {
         this.items.set(items);
         this.refreshCalendarEvents();
       });
-    };
 
-    bind();
-    setTimeout(bind, 800);
-    setTimeout(bind, 2200);
+      this.calendarRef?.getApi()?.gotoDate(period.start);
+    });
   }
 
   ngAfterViewInit() {}
@@ -1356,6 +1374,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     if (this.unsubUsers) this.unsubUsers();
     this.unsub = null;
     this.unsubUsers = null;
+    this.periodEffect.destroy();
   }
 
   onDraftSiteChange(siteId: string) {

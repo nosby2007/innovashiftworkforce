@@ -1,4 +1,4 @@
-import { Component, Inject, computed, inject, signal } from '@angular/core';
+import { Component, Inject, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule, CurrencyPipe, DatePipe, NgIf } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -6,12 +6,10 @@ import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDatepickerInputEvent, MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog, MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatNativeDateModule } from '@angular/material/core';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
@@ -20,6 +18,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 import { SchedulerCommands } from '../../core/commands/scheduler.commands';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { PayPeriodService } from '../../core/tenancy/pay-period.service';
+import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { ToastService } from '../../core/ui/toast.service';
 import { TranslocoModule } from '@jsverse/transloco';
 
@@ -50,7 +50,6 @@ export type ListShiftItem = {
   endAtMs?: number | null;
 };
 
-type DateRange = { start: Date; end: Date };
 type ShiftStatusFilter =
   | ''
   | 'open'
@@ -98,11 +97,10 @@ const STATUS_BADGE: Record<string, string> = {
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
-    MatDatepickerModule,
-    MatNativeDateModule,
     MatSelectModule,
     MatCheckboxModule,
     MatProgressSpinnerModule,
+    PayPeriodSelectorComponent,
     TranslocoModule,
   ],
   template: `
@@ -118,37 +116,12 @@ const STATUS_BADGE: Record<string, string> = {
             <button (click)="go('/app/availability')">{{ 'nav.myAvailability' | transloco }}</button>
             <button (click)="clearFilters()">{{ 'schedule.browseAllShifts' | transloco }}</button>
           </details>
-          <button class="sched-icon" (click)="picker.open()" [attr.aria-label]="'schedule.pickDate' | transloco"><mat-icon>tune</mat-icon></button>
+          <app-pay-period-selector></app-pay-period-selector>
           <button class="sched-icon" (click)="resetAndLoad()" [attr.aria-label]="'schedule.refresh' | transloco"><mat-icon>refresh</mat-icon></button>
-          <mat-form-field class="vs-hidden-date" appearance="outline">
-            <input matInput [matDatepicker]="picker" (dateChange)="onDatePicked($event)" [attr.aria-label]="'schedule.pickDate' | transloco" />
-            <mat-datepicker #picker></mat-datepicker>
-          </mat-form-field>
         </div>
       </header>
 
       <div class="sched-layout">
-        <aside class="sched-mini">
-          <div class="sched-mini-head">
-            <strong>{{ rangeStartMonth() }}</strong>
-            <button (click)="prevRange()" [attr.aria-label]="'schedule.previous' | transloco"><mat-icon>chevron_left</mat-icon></button>
-            <button (click)="nextRange()" [attr.aria-label]="'schedule.next' | transloco"><mat-icon>chevron_right</mat-icon></button>
-          </div>
-          <button class="sched-today" (click)="goToday()">{{ 'schedule.today' | transloco }}</button>
-          <div class="sched-weekdays">
-            <span *ngFor="let d of ('schedule.weekdaysShort' | transloco)">{{ d }}</span>
-          </div>
-          <div class="sched-days">
-            <button *ngFor="let d of calendarDays()"
-                    [class.is-today]="isToday(d)"
-                    [class.has-shift]="hasShiftOn(d)"
-                    (click)="range.set(makeRange(d)); resetAndLoad()">
-              <span>{{ d.getDate() }}</span>
-              <i *ngIf="hasShiftOn(d)"></i>
-            </button>
-          </div>
-        </aside>
-
         <main class="sched-list-card">
           <div class="sched-list-tools">
             <input [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event); onSearch()" [placeholder]="'schedule.searchSchedule' | transloco">
@@ -224,18 +197,16 @@ const STATUS_BADGE: Record<string, string> = {
   styleUrl: './schedule.page.scss',
 })
 export class SchedulePage {
-  private dialog   = inject(MatDialog);
-  private commands = inject(SchedulerCommands);
-  private ctx      = inject(OrgContextService);
-  private router   = inject(Router);
+  private dialog     = inject(MatDialog);
+  private commands   = inject(SchedulerCommands);
+  private ctx        = inject(OrgContextService);
+  private payPeriod  = inject(PayPeriodService);
+  private router     = inject(Router);
 
   displayedColumns = ['date', 'shift', 'status', 'hours', 'projected', 'position', 'assignment', 'location', 'action'];
 
-  // ── Range ───────────────────────────────────────────────────────────────────
-  range = signal<DateRange>(this.makeRange(new Date()));
-
   rangeLabel = computed(() => {
-    const { start, end } = this.range();
+    const { start, end } = this.payPeriod.selectedPeriod();
     const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
     return `${fmt(start)} — ${fmt(end)}`;
   });
@@ -305,7 +276,12 @@ export class SchedulePage {
 
   private toast = inject(ToastService);
 
-  constructor() { this.resetAndLoad(); }
+  constructor() {
+    effect(() => {
+      this.payPeriod.selectedPeriod();
+      this.resetAndLoad();
+    });
+  }
 
   // ── Data loading ─────────────────────────────────────────────────────────────
   async resetAndLoad() {
@@ -326,7 +302,7 @@ export class SchedulePage {
     this.errorMessage.set(null);
 
     try {
-      const { start, end } = this.range();
+      const { start, end } = this.payPeriod.selectedPeriod();
       const res = await this.commands.listShifts({
         startAtMs:       start.getTime(),
         endAtMs:         end.getTime(),
@@ -368,27 +344,6 @@ export class SchedulePage {
   }
 
   onSearch() { this.selectedId.set(null); }
-
-  async prevRange() {
-    const { start, end } = this.range();
-    const days = this.diffDays(start, end) + 1;
-    this.range.set({ start: this.addDays(start, -days), end: this.addDays(end, -days) });
-    await this.resetAndLoad();
-  }
-
-  async nextRange() {
-    const { start, end } = this.range();
-    const days = this.diffDays(start, end) + 1;
-    this.range.set({ start: this.addDays(start, days), end: this.addDays(end, days) });
-    await this.resetAndLoad();
-  }
-
-  async onDatePicked(ev: MatDatepickerInputEvent<Date>) {
-    const d = ev.value;
-    if (!d) return;
-    this.range.set(this.makeRange(d));
-    await this.resetAndLoad();
-  }
 
   openPostDialog(row: ScheduleRow) {
     const ref = this.dialog.open(PostShiftDialogComponent, {
@@ -458,15 +413,6 @@ export class SchedulePage {
     return `${fmt(s)} – ${fmt(e)}`;
   }
 
-  // ── Date utils ────────────────────────────────────────────────────────────────
-  makeRange(anchor: Date): DateRange {
-    const start = this.startOfWeek(anchor);
-    const end   = this.addDays(start, 13);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  }
-
   private sortRows(rows: ScheduleRow[], active: string, dir: 'asc' | 'desc' | '') {
     if (!dir) return rows;
     const m  = dir === 'desc' ? -1 : 1;
@@ -479,53 +425,6 @@ export class SchedulePage {
         default:          return m * by(String((a as any)[active] ?? ''), String((b as any)[active] ?? ''));
       }
     });
-  }
-
-  private startOfWeek(d: Date): Date {
-    const date = new Date(d);
-    const day  = date.getDay();
-    date.setDate(date.getDate() + (day === 0 ? -6 : 1 - day));
-    return date;
-  }
-
-  private addDays(d: Date, n: number): Date {
-    const x = new Date(d); x.setDate(x.getDate() + n); return x;
-  }
-
-  private diffDays(a: Date, b: Date): number {
-    const aa = new Date(a); aa.setHours(0, 0, 0, 0);
-    const bb = new Date(b); bb.setHours(0, 0, 0, 0);
-    return Math.round((bb.getTime() - aa.getTime()) / 86_400_000);
-  }
-
-  async goToday() {
-    this.range.set(this.makeRange(new Date()));
-    await this.resetAndLoad();
-  }
-
-  rangeStartMonth(): string {
-    return this.range().start.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  }
-
-  calendarDays(): Date[] {
-    const start = new Date(this.range().start);
-    start.setDate(start.getDate() - 3);
-    return Array.from({ length: 42 }, (_, i) => this.addDays(start, i));
-  }
-
-  isToday(d: Date): boolean {
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear()
-      && d.getMonth() === now.getMonth()
-      && d.getDate() === now.getDate();
-  }
-
-  hasShiftOn(d: Date): boolean {
-    return this.allRows().some((row) =>
-      row.date.getFullYear() === d.getFullYear()
-      && row.date.getMonth() === d.getMonth()
-      && row.date.getDate() === d.getDate()
-    );
   }
 }
 

@@ -5,13 +5,15 @@ import { ActivatedRoute } from '@angular/router';
 import { Timestamp } from 'firebase/firestore';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { PayPeriodService, PayPeriodOption } from '../../core/tenancy/pay-period.service';
+import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
 import { TimeEntriesRepo } from '../../core/repos/time-entries.repo';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
 import { AdminCommands } from '../../core/commands/admin.commands';
 import { TimeEntry } from '../../shared/models/time-entry.model';
 import { formatDateTime, tsToDate } from '../../shared/utils/date.util';
-import { payrollHours } from '../../shared/utils/payroll.util';
+import { payrollHours, dateInputValue } from '../../shared/utils/payroll.util';
 import { toCsv, downloadTextFile } from '../../shared/utils/csv.util';
 import { ToastService } from '../../core/ui/toast.service';
 import { PrintLauncherService } from '../../core/ui/print-launcher.service';
@@ -23,7 +25,7 @@ import { MatIconModule } from '@angular/material/icon';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, TablePaginatorComponent, TranslocoModule],
+  imports: [CommonModule, FormsModule, MatIconModule, TablePaginatorComponent, PayPeriodSelectorComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad">
       <!-- Header -->
@@ -68,6 +70,7 @@ import { MatIconModule } from '@angular/material/icon';
               </button>
             </div>
           </div>
+          <app-pay-period-selector (periodChange)="onPeriodPicked($event)"></app-pay-period-selector>
         </div>
 
         <div class="ts-meta" *ngIf="rows().length > 0 || selectedUid">
@@ -297,6 +300,7 @@ export class AdminTimesheetsPage implements OnDestroy {
 
   constructor(
     private ctx: OrgContextService,
+    private payPeriod: PayPeriodService,
     private usersRepo: UsersRepo,
     private timeRepo: TimeEntriesRepo,
     private shiftsRepo: ShiftsRepo,
@@ -323,17 +327,14 @@ export class AdminTimesheetsPage implements OnDestroy {
     setTimeout(bind, 800);
     setTimeout(bind, 2400);
 
-    // default dates: current week
-    const now = new Date();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - ((now.getDay()+6)%7));
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    this.fromDate = monday.toISOString().slice(0,10);
-    this.toDate = sunday.toISOString().slice(0,10);
+    // default dates: current pay period
+    const period = this.payPeriod.selectedPeriod();
+    this.fromDate = dateInputValue(period.start);
+    this.toDate = dateInputValue(period.end);
 
     // Deep-linked from Payroll's "Review" action: preselect the employee
     // and payroll period so the flagged entries are immediately visible.
+    // This override wins over the pay-period default above.
     const params = this.route.snapshot.queryParamMap;
     const uid = params.get('uid');
     const from = params.get('from');
@@ -341,6 +342,11 @@ export class AdminTimesheetsPage implements OnDestroy {
     if (uid) this.selectedUid = uid;
     if (from) this.fromDate = from;
     if (to) this.toDate = to;
+  }
+
+  onPeriodPicked(opt: PayPeriodOption) {
+    this.fromDate = dateInputValue(opt.period.start);
+    this.toDate = dateInputValue(opt.period.end);
   }
 
   private async refreshRows() {

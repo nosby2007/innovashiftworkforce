@@ -6,6 +6,8 @@ import { doc, getDoc, getFirestore, onSnapshot, serverTimestamp, setDoc, Timesta
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { MatIconModule } from '@angular/material/icon';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { PayPeriodService, PayPeriodOption } from '../../core/tenancy/pay-period.service';
+import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { PrintLauncherService } from '../../core/ui/print-launcher.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { TimeEntriesRepo } from '../../core/repos/time-entries.repo';
@@ -16,13 +18,12 @@ import { Shift } from '../../shared/models/shift.model';
 import { AccrualsRepo, TimeOffRequest } from '../../core/repos/accruals.repo';
 import { formatDateTime } from '../../shared/utils/date.util';
 import {
-  currentPayrollPeriod, dateInputValue, payrollLeaveGross, payrollLeaveHours,
+  dateInputValue, payrollLeaveGross, payrollLeaveHours,
   computeEmployeeGross, workedDateSet, payrollHolidayOffHours, payrollHolidayOffGross,
   DEFAULT_OVERTIME_POLICY, OvertimePolicy, OrgHoliday, EmployeeGrossBreakdown,
   computeDeductions, resolveDeductionElections, DEFAULT_DEDUCTION_ELECTIONS, DeductionElections, DeductionOverrides,
   defaultDeductionElectionsForCountry, DeductionBreakdown,
 } from '../../shared/utils/payroll.util';
-import { PayFrequency } from '../../core/tenancy/org-finance.model';
 import { toCsv, downloadTextFile } from '../../shared/utils/csv.util';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
@@ -51,7 +52,7 @@ type PayslipEarningLine = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule, TablePaginatorComponent, TranslocoModule],
+  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule, TablePaginatorComponent, PayPeriodSelectorComponent, TranslocoModule],
   template: `
     <div class="pay-admin">
       <header class="pay-admin-hero">
@@ -62,6 +63,7 @@ type PayslipEarningLine = {
         </div>
         <div class="pay-admin-period">
           <label>{{ 'adminPayroll.payrollPeriod' | transloco }}</label>
+          <app-pay-period-selector (periodChange)="onPeriodPicked($event)"></app-pay-period-selector>
           <div>
             <input type="date" [(ngModel)]="fromDate" (change)="reloadEntries()">
             <span>{{ 'adminPayroll.to' | transloco }}</span>
@@ -376,6 +378,7 @@ export class AdminPayrollPage implements OnDestroy {
   constructor(
     private zone: NgZone,
     private ctx: OrgContextService,
+    private payPeriod: PayPeriodService,
     private timeRepo: TimeEntriesRepo,
     private usersRepo: UsersRepo,
     private shiftsRepo: ShiftsRepo,
@@ -384,12 +387,18 @@ export class AdminPayrollPage implements OnDestroy {
     private toast: ToastService,
     private router: Router,
   ) {
-    const period = currentPayrollPeriod((this.ctx.payFrequency() as PayFrequency) || 'biweekly');
+    const period = this.payPeriod.selectedPeriod();
     this.fromDate = dateInputValue(period.start);
     this.toDate = dateInputValue(period.end);
     this.payDate = this.toDate;
     this.bind();
     setTimeout(() => this.bind(), 800);
+  }
+
+  onPeriodPicked(opt: PayPeriodOption) {
+    this.fromDate = dateInputValue(opt.period.start);
+    this.toDate = dateInputValue(opt.period.end);
+    this.reloadEntries();
   }
 
   private bind() {
