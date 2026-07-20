@@ -265,6 +265,12 @@
     "colStatus": "Status",
     "noPayrollEntries": "No payroll time entries in this period."
   },
+  "payPeriod": {
+    "current": "Current",
+    "older": "Older period",
+    "newer": "Newer period",
+    "backToCurrent": "Back to current period"
+  },
   "paystubs": {
     "payHistory": "Pay History",
     "payHistorySubtitle": "View and download each pay period's paystub — including after you leave the organization.",
@@ -931,7 +937,7 @@
     "available": "Available",
     "openHours": "Open Hours",
     "myRequests": "My Requests",
-    "week": "Week",
+    "week": "Pay Period",
     "searchPlaceholder": "Search shift, location, or role",
     "allRoles": "All roles",
     "tabAvailable": "Available",

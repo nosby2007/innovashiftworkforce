@@ -5,6 +5,8 @@ import { RouterLink } from '@angular/router';
 import { Timestamp } from 'firebase/firestore';
 import { MatIconModule } from '@angular/material/icon';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { PayPeriodService, PayPeriodOption } from '../../core/tenancy/pay-period.service';
+import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { PrintLauncherService } from '../../core/ui/print-launcher.service';
 import { TimeEntriesRepo } from '../../core/repos/time-entries.repo';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
@@ -12,15 +14,14 @@ import { TimeEntry } from '../../shared/models/time-entry.model';
 import { Shift } from '../../shared/models/shift.model';
 import { AccrualsRepo, TimeOffRequest } from '../../core/repos/accruals.repo';
 import { formatDateTime } from '../../shared/utils/date.util';
-import { currentPayrollPeriod, dateInputValue, payrollDeductions, payrollGross, payrollHours, payrollLeaveGross, payrollLeaveHours, payrollNet, payrollRate } from '../../shared/utils/payroll.util';
-import { PayFrequency } from '../../core/tenancy/org-finance.model';
+import { dateInputValue, payrollDeductions, payrollGross, payrollHours, payrollLeaveGross, payrollLeaveHours, payrollNet, payrollRate } from '../../shared/utils/payroll.util';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
 import { TranslocoModule } from '@jsverse/transloco';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, CurrencyPipe, MatIconModule, TablePaginatorComponent, TranslocoModule],
+  imports: [CommonModule, FormsModule, RouterLink, CurrencyPipe, MatIconModule, TablePaginatorComponent, PayPeriodSelectorComponent, TranslocoModule],
   template: `
     <div class="pay-page">
       <header class="pay-hero">
@@ -31,6 +32,7 @@ import { TranslocoModule } from '@jsverse/transloco';
         </div>
         <div class="pay-period">
           <label>{{ 'payroll.payPeriod' | transloco }}</label>
+          <app-pay-period-selector (periodChange)="onPeriodPicked($event)"></app-pay-period-selector>
           <div>
             <input type="date" [(ngModel)]="fromDate" (change)="reload()">
             <span>{{ 'payroll.to' | transloco }}</span>
@@ -215,12 +217,13 @@ export class StaffPayrollPage implements OnDestroy {
 
   constructor(
     private ctx: OrgContextService,
+    private payPeriod: PayPeriodService,
     private timeRepo: TimeEntriesRepo,
     private shiftsRepo: ShiftsRepo,
     private accruals: AccrualsRepo,
     private printLauncher: PrintLauncherService,
   ) {
-    const period = currentPayrollPeriod((this.ctx.payFrequency() as PayFrequency) || 'biweekly');
+    const period = this.payPeriod.selectedPeriod();
     this.fromDate = dateInputValue(period.start);
     this.toDate = dateInputValue(period.end);
     this.ctxEffect = effect(() => {
@@ -228,6 +231,12 @@ export class StaffPayrollPage implements OnDestroy {
       this.uid = this.ctx.uid();
       this.reload();
     });
+  }
+
+  onPeriodPicked(opt: PayPeriodOption) {
+    this.fromDate = dateInputValue(opt.period.start);
+    this.toDate = dateInputValue(opt.period.end);
+    this.reload();
   }
 
   reload() {

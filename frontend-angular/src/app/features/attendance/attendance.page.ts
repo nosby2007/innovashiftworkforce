@@ -6,15 +6,18 @@ import { Router } from '@angular/router';
 import { AttendanceCommands } from '../../core/commands/attendance.commands';
 import { ShiftsCommands } from '../../core/commands/shifts.commands';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { PayPeriodService } from '../../core/tenancy/pay-period.service';
+import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { TimeEntriesRepo } from '../../core/repos/time-entries.repo';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
 import { TimeEntry } from '../../shared/models/time-entry.model';
 import { Shift } from '../../shared/models/shift.model';
 import { formatDateTime, tsToDate } from '../../shared/utils/date.util';
+import { formatPayPeriodLabel } from '../../shared/utils/payroll.util';
 import { ToastService } from '../../core/ui/toast.service';
 import { mapAttendancePolicyError } from '../../shared/utils/attendance-policy-error.util';
 import { PlanEntitlementsService } from '../../core/tenancy/plan-entitlements.service';
-import { doc, getDoc, getFirestore } from 'firebase/firestore';
+import { doc, getDoc, getFirestore, Timestamp } from 'firebase/firestore';
 import { fmtShiftDate, fmtShiftTime, shiftHours } from '../../shared/utils/shift-lifecycle.utils';
 import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map/geofence-map.component';
 import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
@@ -24,7 +27,7 @@ import { TranslocoModule } from '@jsverse/transloco';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, GeofenceMapComponent, TablePaginatorComponent, TipCardComponent, TranslocoModule],
+  imports: [CommonModule, FormsModule, MatIconModule, GeofenceMapComponent, TablePaginatorComponent, TipCardComponent, PayPeriodSelectorComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
@@ -51,9 +54,7 @@ import { TranslocoModule } from '@jsverse/transloco';
             </div>
             <div class="at-timecard-period">
               <label>Time Period</label>
-              <select>
-                <option>{{ timePeriodLabel() }}</option>
-              </select>
+              <app-pay-period-selector></app-pay-period-selector>
             </div>
           </div>
           <div class="at-timecard-actions">
@@ -826,9 +827,11 @@ export class AttendancePage implements OnDestroy {
   private unsubCurrentShift: (() => void) | null = null;
   private unsubSchedule: (() => void) | null = null;
   private ctxEffect!: EffectRef;
+  private boundOrgUidKey: string | null = null;
 
   constructor(
     private ctx: OrgContextService,
+    private payPeriod: PayPeriodService,
     private cmd: AttendanceCommands,
     private repo: TimeEntriesRepo,
     private shiftsRepo: ShiftsRepo,
@@ -840,41 +843,56 @@ export class AttendancePage implements OnDestroy {
     this.ctxEffect = effect(() => {
       const orgId = this.ctx.orgId();
       const uid = this.ctx.uid();
+      const period = this.payPeriod.selectedPeriod();
       this.orgId = orgId;
       this.uid = uid;
       if (!orgId || !uid) return;
-      if (this.unsub) return;
 
-      void this.loadOrgSettings(orgId);
+      // "Current shift"/"my upcoming shifts" are forward-looking, not part
+      // of this pay period's history — bind them once per identity, same
+      // as before. Only the entries listener below is period-scoped and
+      // needs to unsubscribe/resubscribe whenever the period changes.
+      const identityKey = `${orgId}:${uid}`;
+      if (identityKey !== this.boundOrgUidKey) {
+        this.boundOrgUidKey = identityKey;
+        void this.loadOrgSettings(orgId);
 
-      this.unsub = this.repo.watchMyEntries(orgId, uid, async (items) => {
-        this.entries.set(items);
-        const shiftIds = Array.from(new Set(items.map((x) => x.shiftId))).filter(Boolean);
-        this.shiftMap.set(shiftIds.length ? await this.shiftsRepo.getManyByIds(orgId, shiftIds) : {});
-        const active = items.find((x) => !x.checkOutAt) || null;
-        this.entryId.set(active?.id ?? null);
-        this.onBreak.set(Boolean(active?.onBreak));
-        if (active?.shiftId && !this.shiftId) {
-          this.shiftId = String(active.shiftId);
-          this.shiftSelection = this.shiftIdToOption[this.shiftId] || this.shiftSelection;
-        }
-      });
+        this.unsubCurrentShift?.();
+        this.unsubCurrentShift = this.shiftsRepo.watchCurrentShift(orgId, uid, (s) => {
+          this.currentShift.set(s);
+          if (s) {
+            this.shiftId = s.id;
+            const option = this.toShiftOptionLabel(s);
+            this.shiftSelection = option;
+            this.shiftOptionToId[option] = s.id;
+            this.shiftIdToOption[s.id] = option;
+          }
+        });
 
-      this.unsubCurrentShift = this.shiftsRepo.watchCurrentShift(orgId, uid, (s) => {
-        this.currentShift.set(s);
-        if (s) {
-          this.shiftId = s.id;
-          const option = this.toShiftOptionLabel(s);
-          this.shiftSelection = option;
-          this.shiftOptionToId[option] = s.id;
-          this.shiftIdToOption[s.id] = option;
-        }
-      });
+        this.unsubSchedule?.();
+        this.unsubSchedule = this.shiftsRepo.watchMySchedule(orgId, uid, (items) => {
+          this.mySchedule.set(items);
+          this.rebuildShiftOptions();
+        });
+      }
 
-      this.unsubSchedule = this.shiftsRepo.watchMySchedule(orgId, uid, (items) => {
-        this.mySchedule.set(items);
-        this.rebuildShiftOptions();
-      });
+      this.unsub?.();
+      this.unsub = this.repo.watchEntriesRange(
+        orgId, uid,
+        Timestamp.fromDate(period.start), Timestamp.fromDate(period.end),
+        async (items) => {
+          this.entries.set(items);
+          const shiftIds = Array.from(new Set(items.map((x) => x.shiftId))).filter(Boolean);
+          this.shiftMap.set(shiftIds.length ? await this.shiftsRepo.getManyByIds(orgId, shiftIds) : {});
+          const active = items.find((x) => !x.checkOutAt) || null;
+          this.entryId.set(active?.id ?? null);
+          this.onBreak.set(Boolean(active?.onBreak));
+          if (active?.shiftId && !this.shiftId) {
+            this.shiftId = String(active.shiftId);
+            this.shiftSelection = this.shiftIdToOption[this.shiftId] || this.shiftSelection;
+          }
+        },
+      );
     });
   }
 
@@ -917,13 +935,6 @@ export class AttendancePage implements OnDestroy {
   fmtShortTime(ts: any): string {
     const d = tsToDate(ts);
     return d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false }) : '—';
-  }
-
-  timePeriodLabel(): string {
-    const now = new Date();
-    const start = new Date(now);
-    start.setDate(now.getDate() - 13);
-    return `${start.toLocaleDateString()} - ${now.toLocaleDateString()}`;
   }
 
   toggleSelectMenu() {
@@ -1005,10 +1016,11 @@ export class AttendancePage implements OnDestroy {
     const rows = this.selectedEntries()
       .map((e) => `${this.fmtShortDate(e.checkInAt)} | ${this.fmtDisplayTime(e.checkInAt)}-${this.fmtDisplayTime(e.checkOutAt)} | ${this.workedHours(e).toFixed(2)} hrs | ${this.entryAnomalies(e).join(', ') || 'OK'}`)
       .join('\n');
-    const subject = `Timecard ${this.timePeriodLabel()} - ${this.staffName()}`;
+    const periodLabel = formatPayPeriodLabel(this.payPeriod.selectedPeriod());
+    const subject = `Timecard ${periodLabel} - ${this.staffName()}`;
     const body = [
       `Employee: ${this.staffName()}`,
-      `Period: ${this.timePeriodLabel()}`,
+      `Period: ${periodLabel}`,
       `Total hours: ${this.totalHours().toFixed(2)}`,
       '',
       rows || 'No timecard rows for this period.',

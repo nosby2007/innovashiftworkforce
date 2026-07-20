@@ -55,6 +55,55 @@ export function currentPayrollPeriod(payFrequency: PayFrequency = 'biweekly', an
 }
 
 /**
+ * The pay period immediately following one whose end date is
+ * `previousPeriodEnd` — i.e. what an org's NEXT payroll run will cover once
+ * the given one has been finalized. Uses the same per-frequency day-count /
+ * month-split rules as currentPayrollPeriod, just keyed off "the day after a
+ * known end" instead of "today/anchor-containing period".
+ */
+export function payrollPeriodAfter(payFrequency: PayFrequency, previousPeriodEnd: Date): PayrollPeriod {
+  const start = new Date(previousPeriodEnd);
+  start.setDate(start.getDate() + 1);
+  start.setHours(0, 0, 0, 0);
+
+  switch (payFrequency) {
+    case 'weekly': {
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+    case 'semimonthly': {
+      const end = new Date(start);
+      if (start.getDate() <= 15) {
+        end.setDate(15);
+      } else {
+        end.setMonth(end.getMonth() + 1, 0); // last day of month
+      }
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+    case 'monthly': {
+      const end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59, 999);
+      return { start, end };
+    }
+    case 'biweekly':
+    default: {
+      const end = new Date(start);
+      end.setDate(start.getDate() + 13);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+  }
+}
+
+/** Short display label for a pay period, e.g. "Jul 6 – Jul 19, 2026". */
+export function formatPayPeriodLabel(period: PayrollPeriod): string {
+  const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(period.start)} – ${fmt(period.end)}, ${period.end.getFullYear()}`;
+}
+
+/**
  * Counts how many of the org's pay periods start within
  * [rangeStart, rangeEnd] ('YYYY-MM-DD'). Used to scale flat per-paycheck
  * deductions (e.g. a $50/paycheck benefit) across a wider window like

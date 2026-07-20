@@ -6,20 +6,23 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { Timestamp } from 'firebase/firestore';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { PayPeriodService } from '../../core/tenancy/pay-period.service';
+import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
 import { ShiftsCommands } from '../../core/commands/shifts.commands';
 import { NotificationsRepo, UserNotification } from '../../core/repos/notifications.repo';
 import { Shift } from '../../shared/models/shift.model';
 import { ToastService } from '../../core/ui/toast.service';
 import { mapAttendancePolicyError } from '../../shared/utils/attendance-policy-error.util';
-import { getCurrentWeekRange, fmtShiftDate, fmtShiftTime, canClaimShift, shiftHours } from '../../shared/utils/shift-lifecycle.utils';
+import { fmtShiftDate, fmtShiftTime, canClaimShift, shiftHours } from '../../shared/utils/shift-lifecycle.utils';
+import { formatPayPeriodLabel } from '../../shared/utils/payroll.util';
 import { scoreShiftMatch, ShiftMatchLabel } from '../../shared/utils/shift-match.util';
 import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, CurrencyPipe, TipCardComponent, TranslocoModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, CurrencyPipe, TipCardComponent, PayPeriodSelectorComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad mk-page">
       <header class="mk-header">
@@ -29,18 +32,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
           <p>{{ 'marketplace.subtitle' | transloco }}</p>
         </div>
         <div class="mk-header-actions">
-          <button class="vs-btn-ghost mk-nav-btn" type="button" (click)="prevWeek()">
-            <mat-icon>chevron_left</mat-icon>
-            {{ 'marketplace.previous' | transloco }}
-          </button>
-          <button class="vs-btn-secondary mk-nav-btn" type="button" (click)="thisWeek()">
-            <mat-icon>today</mat-icon>
-            {{ 'marketplace.thisWeek' | transloco }}
-          </button>
-          <button class="vs-btn-ghost mk-nav-btn" type="button" (click)="nextWeek()">
-            {{ 'marketplace.next' | transloco }}
-            <mat-icon>chevron_right</mat-icon>
-          </button>
+          <app-pay-period-selector></app-pay-period-selector>
         </div>
       </header>
 
@@ -90,7 +82,7 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
             <mat-icon>calendar_month</mat-icon>
             <div>
               <span>{{ 'marketplace.week' | transloco }}</span>
-              <strong class="mk-summary-date">{{ weekLabel }}</strong>
+              <strong class="mk-summary-date">{{ periodLabel() }}</strong>
             </div>
           </div>
         </section>
@@ -1179,12 +1171,10 @@ export class MarketplacePage implements OnDestroy {
   marketError = signal('');
   swapError = '';
   swapLoading = false;
-  weekLabel = '';
   marketView: 'available' | 'requests' | 'activity' | 'approvals' = 'available';
   marketQuery = '';
   roleFilter = '';
 
-  private weekOffset = 0;
   private unsub: (() => void) | null = null;
   private unsubCurrent: (() => void) | null = null;
   private unsubActivity: (() => void) | null = null;
@@ -1193,6 +1183,7 @@ export class MarketplacePage implements OnDestroy {
 
   constructor(
     private ctx: OrgContextService,
+    private payPeriod: PayPeriodService,
     private repo: ShiftsRepo,
     private cmd: ShiftsCommands,
     private notifications: NotificationsRepo,
@@ -1208,6 +1199,7 @@ export class MarketplacePage implements OnDestroy {
       const role = (this.ctx.accessRole() || '').toLowerCase();
       this.isAdminLike = ['admin', 'manager', 'scheduler', 'hr'].includes(role);
       this.orgId = orgId;
+      this.payPeriod.selectedPeriod();
 
       if (!orgId || !this.uid) {
         this.items.set([]);
@@ -1264,6 +1256,10 @@ export class MarketplacePage implements OnDestroy {
     this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
   }
 
+  periodLabel(): string {
+    return formatPayPeriodLabel(this.payPeriod.selectedPeriod());
+  }
+
   private loadWeek() {
     if (this.unsub) {
       this.unsub();
@@ -1278,31 +1274,9 @@ export class MarketplacePage implements OnDestroy {
     this.marketLoading.set(true);
     this.marketError.set('');
 
-    const base = new Date();
-    base.setDate(base.getDate() + this.weekOffset * 7);
-    const { start, end } = getCurrentWeekRange(base);
-
-    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    this.weekLabel = `${fmt(start)} – ${fmt(end)}`;
-
-    if (this.weekOffset === 0) {
-      this.unsub = this.repo.watchMarketplace(
-        this.orgId,
-        (items) => {
-          this.items.set(items);
-          this.marketLoading.set(false);
-        },
-        100,
-        () => {
-          this.marketError.set('marketplace.openShiftsLoadFailed');
-          this.marketLoading.set(false);
-        }
-      );
-      return;
-    }
-
-    const startTs = Timestamp.fromDate(start);
-    const endTs = Timestamp.fromDate(end);
+    const period = this.payPeriod.selectedPeriod();
+    const startTs = Timestamp.fromDate(period.start);
+    const endTs = Timestamp.fromDate(period.end);
     this.unsub = this.repo.watchOrgRange(this.orgId, startTs, endTs, (all) => {
       const nowMs = Date.now();
       this.items.set(all.filter((s) => {
@@ -1319,10 +1293,6 @@ export class MarketplacePage implements OnDestroy {
   moneyCurrency() {
     return this.ctx.currencyCode() || 'USD';
   }
-
-  prevWeek() { this.weekOffset--; this.loadWeek(); }
-  nextWeek() { this.weekOffset++; this.loadWeek(); }
-  thisWeek() { this.weekOffset = 0; this.loadWeek(); }
 
   fmtDate(ts: any) { return fmtShiftDate(ts); }
   fmtTime(ts: any) { return fmtShiftTime(ts); }

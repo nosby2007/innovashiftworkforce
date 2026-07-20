@@ -265,6 +265,12 @@
     "colStatus": "Statut",
     "noPayrollEntries": "Aucune entrée de temps de paie pour cette période."
   },
+  "payPeriod": {
+    "current": "Actuelle",
+    "older": "Période précédente",
+    "newer": "Période suivante",
+    "backToCurrent": "Retour à la période actuelle"
+  },
   "paystubs": {
     "payHistory": "Historique de paie",
     "payHistorySubtitle": "Consultez et téléchargez le bulletin de paie de chaque période — même après votre départ de l'organisation.",
@@ -931,7 +937,7 @@
     "available": "Disponibles",
     "openHours": "Heures ouvertes",
     "myRequests": "Mes demandes",
-    "week": "Semaine",
+    "week": "Période de paie",
     "searchPlaceholder": "Rechercher un quart, un emplacement ou un rôle",
     "allRoles": "Tous les rôles",
     "tabAvailable": "Disponibles",
