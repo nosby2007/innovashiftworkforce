@@ -2,13 +2,14 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { ConnectivityService } from './connectivity.service';
+import { OrgContextService } from '../tenancy/org-context.service';
 
 @Component({
   standalone: true,
   selector: 'app-offline-banner',
   imports: [CommonModule, MatIconModule],
   template: `
-    <div class="ob-banner" *ngIf="!connectivity.online()">
+    <div class="ob-banner" *ngIf="!connectivity.online() && ctx.uid()">
       <mat-icon>cloud_off</mat-icon>
       <span>You're offline — showing saved data. Actions like clocking in/out need a connection.</span>
     </div>
@@ -25,5 +26,5 @@ import { ConnectivityService } from './connectivity.service';
   `],
 })
 export class OfflineBannerComponent {
-  constructor(public connectivity: ConnectivityService) {}
+  constructor(public connectivity: ConnectivityService, public ctx: OrgContextService) {}
 }
