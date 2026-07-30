@@ -25,6 +25,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 
 import { MatIconModule } from '@angular/material/icon';
 import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
+import { ExperienceFlagsService } from '../../core/experience/experience-flags.service';
 
 interface OrgSite {
   id: string;
@@ -161,13 +162,60 @@ interface OrgSite {
         <!-- Shift Actions Modal -->
         <ng-template #shiftActionsTpl let-s="shift">
           <div *ngIf="s" class="sch-modal-content">
-            <div class="vs-form-row vs-form-row--2">
-              <button class="vs-btn-primary" (click)="openEditDrawer(s)" [disabled]="s.status === 'completed' || s.status === 'cancelled'"><mat-icon>edit</mat-icon> Edit</button>
-              <button class="vs-btn-primary" (click)="publish(s,true)" *ngIf="s.status === 'draft' || s.status === 'open'">Publish to Marketplace</button>
-              <button class="vs-btn-ghost" (click)="publish(s,false)" *ngIf="s.status === 'published'">Unpublish</button>
-              <button class="vs-btn-primary" (click)="openStaffPicker(s)">Assign</button>
-              <button class="vs-btn-ghost" (click)="unassign(s)" *ngIf="s.assignedUserId">Unassign</button>
-              <button class="vs-btn-ghost" (click)="openShiftChat(s.id)"><mat-icon>chat</mat-icon> Open Chat</button>
+            <div class="sch-action-hero" *ngIf="nextSchedulerActions()">
+              <div>
+                <div class="sch-action-kicker">Manager command center</div>
+                <h3>{{ s.title }}</h3>
+                <p>{{ fmtShiftWindow(s) }} • {{ s.locationName || 'No location' }}</p>
+              </div>
+              <span class="vs-badge" [class.vs-badge--success]="s.status === 'published'" [class.vs-badge--warning]="!s.assignedUserId">
+                {{ s.status | uppercase }}
+              </span>
+            </div>
+
+            <div class="sch-action-grid" [class.sch-action-grid--next]="nextSchedulerActions()">
+              <button class="sch-command-card sch-command-card--primary" (click)="openEditDrawer(s)" [disabled]="isLockedShift(s)">
+                <mat-icon>edit_calendar</mat-icon>
+                <span>
+                  <strong>Edit shift</strong>
+                  <small>Adjust date, time, role, rate, or site</small>
+                </span>
+              </button>
+              <button class="sch-command-card sch-command-card--market" (click)="publish(s,true)" *ngIf="canPublishToMarket(s)">
+                <mat-icon>campaign</mat-icon>
+                <span>
+                  <strong>Push to market</strong>
+                  <small>Alert available and qualified employees</small>
+                </span>
+              </button>
+              <button class="sch-command-card" (click)="publish(s,false)" *ngIf="s.status === 'published'">
+                <mat-icon>visibility_off</mat-icon>
+                <span>
+                  <strong>Remove from market</strong>
+                  <small>Keep shift open but hidden from staff</small>
+                </span>
+              </button>
+              <button class="sch-command-card sch-command-card--primary" (click)="openStaffPicker(s)" [disabled]="isLockedShift(s)">
+                <mat-icon>person_add</mat-icon>
+                <span>
+                  <strong>Assign employee</strong>
+                  <small>Choose staff from this organization</small>
+                </span>
+              </button>
+              <button class="sch-command-card" (click)="unassign(s)" *ngIf="s.assignedUserId" [disabled]="isLockedShift(s)">
+                <mat-icon>person_remove</mat-icon>
+                <span>
+                  <strong>Vacate shift</strong>
+                  <small>Remove current assignee</small>
+                </span>
+              </button>
+              <button class="sch-command-card" (click)="openShiftChat(s.id)">
+                <mat-icon>chat</mat-icon>
+                <span>
+                  <strong>Open chat</strong>
+                  <small>Coordinate with team</small>
+                </span>
+              </button>
             </div>
 
             <div class="sch-shift-details">
@@ -175,6 +223,7 @@ interface OrgSite {
               <div class="sch-detail-item"><span>Status</span> <span class="vs-badge vs-badge--neutral">{{ s.status | uppercase }}</span></div>
               <div class="sch-detail-item"><span>Location</span> {{ s.locationName }}</div>
               <div class="sch-detail-item"><span>Assigned</span> {{ s.assignedUserId ? userLabel(s.assignedUserId) : '—' }}</div>
+              <div class="sch-detail-item" *ngIf="nextSchedulerActions()"><span>Coverage signal</span> {{ coverageSignal(s) }}</div>
             </div>
           </div>
         </ng-template>
@@ -544,6 +593,60 @@ interface OrgSite {
 
     /* Modals & Drawer */
     .sch-modal-content { display:flex; flex-direction:column; gap:16px; }
+    .sch-action-hero {
+      display:flex;
+      justify-content:space-between;
+      gap:16px;
+      align-items:flex-start;
+      padding:16px;
+      border:1px solid rgba(37,99,235,0.18);
+      border-radius:var(--radius-md);
+      background:linear-gradient(135deg, rgba(37,99,235,0.10), rgba(14,165,233,0.06));
+    }
+    .sch-action-kicker {
+      color:var(--primary);
+      font-weight:900;
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:0.08em;
+      margin-bottom:4px;
+    }
+    .sch-action-hero h3 { margin:0; font-size:20px; color:var(--text); }
+    .sch-action-hero p { margin:4px 0 0; color:var(--text-muted); }
+    .sch-action-grid {
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:10px;
+    }
+    .sch-action-grid--next { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+    .sch-command-card {
+      min-height:74px;
+      display:grid;
+      grid-template-columns:auto 1fr;
+      gap:10px;
+      align-items:center;
+      text-align:left;
+      border:1px solid var(--border);
+      border-radius:var(--radius-md);
+      background:var(--bg-surface);
+      color:var(--text);
+      padding:12px;
+      cursor:pointer;
+      transition:transform var(--t-fast), box-shadow var(--t-fast), border-color var(--t-fast);
+    }
+    .sch-command-card:hover:not(:disabled) {
+      border-color:rgba(37,99,235,0.35);
+      box-shadow:0 12px 28px rgba(15,23,42,0.10);
+      transform:translateY(-1px);
+    }
+    .sch-command-card:disabled { opacity:0.5; cursor:not-allowed; }
+    .sch-command-card mat-icon { color:var(--primary); }
+    .sch-command-card strong,
+    .sch-command-card small { display:block; }
+    .sch-command-card small { margin-top:3px; color:var(--text-muted); line-height:1.3; }
+    .sch-command-card--primary { border-color:rgba(37,99,235,0.28); }
+    .sch-command-card--market { border-color:rgba(16,185,129,0.32); background:rgba(16,185,129,0.08); }
+    .sch-command-card--market mat-icon { color:var(--success); }
     .sch-shift-details { background:var(--panel-2); border-radius:var(--radius); padding:16px; display:flex; flex-direction:column; gap:10px; }
     .sch-detail-item { display:flex; justify-content:space-between; font-size:14px; color:var(--text); }
     .sch-detail-item span:first-child { color:var(--text-muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
@@ -873,6 +976,8 @@ interface OrgSite {
       .sch-filters { grid-template-columns: 1fr; }
       .sch-planning-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
       .sch-plan-card { align-items:flex-start; }
+      .sch-action-grid,
+      .sch-action-grid--next { grid-template-columns:1fr; }
       ::ng-deep .vs-calendar .fc-toolbar.fc-header-toolbar {
         grid-template-columns: 1fr;
       }
@@ -995,7 +1100,8 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     private modal: ModalService,
     private router: Router,
     private zone: NgZone,
-    private toast: ToastService
+    private toast: ToastService,
+    private experience: ExperienceFlagsService
   ) {
     const bind = () => {
       const orgId = this.ctx.orgId();
@@ -1023,6 +1129,33 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit() {}
+
+  nextSchedulerActions() {
+    return this.experience.enabled('nextSchedulerActions');
+  }
+
+  isLockedShift(s: Shift): boolean {
+    return ['completed', 'cancelled', 'expired', 'no_show'].includes(this.normalizeStatus(s.status));
+  }
+
+  canPublishToMarket(s: Shift): boolean {
+    return !s.assignedUserId && ['draft', 'open'].includes(this.normalizeStatus(s.status));
+  }
+
+  coverageSignal(s: Shift): string {
+    if (s.assignedUserId) return `Covered by ${this.userLabel(s.assignedUserId)}`;
+    if (this.normalizeStatus(s.status) === 'published') return 'Vacant and visible in marketplace';
+    return 'Vacant, not visible to staff yet';
+  }
+
+  fmtShiftWindow(s: Shift): string {
+    const start = tsToDate(s.startAt);
+    const end = tsToDate(s.endAt);
+    const date = start ? start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'No date';
+    const startTime = start ? start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '--';
+    const endTime = end ? end.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '--';
+    return `${date}, ${startTime} - ${endTime}`;
+  }
 
   onEventClick(arg: any) {
     const shiftFromProps: Shift | null = (arg?.event?.extendedProps?.shift as Shift) || null;

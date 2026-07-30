@@ -20,6 +20,7 @@ import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map
 import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
+import { ExperienceFlagsService } from '../../core/experience/experience-flags.service';
 
 @Component({
   standalone: true,
@@ -184,22 +185,30 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
           </div>
         </section>
 
-        <section class="vs-glass-strong at-panel" *ngIf="todaysSchedule().length > 0 && !currentShift()">
+        <section class="vs-glass-strong at-panel at-daily-panel" *ngIf="dailyLogShifts().length > 0 && !currentShift()">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">My Upcoming Shifts</div>
-              <div class="vs-panel-subtitle">Today's shift — clock in when you're ready</div>
+              <div class="vs-panel-title">Today's Shift</div>
+              <div class="vs-panel-subtitle">Only shifts scheduled for today are available for clock-in</div>
             </div>
             <mat-icon style="color:var(--primary);">event</mat-icon>
           </div>
-          <div class="at-schedule-cards">
-            <div *ngFor="let s of todaysSchedule()" class="at-schedule-card vs-glass">
+          <div class="at-schedule-cards" [class.at-schedule-cards--next]="nextStaffAttendanceCard()">
+            <div *ngFor="let s of dailyLogShifts()" class="at-schedule-card at-schedule-card--daily vs-glass">
               <div class="at-schedule-card-head">
-                <strong>{{ s.title }}</strong>
-                <span class="at-schedule-card-date">{{ fmtDate(s.startAt) }}</span>
+                <div>
+                  <strong>{{ s.title }}</strong>
+                  <span class="at-schedule-card-date">{{ fmtDate(s.startAt) }}</span>
+                </div>
+                <span class="vs-badge vs-badge--neutral">{{ s.status | uppercase }}</span>
               </div>
               <div class="at-schedule-card-time">{{ fmtTime(s.startAt) }} &ndash; {{ fmtTime(s.endAt) }}</div>
               <div class="at-loc"><mat-icon>location_on</mat-icon>{{ s.locationName }}</div>
+              <div class="at-daily-meta" *ngIf="nextStaffAttendanceCard()">
+                <span><mat-icon>schedule</mat-icon>{{ hrs(s) }} h scheduled</span>
+                <span><mat-icon>payments</mat-icon>{{ shiftPayPreview(s) | currency:moneyCurrency():'symbol':'1.2-2' }}</span>
+                <span *ngIf="shiftRequiresAutoBreak(s)"><mat-icon>restaurant</mat-icon>30 min auto break after 6h</span>
+              </div>
               <div class="at-schedule-card-actions">
                 <button class="vs-btn-primary at-btn-in" (click)="clockInToShift(s)" [disabled]="busy">
                   <mat-icon>login</mat-icon> Clock In
@@ -228,7 +237,7 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
           </div>
         </section>
 
-        <section class="vs-glass-strong at-panel" *ngIf="!currentShift()">
+        <section class="vs-glass-strong at-panel" *ngIf="!currentShift() && (!nextStaffAttendanceCard() || dailyLogShifts().length === 0)">
           <div class="vs-panel-head">
             <div>
               <div class="vs-panel-title">Manual Punch</div>
@@ -271,7 +280,7 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
                   placeholder="Type date, title or location"
                   [disabled]="!!entryId()">
                 <datalist id="attendance-shift-options">
-                  <option *ngFor="let s of mySchedule()" [value]="toShiftOptionLabel(s)"></option>
+                  <option *ngFor="let s of clockInEligibleShifts()" [value]="toShiftOptionLabel(s)"></option>
                 </datalist>
               </div>
             </div>
@@ -634,14 +643,23 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
     .at-current-status { display:flex; align-items:center; gap:8px; padding:10px 16px; background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.26); border-radius:var(--radius-md); font-size:13px; color:var(--success); }
     .at-actions-current { padding: 0 20px 20px; border-top: none; }
 
+    .at-daily-panel { border-left:4px solid var(--primary); }
     .at-schedule-cards { padding:8px 20px 20px; display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:14px; }
+    .at-schedule-cards--next { grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); }
     .at-schedule-card { display:flex; flex-direction:column; gap:8px; padding:16px; border-radius:var(--radius-md); }
-    .at-schedule-card-head { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+    .at-schedule-card--daily {
+      border:1px solid rgba(37,99,235,0.20);
+      background:linear-gradient(135deg, rgba(37,99,235,0.08), rgba(16,185,129,0.05));
+    }
+    .at-schedule-card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
     .at-schedule-card-head strong { font-size:15px; color:var(--text); }
-    .at-schedule-card-date { font-size:12px; color:var(--text-subtle); white-space:nowrap; }
+    .at-schedule-card-date { display:block; margin-top:2px; font-size:12px; color:var(--text-subtle); white-space:nowrap; }
     .at-schedule-card-time { font-size:13px; font-weight:700; color:var(--text-muted); }
     .at-loc { display:flex; align-items:center; gap:4px; font-size:13px; color:var(--text-muted); }
     .at-loc mat-icon { font-size:14px !important; width:14px; height:14px; }
+    .at-daily-meta { display:grid; gap:6px; padding:10px; border:1px solid var(--border); border-radius:var(--radius-sm, 6px); background:var(--bg-surface); }
+    .at-daily-meta span { display:flex; align-items:center; gap:6px; color:var(--text-muted); font-size:12px; font-weight:700; }
+    .at-daily-meta mat-icon { font-size:15px !important; width:15px; height:15px; color:var(--primary); }
     .at-schedule-card-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
     .at-btn-callout { color:var(--danger); border-color:rgba(239,68,68,0.4) !important; }
     .at-callout-form { margin:12px 20px 4px; padding:16px; border:1px solid rgba(239,68,68,0.35); border-radius:var(--radius-md); background:rgba(239,68,68,0.06); }
@@ -798,6 +816,7 @@ export class AttendancePage implements OnDestroy {
       return d ? this.isSameDay(d, today) : false;
     });
   });
+  dailyLogShifts = computed(() => this.todaysSchedule().filter((s) => !this.isClockBlockedStatus(s)).slice(0, 4));
   private shiftOptionToId: Record<string, string> = {};
   private shiftIdToOption: Record<string, string> = {};
 
@@ -834,7 +853,8 @@ export class AttendancePage implements OnDestroy {
     private shiftsCmd: ShiftsCommands,
     private toast: ToastService,
     private entitlements: PlanEntitlementsService,
-    private router: Router
+    private router: Router,
+    private experience: ExperienceFlagsService
   ) {
     this.ctxEffect = effect(() => {
       const orgId = this.ctx.orgId();
@@ -898,6 +918,28 @@ export class AttendancePage implements OnDestroy {
 
   hrs(s: Shift) {
     return shiftHours(s).toFixed(1);
+  }
+
+  nextStaffAttendanceCard() {
+    return this.experience.enabled('nextStaffAttendanceCard');
+  }
+
+  private isClockBlockedStatus(s: Shift): boolean {
+    return ['completed', 'cancelled', 'expired', 'no_show', 'in_progress'].includes(String(s.status || '').toLowerCase());
+  }
+
+  clockInEligibleShifts(): Shift[] {
+    const daily = this.dailyLogShifts();
+    return daily.length ? daily : this.mySchedule().filter((s) => !this.isClockBlockedStatus(s)).slice(0, 8);
+  }
+
+  shiftPayPreview(s: Shift): number {
+    const rate = Number(s.payRate || (this.orgSettings as any)?.defaultPayRate || 0);
+    return Math.max(0, shiftHours(s) * rate);
+  }
+
+  shiftRequiresAutoBreak(s: Shift): boolean {
+    return shiftHours(s) >= 6;
   }
 
   fmt(ts: any) {
@@ -1084,7 +1126,7 @@ export class AttendancePage implements OnDestroy {
   private rebuildShiftOptions() {
     const nextOptionToId: Record<string, string> = {};
     const nextIdToOption: Record<string, string> = {};
-    for (const s of this.mySchedule()) {
+    for (const s of this.clockInEligibleShifts()) {
       const option = this.toShiftOptionLabel(s);
       nextOptionToId[option] = s.id;
       nextIdToOption[s.id] = option;
@@ -1274,6 +1316,9 @@ export class AttendancePage implements OnDestroy {
     if (!this.shiftId && this.shiftSelection) {
       this.shiftId = this.shiftOptionToId[this.shiftSelection] || '';
     }
+    if (!this.shiftId && this.dailyLogShifts().length === 1) {
+      this.shiftId = this.dailyLogShifts()[0].id;
+    }
     if (!this.shiftId) return;
     this.busy = true;
     try {
@@ -1293,14 +1338,22 @@ export class AttendancePage implements OnDestroy {
     this.busy = true;
     try {
       const geo = this.punchMethod === 'gps' ? await this.getGpsPayload() : undefined;
-      await this.cmd.checkOut(this.entryId()!, this.punchMethod, { shiftId: this.shiftId, ...geo });
-      this.toast.success(this.punchMethod === 'gps' ? 'GPS check-out verified.' : 'Checked out successfully.');
+      const targetShiftId = this.resolveCheckoutShiftId();
+      await this.cmd.checkOut(this.entryId()!, this.punchMethod, { shiftId: targetShiftId, ...geo });
+      this.toast.success(this.punchMethod === 'gps' ? 'GPS check-out verified. Break policy applied if needed.' : 'Checked out successfully. Break policy applied if needed.');
       this.onBreak.set(false);
+      this.entryId.set(null);
     } catch (e: any) {
       this.toast.errorFrom(e, mapAttendancePolicyError(e, 'Check-out failed.'));
     } finally {
       this.busy = false;
     }
+  }
+
+  private resolveCheckoutShiftId(): string {
+    const entryId = this.entryId();
+    const activeEntry = entryId ? this.entries().find((e) => e.id === entryId) : null;
+    return String(this.shiftId || this.currentShift()?.id || activeEntry?.shiftId || '').trim();
   }
 
   async breakOut() {

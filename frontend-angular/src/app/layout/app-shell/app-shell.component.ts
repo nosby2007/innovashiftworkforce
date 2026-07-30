@@ -13,6 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { PlanEntitlementsService, PlanFeature } from '../../core/tenancy/plan-entitlements.service';
+import { ExperienceFlagsService } from '../../core/experience/experience-flags.service';
 import { getAuth, signOut } from 'firebase/auth';
 
 type ShellMode = 'staff' | 'admin' | 'platform';
@@ -200,6 +201,13 @@ const ROUTE_TITLES: Record<string, string> = {
           </div>
 
           <span class="l-spacer"></span>
+
+          <span class="l-next-pill"
+                *ngIf="nextExperienceEnabled()"
+                matTooltip="Next Experience is enabled. Disable it in Org Settings to roll back.">
+            <mat-icon>rocket_launch</mat-icon>
+            <span>Next</span>
+          </span>
 
           <button mat-button class="l-admin-bridge-top"
                   routerLink="/admin"
@@ -469,6 +477,26 @@ const ROUTE_TITLES: Record<string, string> = {
     .l-topbtn { color: var(--text-muted) !important; border-radius: 10px !important; flex-shrink: 0; }
     .l-topbtn:hover { color: var(--text) !important; background: var(--panel) !important; }
 
+    .l-next-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 30px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(37, 99, 235, 0.32);
+      background: rgba(37, 99, 235, 0.10);
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 900;
+      flex-shrink: 0;
+    }
+    .l-next-pill mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+    }
+
     .l-admin-bridge-top {
       height: 36px !important;
       border-radius: 999px !important;
@@ -559,6 +587,8 @@ const ROUTE_TITLES: Record<string, string> = {
     @media (max-width: 520px) {
       .l-toolbar { padding: 0 10px !important; gap: 6px; }
       .l-toolbar-sub { display: none; }
+      .l-next-pill span { display: none; }
+      .l-next-pill { width: 30px; padding: 0; justify-content: center; }
       .l-bridge-label { display: none; }
       .l-admin-bridge-top, .l-staff-bridge-top { width: 36px !important; padding: 0 !important; justify-content: center !important; }
       .l-admin-bridge-top mat-icon, .l-staff-bridge-top mat-icon { margin: 0; }
@@ -609,7 +639,13 @@ export class AppLayoutComponent implements OnDestroy {
     { label: 'Platform Console', link: '/platform', icon: 'shield', section: 'platform', superAdminOnly: true },
   ];
 
-  constructor(private ctx: OrgContextService, private plans: PlanEntitlementsService, private router: Router, private route: ActivatedRoute) {
+  constructor(
+    private ctx: OrgContextService,
+    private plans: PlanEntitlementsService,
+    private router: Router,
+    private route: ActivatedRoute,
+    private experience: ExperienceFlagsService
+  ) {
     const mode = this.route.snapshot.data?.['shellMode'] as ShellMode | undefined;
     this.shellMode.set(mode ?? 'staff');
 
@@ -650,6 +686,7 @@ export class AppLayoutComponent implements OnDestroy {
     return ['admin','manager','scheduler','hr'].includes(r ?? '');
   });
   isSuperAdmin = computed(() => this.ctx.platformRole() === 'superAdmin');
+  nextExperienceEnabled = computed(() => this.experience.anyNextExperienceEnabled());
   visibleAdminNav = computed(() => this.adminNav.filter((item) => !item.feature || this.plans.has(item.feature)));
 
   shellBrand = computed(() => {

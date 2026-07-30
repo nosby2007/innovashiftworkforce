@@ -23,6 +23,13 @@ import {
   CADENCE_OPTIONS,
   DEFAULT_ACCRUAL_POLICY,
 } from '../../core/tenancy/org-accrual.model';
+import {
+  DEFAULT_EXPERIENCE_FLAGS,
+  EXPERIENCE_FLAG_OPTIONS,
+  ExperienceFlagKey,
+  ExperienceFlags,
+  normalizeExperienceFlags,
+} from '../../core/experience/experience-flags.model';
 import * as L from 'leaflet';
 
 interface OrgSite {
@@ -63,6 +70,7 @@ interface OrgSettings {
   ssoEnabled: boolean;
   ssoProvider: string;
   integrationConfigs: OrgIntegrationConfig[];
+  experienceFlags: ExperienceFlags;
   stripeCustomerId?: string;
   createdAt?: any;
   updatedAt?: any;
@@ -85,6 +93,7 @@ const DEFAULT_SETTINGS: OrgSettings = {
   ssoEnabled: false,
   ssoProvider: '',
   integrationConfigs: [],
+  experienceFlags: { ...DEFAULT_EXPERIENCE_FLAGS },
 };
 
 const INDUSTRIES = [
@@ -544,6 +553,40 @@ const PLAN_BADGE: Record<string, string> = {
           </section>
         </ng-template>
 
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Next Experience Rollout</div>
+              <div class="vs-panel-subtitle">Safe feature flags for the futuristic roster upgrade. Keep them off until each workflow is validated.</div>
+            </div>
+            <mat-icon class="ors-section-icon">rocket_launch</mat-icon>
+          </div>
+          <div class="vs-panel-body">
+            <div class="ors-rollout-warning">
+              <mat-icon>undo</mat-icon>
+              <div>
+                <strong>Rollback protected</strong>
+                <span>These switches do not delete legacy screens. Turning a switch off returns users to the current stable experience.</span>
+              </div>
+            </div>
+            <div class="ors-flag-grid">
+              <label class="ors-flag-card" *ngFor="let option of experienceFlagOptions">
+                <input
+                  type="checkbox"
+                  [checked]="experienceFlagEnabled(option.key)"
+                  (change)="setExperienceFlag(option.key, $any($event.target).checked)">
+                <span class="ors-flag-copy">
+                  <strong>{{ option.label }}</strong>
+                  <small>{{ option.description }}</small>
+                </span>
+                <span class="vs-badge" [class.vs-badge--success]="experienceFlagEnabled(option.key)" [class.vs-badge--neutral]="!experienceFlagEnabled(option.key)">
+                  {{ experienceFlagEnabled(option.key) ? 'On' : 'Off' }}
+                </span>
+              </label>
+            </div>
+          </div>
+        </section>
+
         <!-- Save / feedback -->
         <div class="ors-save-row">
           <div *ngIf="saveMsg()" class="ors-msg ors-msg--ok">
@@ -649,6 +692,59 @@ const PLAN_BADGE: Record<string, string> = {
     .ors-msg--ok  { background: rgba(34,197,94,0.12); color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
     .ors-msg--err { background: rgba(239,68,68,0.12); color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); }
 
+    .ors-rollout-warning {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 14px;
+      border: 1px solid rgba(37, 99, 235, 0.22);
+      border-radius: var(--radius-md);
+      background: rgba(37, 99, 235, 0.08);
+      color: var(--text);
+      margin-bottom: 14px;
+    }
+    .ors-rollout-warning mat-icon { color: var(--primary); }
+    .ors-rollout-warning strong,
+    .ors-rollout-warning span { display: block; }
+    .ors-rollout-warning span {
+      margin-top: 2px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .ors-flag-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .ors-flag-card {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      cursor: pointer;
+    }
+    .ors-flag-card input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--primary);
+    }
+    .ors-flag-copy strong,
+    .ors-flag-copy small { display: block; }
+    .ors-flag-copy small {
+      margin-top: 3px;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+    @media (max-width: 760px) {
+      .ors-flag-grid { grid-template-columns: 1fr; }
+      .ors-flag-card { grid-template-columns: auto 1fr; }
+      .ors-flag-card .vs-badge { grid-column: 2; width: max-content; }
+    }
+
     .ors-save-btn {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 10px 20px !important;
@@ -677,6 +773,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   currencies = CURRENCY_OPTIONS;
   payFrequencies = PAY_FREQUENCY_OPTIONS;
   taxProfiles = TAX_PROFILE_OPTIONS;
+  experienceFlagOptions = EXPERIENCE_FLAG_OPTIONS;
   selectedSiteIndex = 0;
 
   @ViewChild('geofenceMap') geofenceMap?: ElementRef<HTMLDivElement>;
@@ -695,7 +792,11 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
       const snap = await getDoc(doc(db, 'orgs', this.orgId));
       if (snap.exists()) {
         const data = snap.data() as Partial<OrgSettings>;
-        const loaded: OrgSettings = { ...DEFAULT_SETTINGS, ...data };
+        const loaded: OrgSettings = {
+          ...DEFAULT_SETTINGS,
+          ...data,
+          experienceFlags: normalizeExperienceFlags((data as any).experienceFlags),
+        };
         this.settings.set(loaded);
         this.draft = { ...loaded };
         this.ctx.setContext({
@@ -748,6 +849,16 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   hasEnterpriseControls() { return this.hasSsoConfig() || this.hasCustomIntegrations(); }
   canManageSites() { return this.hasGpsAttendance() || this.hasMultiSite(); }
   hasBillingCustomer() { return !!String(this.settings().stripeCustomerId || '').trim(); }
+  experienceFlagEnabled(key: ExperienceFlagKey) { return this.draft.experienceFlags?.[key] === true; }
+  setExperienceFlag(key: ExperienceFlagKey, enabled: boolean) {
+    this.draft = {
+      ...this.draft,
+      experienceFlags: {
+        ...normalizeExperienceFlags(this.draft.experienceFlags),
+        [key]: enabled,
+      },
+    };
+  }
 
   addSite() {
     if (!this.canManageSites()) {
@@ -937,6 +1048,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
       };
 
       const db = getFirestore();
+      const normalizedExperienceFlags = normalizeExperienceFlags(this.draft.experienceFlags);
       await setDoc(doc(db, 'orgs', this.orgId), {
         ...this.draft,
         countryCode: String(this.draft.countryCode || 'US').trim(),
@@ -956,11 +1068,22 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
               active: item.active !== false,
             })).filter((item) => item.label || item.endpoint)
           : [],
+        experienceFlags: normalizedExperienceFlags,
         orgId: this.orgId,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy });
-      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy };
+      this.settings.set({
+        ...this.draft,
+        sites: normalizedSites,
+        accrualPolicy: normalizedAccrualPolicy,
+        experienceFlags: normalizedExperienceFlags,
+      });
+      this.draft = {
+        ...this.draft,
+        sites: normalizedSites,
+        accrualPolicy: normalizedAccrualPolicy,
+        experienceFlags: normalizedExperienceFlags,
+      };
       this.ctx.setContext({
         orgId: this.ctx.orgId(),
         uid: this.ctx.uid(),
