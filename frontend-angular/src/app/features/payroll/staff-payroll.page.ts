@@ -1,9 +1,12 @@
 import { Component, effect, EffectRef, OnDestroy, signal } from '@angular/core';
 import { CommonModule, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { Timestamp } from 'firebase/firestore';
 import { MatIconModule } from '@angular/material/icon';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { PayPeriodService, PayPeriodOption } from '../../core/tenancy/pay-period.service';
+import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { PrintLauncherService } from '../../core/ui/print-launcher.service';
 import { TimeEntriesRepo } from '../../core/repos/time-entries.repo';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
@@ -11,56 +14,61 @@ import { TimeEntry } from '../../shared/models/time-entry.model';
 import { Shift } from '../../shared/models/shift.model';
 import { AccrualsRepo, TimeOffRequest } from '../../core/repos/accruals.repo';
 import { formatDateTime } from '../../shared/utils/date.util';
-import { currentPayrollPeriod, dateInputValue, payrollDeductions, payrollGross, payrollHours, payrollLeaveGross, payrollLeaveHours, payrollNet, payrollRate } from '../../shared/utils/payroll.util';
-import { PayFrequency } from '../../core/tenancy/org-finance.model';
+import { dateInputValue, payrollDeductions, payrollGross, payrollHours, payrollLeaveGross, payrollLeaveHours, payrollNet, payrollRate } from '../../shared/utils/payroll.util';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
+import { TranslocoModule } from '@jsverse/transloco';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule, TablePaginatorComponent],
+  imports: [CommonModule, FormsModule, RouterLink, CurrencyPipe, MatIconModule, TablePaginatorComponent, PayPeriodSelectorComponent, TranslocoModule],
   template: `
     <div class="pay-page">
       <header class="pay-hero">
         <div>
-          <div class="pay-kicker">My Payroll</div>
-          <h1>Pay Statement Preview</h1>
-          <p>Review your approved hours, estimated gross pay, deductions, and timecard exceptions.</p>
+          <div class="pay-kicker">{{ 'nav.myPayroll' | transloco }}</div>
+          <h1>{{ 'payroll.payStatementPreview' | transloco }}</h1>
+          <p>{{ 'payroll.reviewHoursNote' | transloco }}</p>
         </div>
         <div class="pay-period">
-          <label>Pay period</label>
+          <label>{{ 'payroll.payPeriod' | transloco }}</label>
+          <app-pay-period-selector (periodChange)="onPeriodPicked($event)"></app-pay-period-selector>
           <div>
             <input type="date" [(ngModel)]="fromDate" (change)="reload()">
-            <span>to</span>
+            <span>{{ 'payroll.to' | transloco }}</span>
             <input type="date" [(ngModel)]="toDate" (change)="reload()">
           </div>
           <button class="pay-print-btn" (click)="printPayslip()">
             <mat-icon>picture_as_pdf</mat-icon>
-            Print / Save PDF
+            {{ 'payroll.printSavePdf' | transloco }}
           </button>
+          <a class="pay-print-btn" routerLink="/app/payroll/history">
+            <mat-icon>receipt_long</mat-icon>
+            {{ 'payroll.viewAllPaystubs' | transloco }}
+          </a>
         </div>
       </header>
 
       <div *ngIf="!orgId" class="pay-alert">
         <mat-icon>warning_amber</mat-icon>
-        Missing organization context.
+        {{ 'payroll.missingOrgContext' | transloco }}
       </div>
 
       <section class="pay-kpis" *ngIf="orgId">
         <article>
-          <span>Total Hours</span>
+          <span>{{ 'payroll.totalHours' | transloco }}</span>
           <strong>{{ totalHours().toFixed(2) }}</strong>
         </article>
         <article>
-          <span>Estimated Gross</span>
+          <span>{{ 'payroll.estimatedGross' | transloco }}</span>
           <strong>{{ totalGross() | currency:moneyCurrency() }}</strong>
         </article>
         <article>
-          <span>Estimated Net</span>
+          <span>{{ 'payroll.estimatedNet' | transloco }}</span>
           <strong>{{ estimatedNet() | currency:moneyCurrency() }}</strong>
         </article>
         <article [class.pay-kpi-warn]="exceptionCount() > 0">
-          <span>Exceptions</span>
+          <span>{{ 'payroll.exceptions' | transloco }}</span>
           <strong>{{ exceptionCount() }}</strong>
         </article>
       </section>
@@ -68,27 +76,27 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
       <section class="pay-grid" *ngIf="orgId">
         <article class="pay-card pay-statement">
           <div class="pay-card-head">
-            <h2>Pay Statement</h2>
+            <h2>{{ 'payroll.payStatement' | transloco }}</h2>
             <span>{{ fromDate }} - {{ toDate }}</span>
           </div>
           <div class="pay-statement-row">
-            <span>Regular earnings</span>
+            <span>{{ 'payroll.regularEarnings' | transloco }}</span>
             <strong>{{ totalGross() | currency:moneyCurrency() }}</strong>
           </div>
           <div class="pay-statement-row">
-            <span>Estimated deductions</span>
+            <span>{{ 'payroll.estimatedDeductions' | transloco }}</span>
             <strong>-{{ totalDeductions() | currency:moneyCurrency() }}</strong>
           </div>
           <div class="pay-statement-row pay-statement-net">
-            <span>Estimated net pay</span>
+            <span>{{ 'payroll.estimatedNetPay' | transloco }}</span>
             <strong>{{ estimatedNet() | currency:moneyCurrency() }}</strong>
           </div>
-          <p class="pay-note">This is a preview from InnovaShift time entries. Final payroll may change after admin approval and payroll export.</p>
+          <p class="pay-note">{{ 'payroll.previewNote' | transloco }}</p>
         </article>
 
         <article class="pay-card pay-breakdown">
           <div class="pay-card-head">
-            <h2>Pay Code Breakdown</h2>
+            <h2>{{ 'payroll.payCodeBreakdown' | transloco }}</h2>
             <mat-icon>receipt_long</mat-icon>
           </div>
           <div class="pay-code-row">
@@ -106,26 +114,26 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
 
       <section class="pay-card pay-table-card" *ngIf="orgId">
         <div class="pay-card-head">
-          <h2>Timecard Payroll Rows</h2>
-          <span>{{ rows.length }} row(s)</span>
+          <h2>{{ 'payroll.timecardPayrollRows' | transloco }}</h2>
+          <span>{{ 'payroll.rowCount' | transloco: { count: rows.length } }}</span>
         </div>
         <div class="pay-table-shell">
           <table>
             <thead>
               <tr>
-                <th class="pay-th-sort" (click)="rowsCtrl.toggleSort('date')">Date {{ rowsCtrl.sortIndicator('date') }}</th>
-                <th>Shift</th>
-                <th>Clock In</th>
-                <th>Clock Out</th>
-                <th class="pay-th-sort" (click)="rowsCtrl.toggleSort('hours')">Hours {{ rowsCtrl.sortIndicator('hours') }}</th>
-                <th>Rate</th>
-                <th class="pay-th-sort" (click)="rowsCtrl.toggleSort('gross')">Gross {{ rowsCtrl.sortIndicator('gross') }}</th>
-                <th class="pay-th-sort" (click)="rowsCtrl.toggleSort('status')">Status {{ rowsCtrl.sortIndicator('status') }}</th>
+                <th class="pay-th-sort" (click)="rowsCtrl.toggleSort('date')">{{ 'payroll.colDate' | transloco }} {{ rowsCtrl.sortIndicator('date') }}</th>
+                <th>{{ 'payroll.colShift' | transloco }}</th>
+                <th>{{ 'payroll.colClockIn' | transloco }}</th>
+                <th>{{ 'payroll.colClockOut' | transloco }}</th>
+                <th class="pay-th-sort" (click)="rowsCtrl.toggleSort('hours')">{{ 'payroll.colHours' | transloco }} {{ rowsCtrl.sortIndicator('hours') }}</th>
+                <th>{{ 'payroll.colRate' | transloco }}</th>
+                <th class="pay-th-sort" (click)="rowsCtrl.toggleSort('gross')">{{ 'payroll.colGross' | transloco }} {{ rowsCtrl.sortIndicator('gross') }}</th>
+                <th class="pay-th-sort" (click)="rowsCtrl.toggleSort('status')">{{ 'payroll.colStatus' | transloco }} {{ rowsCtrl.sortIndicator('status') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr *ngIf="rowsCtrl.pageRows().length === 0">
-                <td colspan="8">No payroll time entries in this period.</td>
+                <td colspan="8">{{ 'payroll.noPayrollEntries' | transloco }}</td>
               </tr>
               <tr *ngFor="let r of rowsCtrl.pageRows()">
                 <td>{{ r.date }}</td>
@@ -154,7 +162,7 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
     .pay-period label { color:rgba(255,255,255,.75); font-size:12px; font-weight:800; }
     .pay-period div { display:flex; align-items:center; gap:8px; }
     .pay-period input { height:38px; border:1px solid rgba(255,255,255,.34); border-radius:6px; background:#fff; color:#111827; padding:0 9px; }
-    .pay-print-btn { height:38px; border:1px solid rgba(255,255,255,.8); border-radius:6px; background:#fff; color:#07533f; display:inline-flex; align-items:center; justify-content:center; gap:7px; font-weight:800; cursor:pointer; }
+    .pay-print-btn { height:38px; border:1px solid rgba(255,255,255,.8); border-radius:6px; background:#fff; color:#07533f; display:inline-flex; align-items:center; justify-content:center; gap:7px; font-weight:800; cursor:pointer; padding:0 14px; text-decoration:none; }
     .pay-alert { display:flex; gap:10px; padding:14px 16px; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; color:#92400e; font-weight:800; }
     .pay-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:16px; }
     .pay-kpis article, .pay-card { border:1px solid rgba(15,23,42,.12); border-radius:8px; background:rgba(255,255,255,.94); box-shadow:0 12px 28px rgba(15,23,42,.07); }
@@ -209,12 +217,13 @@ export class StaffPayrollPage implements OnDestroy {
 
   constructor(
     private ctx: OrgContextService,
+    private payPeriod: PayPeriodService,
     private timeRepo: TimeEntriesRepo,
     private shiftsRepo: ShiftsRepo,
     private accruals: AccrualsRepo,
     private printLauncher: PrintLauncherService,
   ) {
-    const period = currentPayrollPeriod((this.ctx.payFrequency() as PayFrequency) || 'biweekly');
+    const period = this.payPeriod.selectedPeriod();
     this.fromDate = dateInputValue(period.start);
     this.toDate = dateInputValue(period.end);
     this.ctxEffect = effect(() => {
@@ -222,6 +231,12 @@ export class StaffPayrollPage implements OnDestroy {
       this.uid = this.ctx.uid();
       this.reload();
     });
+  }
+
+  onPeriodPicked(opt: PayPeriodOption) {
+    this.fromDate = dateInputValue(opt.period.start);
+    this.toDate = dateInputValue(opt.period.end);
+    this.reload();
   }
 
   reload() {

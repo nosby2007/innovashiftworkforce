@@ -1,39 +1,43 @@
 import { Component, OnDestroy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Timestamp } from 'firebase/firestore';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { PayPeriodService, PayPeriodOption } from '../../core/tenancy/pay-period.service';
+import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
 import { TimeEntriesRepo } from '../../core/repos/time-entries.repo';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
 import { AdminCommands } from '../../core/commands/admin.commands';
 import { TimeEntry } from '../../shared/models/time-entry.model';
 import { formatDateTime, tsToDate } from '../../shared/utils/date.util';
-import { payrollHours } from '../../shared/utils/payroll.util';
+import { payrollHours, dateInputValue } from '../../shared/utils/payroll.util';
 import { toCsv, downloadTextFile } from '../../shared/utils/csv.util';
 import { ToastService } from '../../core/ui/toast.service';
 import { PrintLauncherService } from '../../core/ui/print-launcher.service';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
+import { TranslocoModule } from '@jsverse/transloco';
 
 import { MatIconModule } from '@angular/material/icon';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, TablePaginatorComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, TablePaginatorComponent, PayPeriodSelectorComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad">
       <!-- Header -->
       <div class="vs-page-header">
         <div class="vs-page-title">
-          <h1 class="vs-title">Timesheets</h1>
-          <p class="vs-page-subtitle">Review, export, and manage staff time entries</p>
+          <h1 class="vs-title">{{ 'timesheets.title' | transloco }}</h1>
+          <p class="vs-page-subtitle">{{ 'timesheets.subtitle' | transloco }}</p>
         </div>
       </div>
 
       <div *ngIf="!orgId" class="ad-no-org vs-glass">
-        <mat-icon>warning_amber</mat-icon> Missing org context.
+        <mat-icon>warning_amber</mat-icon> {{ 'timesheets.missingOrgContext' | transloco }}
       </div>
 
       <div *ngIf="orgId" class="ts-content">
@@ -41,78 +45,79 @@ import { MatIconModule } from '@angular/material/icon';
         <div class="vs-glass-strong ts-filters">
           <div class="vs-form-row ts-filters-grid">
             <div>
-              <label class="vs-field-label">Staff Member</label>
+              <label class="vs-field-label">{{ 'timesheets.staffMember' | transloco }}</label>
               <select class="vs-select" [(ngModel)]="selectedUid">
-                <option value="">Select user</option>
+                <option value="">{{ 'timesheets.selectUser' | transloco }}</option>
                 <option *ngFor="let u of users()" [value]="u.uid">
-                  {{ u.displayName || u.email || 'Staff member' }} — {{ u.jobRole || '—' }}
+                  {{ u.displayName || u.email || ('timesheets.staffMemberFallback' | transloco) }} — {{ u.jobRole || '—' }}
                 </option>
               </select>
             </div>
             <div>
-              <label class="vs-field-label">From</label>
+              <label class="vs-field-label">{{ 'timesheets.from' | transloco }}</label>
               <input type="date" class="vs-input" [(ngModel)]="fromDate">
             </div>
             <div>
-              <label class="vs-field-label">To</label>
+              <label class="vs-field-label">{{ 'timesheets.to' | transloco }}</label>
               <input type="date" class="vs-input" [(ngModel)]="toDate">
             </div>
             <div class="ts-actions">
               <button class="vs-btn-ghost ts-action-btn" (click)="openPrint()" [disabled]="!selectedUid">
-                <mat-icon style="font-size:18px;">print</mat-icon> Print
+                <mat-icon style="font-size:18px;">print</mat-icon> {{ 'timesheets.print' | transloco }}
               </button>
               <button class="vs-btn-primary ts-action-btn" (click)="exportCsv()" [disabled]="rows().length===0">
-                <mat-icon style="font-size:18px;">download</mat-icon> CSV
+                <mat-icon style="font-size:18px;">download</mat-icon> {{ 'timesheets.csv' | transloco }}
               </button>
             </div>
           </div>
+          <app-pay-period-selector (periodChange)="onPeriodPicked($event)"></app-pay-period-selector>
         </div>
 
         <div class="ts-meta" *ngIf="rows().length > 0 || selectedUid">
-          <span>{{ rows().length }} entries found</span>
+          <span>{{ 'timesheets.entriesFound' | transloco: { count: rows().length } }}</span>
         </div>
 
         <div class="vs-glass-strong ts-fix" *ngIf="orgId">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Attendance Management</div>
-              <div class="vs-panel-subtitle">Fix missed punch by setting corrected in/out times</div>
+              <div class="vs-panel-title">{{ 'timesheets.attendanceManagement' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'timesheets.fixMissedPunch' | transloco }}</div>
             </div>
           </div>
           <div class="ts-fix-help" *ngIf="!fixEntryId">
-            Select a row in the table with <strong>Fix</strong>, or pick a pending request below.
+            {{ 'timesheets.selectRowHelpPre' | transloco }} <strong>{{ 'timesheets.fixAction' | transloco }}</strong>{{ 'timesheets.selectRowHelpPost' | transloco }}
           </div>
 
           <div class="ts-fix-pending" *ngIf="pendingEntries().length > 0 && !fixEntryId">
-            <div class="ts-fix-pending-title">Pending correction requests</div>
+            <div class="ts-fix-pending-title">{{ 'timesheets.pendingCorrectionRequests' | transloco }}</div>
             <div class="ts-fix-pending-list">
               <button class="vs-btn-ghost ts-pending-chip" *ngFor="let p of pendingEntries()" (click)="startFixFromPending(p)">
-                {{ staffLabel(p.userId) }} • Assigned shift
+                {{ staffLabel(p.userId) }} • {{ 'timesheets.assignedShift' | transloco }}
               </button>
             </div>
           </div>
 
           <div class="ts-fix-target" *ngIf="fixEntryId">
-            <span class="vs-badge">Selected correction</span>
-            <span class="ts-target-meta" *ngIf="fixUserId">Staff: {{ staffLabel(fixUserId) }}</span>
-            <span class="ts-target-meta" *ngIf="fixShiftId">Shift: Assigned shift</span>
+            <span class="vs-badge">{{ 'timesheets.selectedCorrection' | transloco }}</span>
+            <span class="ts-target-meta" *ngIf="fixUserId">{{ 'timesheets.staffColon' | transloco }} {{ staffLabel(fixUserId) }}</span>
+            <span class="ts-target-meta" *ngIf="fixShiftId">{{ 'timesheets.shiftColon' | transloco }} {{ 'timesheets.assignedShift' | transloco }}</span>
           </div>
 
           <div *ngIf="fixEntryId">
           <div class="vs-form-row vs-form-row--2">
             <div>
-              <label class="vs-field-label">Corrected Check In</label>
+              <label class="vs-field-label">{{ 'timesheets.correctedCheckIn' | transloco }}</label>
               <input type="datetime-local" class="vs-input" [(ngModel)]="fixCheckInLocal">
             </div>
             <div>
-              <label class="vs-field-label">Corrected Check Out</label>
+              <label class="vs-field-label">{{ 'timesheets.correctedCheckOut' | transloco }}</label>
               <input type="datetime-local" class="vs-input" [(ngModel)]="fixCheckOutLocal">
             </div>
           </div>
           <div class="ts-fix-actions">
-            <button class="vs-btn-ghost" (click)="cancelFix()" [disabled]="fixBusy">Cancel</button>
-            <button class="vs-btn-ghost" (click)="rejectFix()" [disabled]="fixBusy">Reject</button>
-            <button class="vs-btn-primary" (click)="applyFix()" [disabled]="fixBusy">Apply Fix</button>
+            <button class="vs-btn-ghost" (click)="cancelFix()" [disabled]="fixBusy">{{ 'timesheets.cancel' | transloco }}</button>
+            <button class="vs-btn-ghost" (click)="rejectFix()" [disabled]="fixBusy">{{ 'timesheets.reject' | transloco }}</button>
+            <button class="vs-btn-primary" (click)="applyFix()" [disabled]="fixBusy">{{ 'timesheets.applyFix' | transloco }}</button>
           </div>
           </div>
         </div>
@@ -123,7 +128,7 @@ import { MatIconModule } from '@angular/material/icon';
             type="search"
             class="vs-input"
             style="max-width:320px;"
-            placeholder="Search shift title or status…"
+            [placeholder]="'timesheets.searchPlaceholder' | transloco"
             [value]="rowsCtrl.filterText()"
             (input)="rowsCtrl.setFilter($any($event.target).value)">
         </div>
@@ -131,13 +136,13 @@ import { MatIconModule } from '@angular/material/icon';
           <table class="vs-table ts-table">
             <thead>
               <tr>
-                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('shiftTitle')">Shift Title {{ rowsCtrl.sortIndicator('shiftTitle') }}</th>
-                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('checkIn')">Check In {{ rowsCtrl.sortIndicator('checkIn') }}</th>
-                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('checkOut')">Check Out {{ rowsCtrl.sortIndicator('checkOut') }}</th>
-                <th>Break</th>
-                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('hours')">Hours {{ rowsCtrl.sortIndicator('hours') }}</th>
-                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('status')">Status {{ rowsCtrl.sortIndicator('status') }}</th>
-                <th class="ts-right">Actions</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('shiftTitle')">{{ 'timesheets.colShiftTitle' | transloco }} {{ rowsCtrl.sortIndicator('shiftTitle') }}</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('checkIn')">{{ 'timesheets.colCheckIn' | transloco }} {{ rowsCtrl.sortIndicator('checkIn') }}</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('checkOut')">{{ 'timesheets.colCheckOut' | transloco }} {{ rowsCtrl.sortIndicator('checkOut') }}</th>
+                <th>{{ 'timesheets.colBreak' | transloco }}</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('hours')">{{ 'timesheets.colHours' | transloco }} {{ rowsCtrl.sortIndicator('hours') }}</th>
+                <th class="ts-th-sort" (click)="rowsCtrl.toggleSort('status')">{{ 'timesheets.colStatus' | transloco }} {{ rowsCtrl.sortIndicator('status') }}</th>
+                <th class="ts-right">{{ 'timesheets.colActions' | transloco }}</th>
               </tr>
             </thead>
             <tbody>
@@ -149,13 +154,15 @@ import { MatIconModule } from '@angular/material/icon';
                 <td><strong>{{ r.hours }}</strong></td>
                 <td>
                   <span class="vs-badge"
-                        [class.vs-badge--success]="!r.exceptionStatus || r.exceptionStatus==='none'"
-                        [class.vs-badge--warning]="r.exceptionStatus && r.exceptionStatus!=='none'">
+                        [class.vs-badge--success]="!r.exceptionStatus || r.exceptionStatus==='none' || r.exceptionStatus==='approved'"
+                        [class.vs-badge--warning]="r.exceptionStatus==='pending'"
+                        [class.vs-badge--neutral]="r.exceptionStatus==='rejected'">
                     {{ (r.exceptionStatus || 'none') | titlecase }}
                   </span>
                 </td>
                 <td class="ts-right">
-                  <button class="vs-btn-ghost ts-fix-btn" (click)="startFix(r)">Fix</button>
+                  <button class="vs-btn-ghost ts-fix-btn" (click)="startFix(r)">{{ 'timesheets.fixAction' | transloco }}</button>
+                  <button class="vs-btn-ghost ts-fix-btn ts-delete-btn" [disabled]="deleteBusyId === r.entryId" (click)="deleteEntry(r)">{{ 'timesheets.delete' | transloco }}</button>
                 </td>
               </tr>
             </tbody>
@@ -166,8 +173,8 @@ import { MatIconModule } from '@angular/material/icon';
         <div *ngIf="rows().length === 0 && selectedUid" class="ts-empty vs-glass">
           <mat-icon>search_off</mat-icon>
           <div>
-            <strong>No timesheet entries found.</strong>
-            <p>Try adjusting the date range or selecting a different employee.</p>
+            <strong>{{ 'timesheets.noEntriesFound' | transloco }}</strong>
+            <p>{{ 'timesheets.adjustDateRange' | transloco }}</p>
           </div>
         </div>
       </div>
@@ -206,6 +213,7 @@ import { MatIconModule } from '@angular/material/icon';
     .ts-pending-chip { padding:5px 9px !important; font-size:12px !important; }
     .ts-fix-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:10px; }
     .ts-fix-btn { padding:6px 10px !important; font-size:12px !important; }
+    .ts-delete-btn { margin-left:6px; color:var(--danger, #dc2626) !important; }
 
     .ts-table-shell {
       border: 1px solid var(--border);
@@ -287,16 +295,19 @@ export class AdminTimesheetsPage implements OnDestroy {
   fixCheckInLocal = '';
   fixCheckOutLocal = '';
   fixBusy = false;
+  deleteBusyId: string | null = null;
   private lastFilterKey = '';
 
   constructor(
     private ctx: OrgContextService,
+    private payPeriod: PayPeriodService,
     private usersRepo: UsersRepo,
     private timeRepo: TimeEntriesRepo,
     private shiftsRepo: ShiftsRepo,
     private adminCmd: AdminCommands,
     private toast: ToastService,
     private printLauncher: PrintLauncherService,
+    private route: ActivatedRoute,
   ) {
     const bind = () => {
       const orgId = this.ctx.orgId();
@@ -316,14 +327,26 @@ export class AdminTimesheetsPage implements OnDestroy {
     setTimeout(bind, 800);
     setTimeout(bind, 2400);
 
-    // default dates: current week
-    const now = new Date();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - ((now.getDay()+6)%7));
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    this.fromDate = monday.toISOString().slice(0,10);
-    this.toDate = sunday.toISOString().slice(0,10);
+    // default dates: current pay period
+    const period = this.payPeriod.selectedPeriod();
+    this.fromDate = dateInputValue(period.start);
+    this.toDate = dateInputValue(period.end);
+
+    // Deep-linked from Payroll's "Review" action: preselect the employee
+    // and payroll period so the flagged entries are immediately visible.
+    // This override wins over the pay-period default above.
+    const params = this.route.snapshot.queryParamMap;
+    const uid = params.get('uid');
+    const from = params.get('from');
+    const to = params.get('to');
+    if (uid) this.selectedUid = uid;
+    if (from) this.fromDate = from;
+    if (to) this.toDate = to;
+  }
+
+  onPeriodPicked(opt: PayPeriodOption) {
+    this.fromDate = dateInputValue(opt.period.start);
+    this.toDate = dateInputValue(opt.period.end);
   }
 
   private async refreshRows() {
@@ -468,6 +491,24 @@ exportCsv() {
       this.toast.errorFrom(e, 'Reject failed.');
     } finally {
       this.fixBusy = false;
+    }
+  }
+
+  async deleteEntry(row: any) {
+    if (!row.entryId || this.deleteBusyId) return;
+    const ok = window.confirm(`Delete this time entry for "${row.shiftTitle}"? This cannot be undone.`);
+    if (!ok) return;
+    const reason = String(window.prompt('Why is this time entry being deleted?') || '').trim();
+    if (!reason) return;
+    this.deleteBusyId = row.entryId;
+    try {
+      await this.adminCmd.deleteTimeEntry(row.entryId, reason);
+      if (this.fixEntryId === row.entryId) this.cancelFix();
+      this.toast.success('Time entry deleted.');
+    } catch (e: any) {
+      this.toast.errorFrom(e, 'Delete failed.');
+    } finally {
+      this.deleteBusyId = null;
     }
   }
 

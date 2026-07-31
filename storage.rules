@@ -47,6 +47,15 @@ service firebase.storage {
         || (isOrgMember(orgId) && accessRole() in ['admin', 'manager', 'scheduler', 'hr']);
     }
 
+    // Discretionary/sensitive files (employee identity docs, W-4/W-2, etc.)
+    // — admin and hr only, narrower than isOrgAdminLike(). Mirrors
+    // isAdminOrHR() in firestore.rules, which already gates the matching
+    // employeeDocuments collection this way.
+    function isOrgAdminOrHR(orgId) {
+      return isSuperAdmin()
+        || (isOrgMember(orgId) && accessRole() in ['admin', 'hr']);
+    }
+
     function isSafeUpload(maxBytes) {
       return request.resource != null
         && request.resource.size > 0
@@ -54,6 +63,23 @@ service firebase.storage {
         && request.resource.contentType.matches(
           '(image/.*|application/pdf|text/plain|text/csv|application/vnd\\.ms-excel)'
         );
+    }
+
+    // Sensitive employee documents (identity, W-4/W-2, certifications) —
+    // narrower than the general per-user path below: only the employee
+    // themselves and admin/hr can read or write these, not manager/scheduler.
+    match /orgs/{orgId}/users/{uid}/documents/{fileName=**} {
+      allow read: if isOrgAdminOrHR(orgId)
+        || (isOrgMember(orgId) && request.auth.uid == uid);
+
+      allow create, update: if (
+          isOrgAdminOrHR(orgId)
+          || (isOrgMember(orgId) && request.auth.uid == uid)
+        )
+        && isSafeUpload(10 * 1024 * 1024);
+
+      allow delete: if isOrgAdminOrHR(orgId)
+        || (isOrgMember(orgId) && request.auth.uid == uid);
     }
 
     match /orgs/{orgId}/users/{uid}/{fileName=**} {

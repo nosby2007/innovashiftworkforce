@@ -6,40 +6,44 @@ import { Router } from '@angular/router';
 import { AttendanceCommands } from '../../core/commands/attendance.commands';
 import { ShiftsCommands } from '../../core/commands/shifts.commands';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { ExperienceFlagsService } from '../../core/experience/experience-flags.service';
+import { PayPeriodService } from '../../core/tenancy/pay-period.service';
+import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { TimeEntriesRepo } from '../../core/repos/time-entries.repo';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
 import { TimeEntry } from '../../shared/models/time-entry.model';
 import { Shift } from '../../shared/models/shift.model';
 import { formatDateTime, tsToDate } from '../../shared/utils/date.util';
+import { formatPayPeriodLabel } from '../../shared/utils/payroll.util';
 import { ToastService } from '../../core/ui/toast.service';
 import { mapAttendancePolicyError } from '../../shared/utils/attendance-policy-error.util';
 import { PlanEntitlementsService } from '../../core/tenancy/plan-entitlements.service';
-import { doc, getDoc, getFirestore } from 'firebase/firestore';
+import { doc, getDoc, getFirestore, Timestamp } from 'firebase/firestore';
 import { fmtShiftDate, fmtShiftTime, shiftHours } from '../../shared/utils/shift-lifecycle.utils';
 import { GeofenceMapComponent, GeofenceSite } from '../../shared/ui/geofence-map/geofence-map.component';
 import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
-import { ExperienceFlagsService } from '../../core/experience/experience-flags.service';
+import { TranslocoModule } from '@jsverse/transloco';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, GeofenceMapComponent, TablePaginatorComponent, TipCardComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, GeofenceMapComponent, TablePaginatorComponent, TipCardComponent, PayPeriodSelectorComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
         <div class="vs-page-title">
-          <h1 class="vs-title">Time & Attendance</h1>
-          <p class="vs-page-subtitle">Log your shift hours and manage active time entries</p>
+          <h1 class="vs-title">{{ 'nav.timeAttendance' | transloco }}</h1>
+          <p class="vs-page-subtitle">{{ 'attendance.subtitle' | transloco }}</p>
         </div>
       </div>
 
-      <app-tip-card tipId="attendance-intro" title="Clocking in with GPS" icon="my_location">
-        Your location is checked against the shift's site when you clock in or out — make sure location access is allowed so the map can confirm you're on-site.
+      <app-tip-card tipId="attendance-intro" [title]="'attendance.tipTitle' | transloco" icon="my_location">
+        {{ 'attendance.tipBody' | transloco }}
       </app-tip-card>
 
       <div *ngIf="!orgId" class="at-no-org vs-glass">
-        <mat-icon>warning_amber</mat-icon> Missing org context.
+        <mat-icon>warning_amber</mat-icon> {{ 'attendance.missingOrgContext' | transloco }}
       </div>
 
       <div *ngIf="orgId" class="at-content">
@@ -51,9 +55,7 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
             </div>
             <div class="at-timecard-period">
               <label>Time Period</label>
-              <select>
-                <option>{{ timePeriodLabel() }}</option>
-              </select>
+              <app-pay-period-selector></app-pay-period-selector>
             </div>
           </div>
           <div class="at-timecard-actions">
@@ -149,10 +151,10 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
         <section class="vs-glass-strong at-panel at-current" *ngIf="currentShift() as cs">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Current Shift - In Progress</div>
+              <div class="vs-panel-title">{{ 'attendance.currentShiftInProgress' | transloco }}</div>
               <div class="vs-panel-subtitle">{{ cs.title }} &bull; {{ cs.locationName }}</div>
             </div>
-            <span class="vs-badge vs-badge--warning">In Progress</span>
+            <span class="vs-badge vs-badge--warning">{{ 'attendance.inProgress' | transloco }}</span>
           </div>
           <div class="at-current-row">
             <div class="at-current-info">
@@ -165,22 +167,22 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
             </div>
             <div class="at-current-status" *ngIf="entryId()">
               <span class="vs-dot vs-dot--green"></span>
-              <strong>Active Entry:</strong>
+              <strong>{{ 'attendance.activeEntry' | transloco }}</strong>
               <span class="at-mono">{{ entryId() }}</span>
-              <span *ngIf="onBreak()" class="vs-badge vs-badge--warning">On Break</span>
+              <span *ngIf="onBreak()" class="vs-badge vs-badge--warning">{{ 'attendance.onBreak' | transloco }}</span>
             </div>
           </div>
           <app-geofence-map *ngIf="punchMethod === 'gps' && canUseGps()" [site]="activeSiteForMap()"></app-geofence-map>
 
           <div class="at-actions at-actions-current">
             <button class="vs-btn-ghost at-btn-break" (click)="breakOut()" [disabled]="busy || !entryId() || onBreak()">
-              <mat-icon>pause_circle</mat-icon> Break Out
+              <mat-icon>pause_circle</mat-icon> {{ 'attendance.breakOut' | transloco }}
             </button>
             <button class="vs-btn-ghost at-btn-break" (click)="breakIn()" [disabled]="busy || !entryId() || !onBreak()">
-              <mat-icon>play_circle</mat-icon> Break In
+              <mat-icon>play_circle</mat-icon> {{ 'attendance.breakIn' | transloco }}
             </button>
             <button class="vs-btn-primary at-btn-out" (click)="checkOut()" [disabled]="busy || !entryId()">
-              <mat-icon>logout</mat-icon> Clock Out
+              <mat-icon>logout</mat-icon> {{ 'attendance.clockOut' | transloco }}
             </button>
           </div>
         </section>
@@ -188,33 +190,30 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
         <section class="vs-glass-strong at-panel at-daily-panel" *ngIf="dailyLogShifts().length > 0 && !currentShift()">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Today's Shift</div>
-              <div class="vs-panel-subtitle">Only shifts scheduled for today are available for clock-in</div>
+              <div class="vs-panel-title">{{ 'attendance.myUpcomingShifts' | transloco }}</div>
+              <div class="vs-panel-subtitle">Only today's eligible shift is shown for clock-in.</div>
             </div>
             <mat-icon style="color:var(--primary);">event</mat-icon>
           </div>
-          <div class="at-schedule-cards" [class.at-schedule-cards--next]="nextStaffAttendanceCard()">
-            <div *ngFor="let s of dailyLogShifts()" class="at-schedule-card at-schedule-card--daily vs-glass">
+          <div class="at-schedule-cards">
+            <div *ngFor="let s of dailyLogShifts()" class="at-schedule-card vs-glass">
               <div class="at-schedule-card-head">
-                <div>
-                  <strong>{{ s.title }}</strong>
-                  <span class="at-schedule-card-date">{{ fmtDate(s.startAt) }}</span>
-                </div>
-                <span class="vs-badge vs-badge--neutral">{{ s.status | uppercase }}</span>
+                <strong>{{ s.title }}</strong>
+                <span class="vs-badge vs-badge--primary">{{ s.status || 'assigned' }}</span>
               </div>
+              <span class="at-schedule-card-date">{{ fmtDate(s.startAt) }}</span>
               <div class="at-schedule-card-time">{{ fmtTime(s.startAt) }} &ndash; {{ fmtTime(s.endAt) }}</div>
-              <div class="at-loc"><mat-icon>location_on</mat-icon>{{ s.locationName }}</div>
-              <div class="at-daily-meta" *ngIf="nextStaffAttendanceCard()">
-                <span><mat-icon>schedule</mat-icon>{{ hrs(s) }} h scheduled</span>
-                <span><mat-icon>payments</mat-icon>{{ shiftPayPreview(s) | currency:moneyCurrency():'symbol':'1.2-2' }}</span>
-                <span *ngIf="shiftRequiresAutoBreak(s)"><mat-icon>restaurant</mat-icon>30 min auto break after 6h</span>
+              <div class="at-loc"><mat-icon>location_on</mat-icon>{{ s.locationName || 'No location' }}</div>
+              <div class="at-daily-meta">
+                <span><mat-icon>schedule</mat-icon>{{ shiftHours(s).toFixed(2) }} hrs</span>
+                <span *ngIf="shiftRequiresAutoBreak(s)"><mat-icon>free_breakfast</mat-icon>Auto 30 min break if no break is taken</span>
               </div>
               <div class="at-schedule-card-actions">
                 <button class="vs-btn-primary at-btn-in" (click)="clockInToShift(s)" [disabled]="busy">
-                  <mat-icon>login</mat-icon> Clock In
+                  <mat-icon>login</mat-icon> {{ 'attendance.clockIn' | transloco }}
                 </button>
                 <button class="vs-btn-ghost at-btn-callout" (click)="openCallOut(s)" [disabled]="busy">
-                  <mat-icon>event_busy</mat-icon> Call Out
+                  <mat-icon>event_busy</mat-icon> {{ 'attendance.callOut' | transloco }}
                 </button>
               </div>
             </div>
@@ -223,25 +222,25 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
           <div class="at-callout-form vs-glass" *ngIf="callOutTargetShift">
             <div class="at-callout-form-title">
               <mat-icon>event_busy</mat-icon>
-              Call Out — <span>{{ callOutTargetShift.title }}</span>
+              {{ 'attendance.callOutTitle' | transloco }} <span>{{ callOutTargetShift.title }}</span>
             </div>
-            <p class="at-callout-help">This immediately removes you from the shift, puts it back on the marketplace, and notifies your admin.</p>
-            <label class="vs-field-label">Reason (optional)</label>
-            <input class="vs-input" [(ngModel)]="callOutReason" placeholder="Feeling sick, family emergency…" aria-label="Call-out reason">
+            <p class="at-callout-help">{{ 'attendance.callOutHelp' | transloco }}</p>
+            <label class="vs-field-label">{{ 'attendance.reasonOptional' | transloco }}</label>
+            <input class="vs-input" [(ngModel)]="callOutReason" [placeholder]="'attendance.callOutPlaceholder' | transloco" [attr.aria-label]="'attendance.reasonOptional' | transloco">
             <div class="at-callout-form-actions">
-              <button class="vs-btn-ghost" (click)="cancelCallOut()" [disabled]="callOutBusy">Cancel</button>
+              <button class="vs-btn-ghost" (click)="cancelCallOut()" [disabled]="callOutBusy">{{ 'common.cancel' | transloco }}</button>
               <button class="vs-btn-primary" (click)="submitCallOut()" [disabled]="callOutBusy">
-                {{ callOutBusy ? 'Calling out…' : 'Confirm Call Out' }}
+                {{ callOutBusy ? ('attendance.callingOut' | transloco) : ('attendance.confirmCallOut' | transloco) }}
               </button>
             </div>
           </div>
         </section>
 
-        <section class="vs-glass-strong at-panel" *ngIf="!currentShift() && (!nextStaffAttendanceCard() || dailyLogShifts().length === 0)">
+        <section class="vs-glass-strong at-panel" *ngIf="!currentShift()">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Manual Punch</div>
-              <div class="vs-panel-subtitle">Select one of your shifts to clock in</div>
+              <div class="vs-panel-title">{{ 'attendance.manualPunch' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'attendance.selectShiftToClockIn' | transloco }}</div>
             </div>
             <mat-icon style="color:var(--primary);">timer</mat-icon>
           </div>
@@ -249,13 +248,13 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
           <div class="at-form">
             <div class="at-mode-card" *ngIf="gpsRequired() || canUseGps()">
               <div>
-                <div class="vs-field-label">Attendance Verification</div>
-                <div class="vs-muted" *ngIf="gpsRequired()">This organization requires GPS-verified attendance.</div>
-                <div class="vs-muted" *ngIf="!gpsRequired()">Use GPS for on-site punches or manual for standard workflows.</div>
+                <div class="vs-field-label">{{ 'attendance.attendanceVerification' | transloco }}</div>
+                <div class="vs-muted" *ngIf="gpsRequired()">{{ 'attendance.gpsRequiredNote' | transloco }}</div>
+                <div class="vs-muted" *ngIf="!gpsRequired()">{{ 'attendance.gpsOptionalNote' | transloco }}</div>
               </div>
               <div class="at-mode-toggle">
-                <button class="vs-btn-ghost" [class.at-mode-active]="punchMethod==='manual'" (click)="setPunchMethod('manual')" [disabled]="busy || gpsRequired()">Manual</button>
-                <button class="vs-btn-ghost" [class.at-mode-active]="punchMethod==='gps'" (click)="setPunchMethod('gps')" [disabled]="busy || !canUseGps()">GPS Verified</button>
+                <button class="vs-btn-ghost" [class.at-mode-active]="punchMethod==='manual'" (click)="setPunchMethod('manual')" [disabled]="busy || gpsRequired()">{{ 'attendance.manual' | transloco }}</button>
+                <button class="vs-btn-ghost" [class.at-mode-active]="punchMethod==='gps'" (click)="setPunchMethod('gps')" [disabled]="busy || !canUseGps()">{{ 'attendance.gpsVerified' | transloco }}</button>
               </div>
             </div>
 
@@ -264,20 +263,20 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
             <div class="at-upgrade-card" *ngIf="!canUseGps() && !gpsRequired()">
               <mat-icon>workspace_premium</mat-icon>
               <div>
-                <strong>Upgrade to Pro</strong>
-                <div>GPS attendance and geofence validation are available on Pro and Enterprise plans.</div>
+                <strong>{{ 'attendance.upgradeToPro' | transloco }}</strong>
+                <div>{{ 'attendance.upgradeToProBody' | transloco }}</div>
               </div>
             </div>
 
             <div class="vs-form-row">
               <div>
-                <label class="vs-field-label">Shift *</label>
+                <label class="vs-field-label">{{ 'attendance.shiftRequired' | transloco }}</label>
                 <input
                   class="vs-input at-input"
                   [(ngModel)]="shiftSelection"
                   (ngModelChange)="onShiftSelectionChange($event)"
                   list="attendance-shift-options"
-                  placeholder="Type date, title or location"
+                  [placeholder]="'attendance.shiftPlaceholder' | transloco"
                   [disabled]="!!entryId()">
                 <datalist id="attendance-shift-options">
                   <option *ngFor="let s of clockInEligibleShifts()" [value]="toShiftOptionLabel(s)"></option>
@@ -287,7 +286,7 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
 
             <div class="at-actions">
               <button class="vs-btn-primary at-btn-in" (click)="checkIn()" [disabled]="busy || !shiftId || !!entryId()">
-                <mat-icon>login</mat-icon> Clock In
+                <mat-icon>login</mat-icon> {{ 'attendance.clockIn' | transloco }}
               </button>
             </div>
           </div>
@@ -295,19 +294,19 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
 
         <div class="vs-grid-3 at-kpis" *ngIf="entries().length > 0">
           <div class="vs-stat-card vs-stat--primary">
-            <div class="vs-stat-label">Hours Logged</div>
+            <div class="vs-stat-label">{{ 'attendance.hoursLogged' | transloco }}</div>
             <div class="vs-stat-value">{{ totalHours().toFixed(2) }}</div>
           </div>
           <div class="vs-stat-card vs-stat--success">
-            <div class="vs-stat-label">Estimated Earnings</div>
+            <div class="vs-stat-label">{{ 'attendance.estimatedEarnings' | transloco }}</div>
             <div class="vs-stat-value">{{ totalEarnings() | currency:moneyCurrency():'symbol':'1.2-2' }}</div>
           </div>
           <div class="vs-stat-card vs-stat--warning">
-            <div class="vs-stat-label">Pending Fixes</div>
+            <div class="vs-stat-label">{{ 'attendance.pendingFixes' | transloco }}</div>
             <div class="vs-stat-value">{{ pendingFixCount() }}</div>
           </div>
           <div class="vs-stat-card vs-stat--danger">
-            <div class="vs-stat-label">Anomalies</div>
+            <div class="vs-stat-label">{{ 'attendance.anomalies' | transloco }}</div>
             <div class="vs-stat-value">{{ anomalyCount() }}</div>
           </div>
         </div>
@@ -315,37 +314,37 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
         <section class="vs-glass-strong at-panel">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Recent Punches</div>
-              <div class="vs-panel-subtitle">Your time entries for this week</div>
+              <div class="vs-panel-title">{{ 'attendance.recentPunches' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'attendance.yourTimeEntriesThisWeek' | transloco }}</div>
             </div>
           </div>
           <div class="at-table-toolbar" *ngIf="entries().length > 0">
             <input
               class="at-table-search"
               type="search"
-              placeholder="Search recent punches…"
+              [placeholder]="'attendance.searchRecentPunches' | transloco"
               [value]="punchesCtrl.filterText()"
               (input)="punchesCtrl.setFilter($any($event.target).value)"
-              aria-label="Search recent punches">
+              [attr.aria-label]="'attendance.searchRecentPunches' | transloco">
           </div>
           <div class="vs-table-shell at-table-shell">
             <table class="vs-table at-table">
               <caption class="sr-only">Recent punches with calculated hours, estimated pay, status and anomaly warnings.</caption>
               <thead>
                 <tr>
-                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('shift')">Shift <span>{{ punchesCtrl.sortIndicator('shift') }}</span></th>
-                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('checkInAt')">Clock In <span>{{ punchesCtrl.sortIndicator('checkInAt') }}</span></th>
-                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('checkOutAt')">Clock Out <span>{{ punchesCtrl.sortIndicator('checkOutAt') }}</span></th>
-                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('hours')">Hours <span>{{ punchesCtrl.sortIndicator('hours') }}</span></th>
-                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('pay')">Est. Pay <span>{{ punchesCtrl.sortIndicator('pay') }}</span></th>
-                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('status')">Status <span>{{ punchesCtrl.sortIndicator('status') }}</span></th>
-                  <th>Anomalies</th>
-                  <th>Actions</th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('shift')">{{ 'attendance.colShift' | transloco }} <span>{{ punchesCtrl.sortIndicator('shift') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('checkInAt')">{{ 'attendance.colClockIn' | transloco }} <span>{{ punchesCtrl.sortIndicator('checkInAt') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('checkOutAt')">{{ 'attendance.colClockOut' | transloco }} <span>{{ punchesCtrl.sortIndicator('checkOutAt') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('hours')">{{ 'attendance.colHours' | transloco }} <span>{{ punchesCtrl.sortIndicator('hours') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('pay')">{{ 'attendance.colEstPay' | transloco }} <span>{{ punchesCtrl.sortIndicator('pay') }}</span></th>
+                  <th class="at-th-sort" (click)="punchesCtrl.toggleSort('status')">{{ 'attendance.colStatus' | transloco }} <span>{{ punchesCtrl.sortIndicator('status') }}</span></th>
+                  <th>{{ 'attendance.colAnomalies' | transloco }}</th>
+                  <th>{{ 'attendance.colActions' | transloco }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr class="vs-empty" *ngIf="punchesCtrl.pageRows().length===0">
-                  <td colspan="8">No recent time entries.</td>
+                  <td colspan="8">{{ 'attendance.noRecentEntries' | transloco }}</td>
                 </tr>
                 <tr *ngFor="let e of punchesCtrl.pageRows(); let i = index; trackBy: trackByEntry" class="vs-row"
                     [class.at-row--pending]="e.exceptionStatus==='pending'"
@@ -376,10 +375,10 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
                             (click)="openFixRequest(e)"
                             [disabled]="busy || e.exceptionStatus==='pending'"
                             *ngIf="e.exceptionStatus !== 'pending'">
-                      <mat-icon>edit_note</mat-icon> Request Fix
+                      <mat-icon>edit_note</mat-icon> {{ 'attendance.requestFix' | transloco }}
                     </button>
                     <span class="at-pending-chip" *ngIf="e.exceptionStatus==='pending'">
-                      <mat-icon>hourglass_top</mat-icon> Pending Review
+                      <mat-icon>hourglass_top</mat-icon> {{ 'attendance.pendingReview' | transloco }}
                     </span>
                   </td>
                 </tr>
@@ -393,8 +392,8 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
         <section class="vs-glass-strong at-panel" *ngIf="corrections.length > 0 || fixRequestEntry">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">My Correction Requests</div>
-              <div class="vs-panel-subtitle">Track your submitted requests and their status</div>
+              <div class="vs-panel-title">{{ 'attendance.myCorrectionRequests' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'attendance.trackSubmittedRequests' | transloco }}</div>
             </div>
             <mat-icon style="color:var(--warning);">pending_actions</mat-icon>
           </div>
@@ -403,42 +402,42 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
           <div class="at-fix-form" *ngIf="fixRequestEntry">
             <div class="at-fix-form-title">
               <mat-icon>edit_calendar</mat-icon>
-              Request Correction — <span>{{ shiftLabel(fixRequestEntry.shiftId) }}</span>
+              {{ 'attendance.requestCorrectionTitle' | transloco }} <span>{{ shiftLabel(fixRequestEntry.shiftId) }}</span>
             </div>
             <div class="at-fix-form-body">
               <div class="vs-form-row at-fix-form-row">
                 <div>
-                  <label class="vs-field-label">Correction Type *</label>
-                  <select class="vs-input" [(ngModel)]="fixCategory" (ngModelChange)="onFixCategoryChange()" aria-label="Correction type">
-                    <option value="missed_punch">Missed punch</option>
-                    <option value="wrong_hours">Wrong working hours</option>
-                    <option value="missed_break">Missed or wrong break</option>
-                    <option value="site_mismatch">Wrong site/location</option>
-                    <option value="other">Other</option>
+                  <label class="vs-field-label">{{ 'attendance.correctionType' | transloco }}</label>
+                  <select class="vs-input" [(ngModel)]="fixCategory" (ngModelChange)="onFixCategoryChange()" [attr.aria-label]="'attendance.correctionType' | transloco">
+                    <option value="missed_punch">{{ 'attendance.missedPunch' | transloco }}</option>
+                    <option value="wrong_hours">{{ 'attendance.wrongHours' | transloco }}</option>
+                    <option value="missed_break">{{ 'attendance.missedBreak' | transloco }}</option>
+                    <option value="site_mismatch">{{ 'attendance.siteMismatch' | transloco }}</option>
+                    <option value="other">{{ 'attendance.other' | transloco }}</option>
                   </select>
                 </div>
               </div>
               <div class="vs-form-row at-fix-form-row">
                 <div>
-                  <label class="vs-field-label">Reason *</label>
-                  <input class="vs-input" [(ngModel)]="fixReason" placeholder="Missed punch, wrong times, missed lunch break…" aria-label="Correction reason">
+                  <label class="vs-field-label">{{ 'attendance.reasonRequired' | transloco }}</label>
+                  <input class="vs-input" [(ngModel)]="fixReason" [placeholder]="'attendance.reasonPlaceholder' | transloco" [attr.aria-label]="'attendance.reasonRequired' | transloco">
                   <div class="at-guidance" *ngIf="fixHint()">{{ fixHint() }}</div>
                 </div>
               </div>
               <div class="vs-form-row at-fix-form-row">
                 <div>
-                  <label class="vs-field-label">Proposed Check-In (optional)</label>
-                  <input type="datetime-local" class="vs-input" [(ngModel)]="fixProposedIn" aria-label="Proposed check-in">
+                  <label class="vs-field-label">{{ 'attendance.proposedCheckIn' | transloco }}</label>
+                  <input type="datetime-local" class="vs-input" [(ngModel)]="fixProposedIn" [attr.aria-label]="'attendance.proposedCheckIn' | transloco">
                 </div>
                 <div>
-                  <label class="vs-field-label">Proposed Check-Out (optional)</label>
-                  <input type="datetime-local" class="vs-input" [(ngModel)]="fixProposedOut" aria-label="Proposed check-out">
+                  <label class="vs-field-label">{{ 'attendance.proposedCheckOut' | transloco }}</label>
+                  <input type="datetime-local" class="vs-input" [(ngModel)]="fixProposedOut" [attr.aria-label]="'attendance.proposedCheckOut' | transloco">
                 </div>
               </div>
               <div class="at-fix-form-actions">
-                <button class="vs-btn-ghost" (click)="cancelFixRequest()" [disabled]="busy">Cancel</button>
-                <button class="vs-btn-primary" (click)="submitFixRequest()" [disabled]="busy || !isFixRequestValid()" aria-label="Submit correction request">
-                  <mat-icon>send</mat-icon> {{ busy ? 'Sending…' : 'Submit Request' }}
+                <button class="vs-btn-ghost" (click)="cancelFixRequest()" [disabled]="busy">{{ 'common.cancel' | transloco }}</button>
+                <button class="vs-btn-primary" (click)="submitFixRequest()" [disabled]="busy || !isFixRequestValid()" [attr.aria-label]="'attendance.submitRequest' | transloco">
+                  <mat-icon>send</mat-icon> {{ busy ? ('attendance.sending' | transloco) : ('attendance.submitRequest' | transloco) }}
                 </button>
               </div>
             </div>
@@ -643,23 +642,21 @@ import { ExperienceFlagsService } from '../../core/experience/experience-flags.s
     .at-current-status { display:flex; align-items:center; gap:8px; padding:10px 16px; background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.26); border-radius:var(--radius-md); font-size:13px; color:var(--success); }
     .at-actions-current { padding: 0 20px 20px; border-top: none; }
 
-    .at-daily-panel { border-left:4px solid var(--primary); }
     .at-schedule-cards { padding:8px 20px 20px; display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:14px; }
-    .at-schedule-cards--next { grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); }
     .at-schedule-card { display:flex; flex-direction:column; gap:8px; padding:16px; border-radius:var(--radius-md); }
-    .at-schedule-card--daily {
-      border:1px solid rgba(37,99,235,0.20);
-      background:linear-gradient(135deg, rgba(37,99,235,0.08), rgba(16,185,129,0.05));
-    }
-    .at-schedule-card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+    .at-schedule-card-head { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
     .at-schedule-card-head strong { font-size:15px; color:var(--text); }
-    .at-schedule-card-date { display:block; margin-top:2px; font-size:12px; color:var(--text-subtle); white-space:nowrap; }
+    .at-schedule-card-date { font-size:12px; color:var(--text-subtle); white-space:nowrap; }
     .at-schedule-card-time { font-size:13px; font-weight:700; color:var(--text-muted); }
+    .at-daily-panel .at-schedule-card {
+      border-color: rgba(37, 99, 235, 0.24);
+      background: linear-gradient(135deg, rgba(255,255,255,0.94), rgba(239,246,255,0.92));
+    }
+    .at-daily-meta { display:grid; gap:6px; margin:4px 0 6px; }
+    .at-daily-meta span { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted); }
+    .at-daily-meta mat-icon { font-size:15px; width:15px; height:15px; color:var(--primary); }
     .at-loc { display:flex; align-items:center; gap:4px; font-size:13px; color:var(--text-muted); }
     .at-loc mat-icon { font-size:14px !important; width:14px; height:14px; }
-    .at-daily-meta { display:grid; gap:6px; padding:10px; border:1px solid var(--border); border-radius:var(--radius-sm, 6px); background:var(--bg-surface); }
-    .at-daily-meta span { display:flex; align-items:center; gap:6px; color:var(--text-muted); font-size:12px; font-weight:700; }
-    .at-daily-meta mat-icon { font-size:15px !important; width:15px; height:15px; color:var(--primary); }
     .at-schedule-card-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
     .at-btn-callout { color:var(--danger); border-color:rgba(239,68,68,0.4) !important; }
     .at-callout-form { margin:12px 20px 4px; padding:16px; border:1px solid rgba(239,68,68,0.35); border-radius:var(--radius-md); background:rgba(239,68,68,0.06); }
@@ -816,7 +813,7 @@ export class AttendancePage implements OnDestroy {
       return d ? this.isSameDay(d, today) : false;
     });
   });
-  dailyLogShifts = computed(() => this.todaysSchedule().filter((s) => !this.isClockBlockedStatus(s)).slice(0, 4));
+  dailyLogShifts = computed(() => this.clockInEligibleShifts().slice(0, 1));
   private shiftOptionToId: Record<string, string> = {};
   private shiftIdToOption: Record<string, string> = {};
 
@@ -844,9 +841,11 @@ export class AttendancePage implements OnDestroy {
   private unsubCurrentShift: (() => void) | null = null;
   private unsubSchedule: (() => void) | null = null;
   private ctxEffect!: EffectRef;
+  private boundOrgUidKey: string | null = null;
 
   constructor(
     private ctx: OrgContextService,
+    private payPeriod: PayPeriodService,
     private cmd: AttendanceCommands,
     private repo: TimeEntriesRepo,
     private shiftsRepo: ShiftsRepo,
@@ -854,46 +853,61 @@ export class AttendancePage implements OnDestroy {
     private toast: ToastService,
     private entitlements: PlanEntitlementsService,
     private router: Router,
-    private experience: ExperienceFlagsService
+    private experience: ExperienceFlagsService,
   ) {
     this.ctxEffect = effect(() => {
       const orgId = this.ctx.orgId();
       const uid = this.ctx.uid();
+      const period = this.payPeriod.selectedPeriod();
       this.orgId = orgId;
       this.uid = uid;
       if (!orgId || !uid) return;
-      if (this.unsub) return;
 
-      void this.loadOrgSettings(orgId);
+      // "Current shift"/"my upcoming shifts" are forward-looking, not part
+      // of this pay period's history — bind them once per identity, same
+      // as before. Only the entries listener below is period-scoped and
+      // needs to unsubscribe/resubscribe whenever the period changes.
+      const identityKey = `${orgId}:${uid}`;
+      if (identityKey !== this.boundOrgUidKey) {
+        this.boundOrgUidKey = identityKey;
+        void this.loadOrgSettings(orgId);
 
-      this.unsub = this.repo.watchMyEntries(orgId, uid, async (items) => {
-        this.entries.set(items);
-        const shiftIds = Array.from(new Set(items.map((x) => x.shiftId))).filter(Boolean);
-        this.shiftMap.set(shiftIds.length ? await this.shiftsRepo.getManyByIds(orgId, shiftIds) : {});
-        const active = items.find((x) => !x.checkOutAt) || null;
-        this.entryId.set(active?.id ?? null);
-        this.onBreak.set(Boolean(active?.onBreak));
-        if (active?.shiftId && !this.shiftId) {
-          this.shiftId = String(active.shiftId);
-          this.shiftSelection = this.shiftIdToOption[this.shiftId] || this.shiftSelection;
-        }
-      });
+        this.unsubCurrentShift?.();
+        this.unsubCurrentShift = this.shiftsRepo.watchCurrentShift(orgId, uid, (s) => {
+          this.currentShift.set(s);
+          if (s) {
+            this.shiftId = s.id;
+            const option = this.toShiftOptionLabel(s);
+            this.shiftSelection = option;
+            this.shiftOptionToId[option] = s.id;
+            this.shiftIdToOption[s.id] = option;
+          }
+        });
 
-      this.unsubCurrentShift = this.shiftsRepo.watchCurrentShift(orgId, uid, (s) => {
-        this.currentShift.set(s);
-        if (s) {
-          this.shiftId = s.id;
-          const option = this.toShiftOptionLabel(s);
-          this.shiftSelection = option;
-          this.shiftOptionToId[option] = s.id;
-          this.shiftIdToOption[s.id] = option;
-        }
-      });
+        this.unsubSchedule?.();
+        this.unsubSchedule = this.shiftsRepo.watchMySchedule(orgId, uid, (items) => {
+          this.mySchedule.set(items);
+          this.rebuildShiftOptions();
+        });
+      }
 
-      this.unsubSchedule = this.shiftsRepo.watchMySchedule(orgId, uid, (items) => {
-        this.mySchedule.set(items);
-        this.rebuildShiftOptions();
-      });
+      this.unsub?.();
+      this.unsub = this.repo.watchEntriesRange(
+        orgId, uid,
+        Timestamp.fromDate(period.start), Timestamp.fromDate(period.end),
+        async (items) => {
+          this.entries.set(items);
+          const shiftIds = Array.from(new Set(items.map((x) => x.shiftId))).filter(Boolean);
+          this.shiftMap.set(shiftIds.length ? await this.shiftsRepo.getManyByIds(orgId, shiftIds) : {});
+          const active = items.find((x) => !x.checkOutAt) || null;
+          this.entryId.set(active?.id ?? null);
+          this.onBreak.set(Boolean(active?.onBreak));
+          if (active?.shiftId && !this.shiftId) {
+            this.shiftId = String(active.shiftId);
+            this.shiftSelection = this.shiftIdToOption[this.shiftId] || this.shiftSelection;
+          }
+        },
+      );
     });
   }
 
@@ -920,28 +934,6 @@ export class AttendancePage implements OnDestroy {
     return shiftHours(s).toFixed(1);
   }
 
-  nextStaffAttendanceCard() {
-    return this.experience.enabled('nextStaffAttendanceCard');
-  }
-
-  private isClockBlockedStatus(s: Shift): boolean {
-    return ['completed', 'cancelled', 'expired', 'no_show', 'in_progress'].includes(String(s.status || '').toLowerCase());
-  }
-
-  clockInEligibleShifts(): Shift[] {
-    const daily = this.dailyLogShifts();
-    return daily.length ? daily : this.mySchedule().filter((s) => !this.isClockBlockedStatus(s)).slice(0, 8);
-  }
-
-  shiftPayPreview(s: Shift): number {
-    const rate = Number(s.payRate || (this.orgSettings as any)?.defaultPayRate || 0);
-    return Math.max(0, shiftHours(s) * rate);
-  }
-
-  shiftRequiresAutoBreak(s: Shift): boolean {
-    return shiftHours(s) >= 6;
-  }
-
   fmt(ts: any) {
     return ts ? formatDateTime(ts) : '—';
   }
@@ -958,13 +950,6 @@ export class AttendancePage implements OnDestroy {
   fmtShortTime(ts: any): string {
     const d = tsToDate(ts);
     return d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false }) : '—';
-  }
-
-  timePeriodLabel(): string {
-    const now = new Date();
-    const start = new Date(now);
-    start.setDate(now.getDate() - 13);
-    return `${start.toLocaleDateString()} - ${now.toLocaleDateString()}`;
   }
 
   toggleSelectMenu() {
@@ -1046,10 +1031,11 @@ export class AttendancePage implements OnDestroy {
     const rows = this.selectedEntries()
       .map((e) => `${this.fmtShortDate(e.checkInAt)} | ${this.fmtDisplayTime(e.checkInAt)}-${this.fmtDisplayTime(e.checkOutAt)} | ${this.workedHours(e).toFixed(2)} hrs | ${this.entryAnomalies(e).join(', ') || 'OK'}`)
       .join('\n');
-    const subject = `Timecard ${this.timePeriodLabel()} - ${this.staffName()}`;
+    const periodLabel = formatPayPeriodLabel(this.payPeriod.selectedPeriod());
+    const subject = `Timecard ${periodLabel} - ${this.staffName()}`;
     const body = [
       `Employee: ${this.staffName()}`,
-      `Period: ${this.timePeriodLabel()}`,
+      `Period: ${periodLabel}`,
       `Total hours: ${this.totalHours().toFixed(2)}`,
       '',
       rows || 'No timecard rows for this period.',
@@ -1136,6 +1122,28 @@ export class AttendancePage implements OnDestroy {
     if (this.shiftId && this.shiftIdToOption[this.shiftId]) {
       this.shiftSelection = this.shiftIdToOption[this.shiftId];
     }
+  }
+
+  nextStaffAttendanceCard() {
+    return this.experience.enabled('nextStaffAttendanceCard');
+  }
+
+  clockInEligibleShifts(): Shift[] {
+    const today = new Date();
+    return this.mySchedule()
+      .filter((s) => {
+        const d = tsToDate(s.startAt);
+        return d ? this.isSameDay(d, today) : false;
+      })
+      .filter((s) => !this.isClockBlockedStatus(s));
+  }
+
+  private isClockBlockedStatus(s: Shift): boolean {
+    return ['completed', 'cancelled', 'expired', 'no_show'].includes(String(s.status || '').toLowerCase());
+  }
+
+  shiftRequiresAutoBreak(s: Shift): boolean {
+    return shiftHours(s) > 6;
   }
 
   workedHours(e: TimeEntry): number {
@@ -1313,11 +1321,13 @@ export class AttendancePage implements OnDestroy {
   }
 
   async checkIn() {
+    const dailyShifts = this.clockInEligibleShifts();
+    if (!this.shiftId && dailyShifts.length === 1) {
+      this.shiftId = dailyShifts[0].id;
+      this.shiftSelection = this.toShiftOptionLabel(dailyShifts[0]);
+    }
     if (!this.shiftId && this.shiftSelection) {
       this.shiftId = this.shiftOptionToId[this.shiftSelection] || '';
-    }
-    if (!this.shiftId && this.dailyLogShifts().length === 1) {
-      this.shiftId = this.dailyLogShifts()[0].id;
     }
     if (!this.shiftId) return;
     this.busy = true;
@@ -1340,7 +1350,7 @@ export class AttendancePage implements OnDestroy {
       const geo = this.punchMethod === 'gps' ? await this.getGpsPayload() : undefined;
       const targetShiftId = this.resolveCheckoutShiftId();
       await this.cmd.checkOut(this.entryId()!, this.punchMethod, { shiftId: targetShiftId, ...geo });
-      this.toast.success(this.punchMethod === 'gps' ? 'GPS check-out verified. Break policy applied if needed.' : 'Checked out successfully. Break policy applied if needed.');
+      this.toast.success(this.punchMethod === 'gps' ? 'GPS check-out verified. Break policy applied.' : 'Checked out successfully. Break policy applied.');
       this.onBreak.set(false);
       this.entryId.set(null);
     } catch (e: any) {
@@ -1351,9 +1361,8 @@ export class AttendancePage implements OnDestroy {
   }
 
   private resolveCheckoutShiftId(): string {
-    const entryId = this.entryId();
-    const activeEntry = entryId ? this.entries().find((e) => e.id === entryId) : null;
-    return String(this.shiftId || this.currentShift()?.id || activeEntry?.shiftId || '').trim();
+    const active = this.entries().find((e) => e.id === this.entryId());
+    return String(active?.shiftId || this.shiftId || this.currentShift()?.id || '');
   }
 
   async breakOut() {

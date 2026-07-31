@@ -4,6 +4,7 @@ import { resolveTenantWithFallback } from '../infra/tenancy';
 import { writeAudit } from '../infra/audit';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { normalizeOrgPlan } from '../infra/plans';
+import { dayBoundsMs } from '../domain/dates';
 
 function validateMethod(m:any){ if(m!=='qr' && m!=='manual' && m!=='gps') throw new HttpsError('invalid-argument','method must be qr, gps or manual.'); return m as 'qr'|'manual'|'gps'; }
 
@@ -73,6 +74,38 @@ function toMillis(value: any): number {
   return value?.toMillis ? value.toMillis() : Number(value || 0);
 }
 
+/**
+ * Approving a time-off request unassigns any overlapping shift back to the
+ * marketplace (decideTimeOffRequest.ts), but that alone isn't a reliable
+ * guard here: a client can still submit a stale/cached shiftId from before
+ * the unassignment propagated. This is the authoritative, server-side check
+ * that a clock-in can never happen during the caller's own approved PTO,
+ * regardless of what the shift document currently says.
+ */
+async function assertNoApprovedTimeOffOverlap(
+  db: FirebaseFirestore.Firestore,
+  orgId: string,
+  uid: string,
+  shiftStartMs: number,
+  shiftEndMs: number,
+) {
+  if (!shiftStartMs || !shiftEndMs) return;
+  const snap = await db.collection('orgs').doc(orgId).collection('requests')
+    .where('userId', '==', uid)
+    .limit(200)
+    .get();
+
+  for (const doc of snap.docs) {
+    const r = doc.data() as any;
+    if (String(r.type || '') !== 'time_off' || String(r.status || '') !== 'approved') continue;
+    const rStart = dayBoundsMs(String(r.startDate || ''), false);
+    const rEnd = dayBoundsMs(String(r.endDate || r.startDate || ''), true);
+    if (rStart && rEnd && shiftStartMs < rEnd && rStart < shiftEndMs) {
+      throw new HttpsError('failed-precondition', 'You have approved time off during this shift and cannot clock in.');
+    }
+  }
+}
+
 export const checkIn = onCall(async (req) => {
   const admin=initFirebase(); const db=admin.firestore();
   const ctx = await resolveTenantWithFallback(req);
@@ -104,14 +137,19 @@ export const checkIn = onCall(async (req) => {
     throw new HttpsError('failed-precondition', 'This organization requires GPS-verified attendance.');
   }
 
-  // Validate shift assignment before proceeding
+  // Validate shift assignment before proceeding. Must equal the caller
+  // exactly (not just "not someone else's") — a shift that's been
+  // unassigned back to the marketplace (assignedUserId null, e.g. by an
+  // approved time-off request) must never be clockable-into by anyone
+  // without first claiming it.
   const shiftRef = db.collection('orgs').doc(orgId).collection('shifts').doc(shiftId);
   const shiftSnap = await shiftRef.get();
   if (!shiftSnap.exists) throw new HttpsError('not-found', 'Shift not found.');
   const shift = shiftSnap.data() as any;
-  if (shift.assignedUserId && shift.assignedUserId !== ctx.uid) {
+  if (shift.assignedUserId !== ctx.uid) {
     throw new HttpsError('permission-denied', 'You are not assigned to this shift.');
   }
+  await assertNoApprovedTimeOffOverlap(db, orgId, ctx.uid, toMillis(shift.startAt), toMillis(shift.endAt));
   if (['completed', 'cancelled', 'expired', 'no_show'].includes(shift.status)) {
     throw new HttpsError('failed-precondition', `Cannot clock in: shift is ${shift.status}.`);
   }

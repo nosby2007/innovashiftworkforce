@@ -10,6 +10,7 @@ import { getGlobalAuditLogs } from './callable/getGlobalAuditLogs';
 import { rescheduleShift } from './callable/rescheduleShift';
 import { createShift } from './callable/createShift';
 import { onShiftWriteMetrics } from './triggers/onShiftWriteMetrics';
+import { onShiftWorkforceEmail, onTimeEntryWorkforceEmail, onShiftSwapWorkforceEmail } from './triggers/onWorkforceEmailEvents';
 import { unassignShift } from './callable/unassignShift';
 import { deleteShift } from './callable/deleteShift';
 import { assignShift } from './callable/assignShift';
@@ -25,6 +26,7 @@ import { checkIn, checkOut, breakOut, breakIn } from './callable/checkInOut';
 import { markMessageRead } from './callable/markMessageRead';
 import { approveTimeCorrection } from './callable/approveTimeCorrection';
 import { requestTimeCorrection } from './callable/requestTimeCorrection';
+import { deleteTimeEntry } from './callable/deleteTimeEntry';
 import { sendMessage } from './callable/sendMessage';
 import { adminSetUserClaims } from './callable/adminSetUserClaims';
 import { adminInviteUser } from './callable/adminInviteUser';
@@ -38,6 +40,7 @@ import { listShifts } from './callable/listShifts';
 import { expireShifts } from './callable/expireShifts';
 import { contactIntake } from './http/contactIntake';
 import { decideTimeOffRequest } from './callable/decideTimeOffRequest';
+import { finalizePayrollRun } from './callable/finalizePayrollRun';
 import { accrueTimeOff } from './callable/accrueTimeOff';
 import { callOutShift } from './callable/callOutShift';
 import { updateShift } from './callable/updateShift';
@@ -46,6 +49,11 @@ import { unregisterPushToken } from './callable/unregisterPushToken';
 import { shiftActionFromNotification } from './http/shiftActionFromNotification';
 import { aiAssistantChat } from './callable/aiAssistantChat';
 import { dailyDigest } from './scheduled/dailyDigest';
+import { cleanupArchivedNotifications } from './scheduled/cleanupArchivedNotifications';
+import { enforceDataRetention } from './scheduled/enforceDataRetention';
+import { superAdminCreateUsers } from './callable/superAdminCreateUsers';
+import { listContactRequests } from './callable/listContactRequests';
+import { updateContactRequestStatus } from './callable/updateContactRequestStatus';
 
 // ----------------------------------------------------------------------
 // Stripe Billing
@@ -74,6 +82,7 @@ export {
   markMessageRead,
   approveTimeCorrection,
   requestTimeCorrection,
+  deleteTimeEntry,
   sendMessage,
   adminSetUserClaims,
   adminInviteUser,
@@ -90,6 +99,9 @@ export {
   unassignShift,
   deleteShift,
   onShiftWriteMetrics,
+  onShiftWorkforceEmail,
+  onTimeEntryWorkforceEmail,
+  onShiftSwapWorkforceEmail,
   createShift,
   rescheduleShift,
   externalNotifyCallable,
@@ -97,6 +109,7 @@ export {
   expireShifts,
   contactIntake,
   decideTimeOffRequest,
+  finalizePayrollRun,
   accrueTimeOff,
   callOutShift,
   updateShift,
@@ -105,4 +118,9 @@ export {
   shiftActionFromNotification,
   aiAssistantChat,
   dailyDigest,
+  cleanupArchivedNotifications,
+  enforceDataRetention,
+  superAdminCreateUsers,
+  listContactRequests,
+  updateContactRequestStatus,
 };

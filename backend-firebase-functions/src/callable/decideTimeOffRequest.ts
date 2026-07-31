@@ -60,8 +60,8 @@ async function notifyUser(db: FirebaseFirestore.Firestore, orgId: string, uid: s
  */
 export const decideTimeOffRequest = onCall({ secrets: [actionTokenSecret] }, async (req) => {
   const ctx = await resolveTenantWithFallback(req);
-  if (!ctx.isAdminLike) {
-    throw new HttpsError('permission-denied', 'Admin/Scheduler privileges required.');
+  if (!ctx.isAdminOrHr) {
+    throw new HttpsError('permission-denied', 'Admin/HR privileges required.');
   }
   const admin = initFirebase();
   const db = admin.firestore();

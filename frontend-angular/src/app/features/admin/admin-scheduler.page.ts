@@ -1,10 +1,13 @@
-import { AfterViewInit, Component, NgZone, OnDestroy, TemplateRef, ViewChild, signal } from '@angular/core';
+import { AfterViewInit, Component, EffectRef, NgZone, OnDestroy, TemplateRef, ViewChild, effect, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Timestamp } from 'firebase/firestore';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { ExperienceFlagsService } from '../../core/experience/experience-flags.service';
+import { PayPeriodService } from '../../core/tenancy/pay-period.service';
+import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
 import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
 import { SchedulerCommands } from '../../core/commands/scheduler.commands';
@@ -18,14 +21,14 @@ import { ToastService } from '../../core/ui/toast.service';
 import { mapAttendancePolicyError } from '../../shared/utils/attendance-policy-error.util';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
 
-import { FullCalendarModule } from '@fullcalendar/angular';
+import { FullCalendarComponent, FullCalendarModule } from '@fullcalendar/angular';
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import dayGridPlugin from '@fullcalendar/daygrid';
 
 import { MatIconModule } from '@angular/material/icon';
 import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
-import { ExperienceFlagsService } from '../../core/experience/experience-flags.service';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 interface OrgSite {
   id: string;
@@ -35,7 +38,7 @@ interface OrgSite {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FullCalendarModule, DrawerComponent, FormsModule, MatIconModule, TipCardComponent],
+  imports: [CommonModule, FullCalendarModule, DrawerComponent, FormsModule, MatIconModule, TipCardComponent, PayPeriodSelectorComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad sch-page">
       <!-- Header -->
@@ -45,61 +48,61 @@ interface OrgSite {
             <span class="sch-brand-mark">S</span>
             <span>InnovaShift</span>
           </div>
-          <h1 class="vs-title sch-hero-title">All-in-One Workforce Calendar</h1>
-          <p class="vs-page-subtitle sch-hero-subtitle">Scheduling, attendance, timesheets, communication, and insights in one place.</p>
+          <h1 class="vs-title sch-hero-title">{{ 'scheduler.title' | transloco }}</h1>
+          <p class="vs-page-subtitle sch-hero-subtitle">{{ 'scheduler.subtitle' | transloco }}</p>
         </div>
         <div class="vs-page-actions sch-hero-actions">
           <button class="vs-btn-ghost sch-hero-btn" (click)="printScheduler()">
-            <mat-icon>print</mat-icon> Print Week
+            <mat-icon>print</mat-icon> {{ 'scheduler.printWeek' | transloco }}
           </button>
           <button class="vs-btn-ghost sch-hero-btn" (click)="exportSchedulerCsv()">
-            <mat-icon>download</mat-icon> Export CSV
+            <mat-icon>download</mat-icon> {{ 'scheduler.exportCsv' | transloco }}
           </button>
           <button class="vs-btn-primary sch-create-btn" (click)="openDrawerForNew()">
-            <mat-icon>add</mat-icon> Create Shift
+            <mat-icon>add</mat-icon> {{ 'scheduler.createShift' | transloco }}
           </button>
         </div>
       </div>
 
-      <app-tip-card tipId="scheduler-intro" title="Working with the calendar" icon="calendar_month">
-        Click any shift to open its actions — assign, publish, or cancel. Use "Create Shift" above to add a new one, and the filters below to focus on a location or role.
+      <app-tip-card tipId="scheduler-intro" [title]="'scheduler.tipTitle' | transloco" icon="calendar_month">
+        {{ 'scheduler.tipBody' | transloco }}
       </app-tip-card>
 
       <div *ngIf="!orgId" class="ad-no-org vs-glass">
-        <mat-icon>warning_amber</mat-icon> Missing org context.
+        <mat-icon>warning_amber</mat-icon> {{ 'scheduler.missingOrgContext' | transloco }}
       </div>
 
       <div *ngIf="orgId" class="sch-planning-grid">
         <div class="sch-plan-card vs-glass">
           <mat-icon class="sch-plan-icon">calendar_month</mat-icon>
           <div>
-            <div class="sch-plan-label">Visible Shifts</div>
+            <div class="sch-plan-label">{{ 'scheduler.visibleShifts' | transloco }}</div>
             <div class="sch-plan-value">{{ totalVisibleShifts() }}</div>
-            <div class="sch-plan-sub">Current filters</div>
+            <div class="sch-plan-sub">{{ 'scheduler.currentFilters' | transloco }}</div>
           </div>
         </div>
         <div class="sch-plan-card vs-glass" [class.sch-plan-card--warn]="unassignedVisibleShifts() > 0">
           <mat-icon class="sch-plan-icon">radar</mat-icon>
           <div>
-            <div class="sch-plan-label">Open Coverage</div>
+            <div class="sch-plan-label">{{ 'scheduler.openCoverage' | transloco }}</div>
             <div class="sch-plan-value">{{ unassignedVisibleShifts() }}</div>
-            <div class="sch-plan-sub">Unassigned shifts</div>
+            <div class="sch-plan-sub">{{ 'scheduler.unassignedShiftsSub' | transloco }}</div>
           </div>
         </div>
         <div class="sch-plan-card vs-glass" [class.sch-plan-card--danger]="urgentVisibleShifts() > 0">
           <mat-icon class="sch-plan-icon">emergency_home</mat-icon>
           <div>
-            <div class="sch-plan-label">Next 24h Risk</div>
+            <div class="sch-plan-label">{{ 'scheduler.next24hRisk' | transloco }}</div>
             <div class="sch-plan-value">{{ urgentVisibleShifts() }}</div>
-            <div class="sch-plan-sub">Open or draft shifts</div>
+            <div class="sch-plan-sub">{{ 'scheduler.openOrDraftShifts' | transloco }}</div>
           </div>
         </div>
         <div class="sch-plan-card vs-glass">
           <mat-icon class="sch-plan-icon">monitoring</mat-icon>
           <div>
-            <div class="sch-plan-label">Planned Labor</div>
+            <div class="sch-plan-label">{{ 'scheduler.plannedLabor' | transloco }}</div>
             <div class="sch-plan-value">{{ projectedHours() }}h</div>
-            <div class="sch-plan-sub">{{ projectedLaborCost() | currency:moneyCurrency():'symbol':'1.0-0' }} projected</div>
+            <div class="sch-plan-sub">{{ projectedLaborCost() | currency:moneyCurrency():'symbol':'1.0-0' }} {{ 'scheduler.projected' | transloco }}</div>
           </div>
         </div>
       </div>
@@ -108,29 +111,30 @@ interface OrgSite {
         <div class="sch-toolbar">
           <div class="sch-filters">
             <select class="vs-select" [(ngModel)]="filterStatus" (ngModelChange)="refreshCalendarEvents()">
-              <option value="all">All statuses</option>
+              <option value="all">{{ 'scheduler.allStatuses' | transloco }}</option>
               <option *ngFor="let s of statusOptions" [value]="s">{{ s }}</option>
             </select>
             <select class="vs-select" [(ngModel)]="filterSite" (ngModelChange)="refreshCalendarEvents()">
-              <option value="all">All sites</option>
+              <option value="all">{{ 'scheduler.allSites' | transloco }}</option>
               <option *ngFor="let site of sites" [value]="site.id">{{ site.name }}</option>
             </select>
             <select class="vs-select" [(ngModel)]="filterAssigned" (ngModelChange)="refreshCalendarEvents()">
-              <option value="all">All assignment</option>
-              <option value="assigned">Assigned</option>
-              <option value="unassigned">Unassigned</option>
+              <option value="all">{{ 'scheduler.allAssignment' | transloco }}</option>
+              <option value="assigned">{{ 'scheduler.assigned' | transloco }}</option>
+              <option value="unassigned">{{ 'scheduler.unassigned' | transloco }}</option>
             </select>
           </div>
+          <app-pay-period-selector></app-pay-period-selector>
           <div class="sch-toolbar-bottom">
             <div class="sch-legend">
               <span class="sch-legend-item" *ngFor="let item of statusLegend">
                 <span class="sch-legend-dot" [class]="'sch-legend-dot sch-legend-dot--' + item.key"></span>
-                {{ item.label }}
+                {{ item.label | transloco }}
               </span>
             </div>
             <button class="vs-btn-ghost sch-batch-btn" type="button" (click)="publishFilteredOpenShifts()" [disabled]="publishingBatch || batchPublishCount() === 0">
               <mat-icon>campaign</mat-icon>
-              {{ publishingBatch ? 'Publishing...' : 'Publish Filtered Open' }}
+              {{ (publishingBatch ? 'scheduler.publishing' : 'scheduler.publishFilteredOpen') | transloco }}
               <span *ngIf="batchPublishCount() > 0">({{ batchPublishCount() }})</span>
             </button>
           </div>
@@ -139,16 +143,17 @@ interface OrgSite {
         <div class="sch-calendar-shell">
           <div class="sch-calendar-topline">
             <div>
-              <div class="sch-calendar-kicker">Smart Scheduling</div>
-              <div class="sch-calendar-title">Weekly Workforce Plan</div>
+              <div class="sch-calendar-kicker">{{ 'scheduler.smartScheduling' | transloco }}</div>
+              <div class="sch-calendar-title">{{ 'scheduler.weeklyWorkforcePlan' | transloco }}</div>
             </div>
             <div class="sch-live-pill">
               <span></span>
-              Live Calendar
+              {{ 'scheduler.liveCalendar' | transloco }}
             </div>
           </div>
 
           <full-calendar
+            #calendar
             [options]="calendarOptions"
             class="vs-calendar">
           </full-calendar>
@@ -156,74 +161,63 @@ interface OrgSite {
 
         <div class="sch-footer-hint">
           <mat-icon style="font-size:16px;">info</mat-icon>
-          Click a shift for actions. Drag range to create. Drag & drop to reschedule.
+          {{ 'scheduler.footerHint' | transloco }}
         </div>
 
         <!-- Shift Actions Modal -->
         <ng-template #shiftActionsTpl let-s="shift">
           <div *ngIf="s" class="sch-modal-content">
-            <div class="sch-action-hero" *ngIf="nextSchedulerActions()">
+            <div class="sch-action-hero">
               <div>
-                <div class="sch-action-kicker">Manager command center</div>
-                <h3>{{ s.title }}</h3>
-                <p>{{ fmtShiftWindow(s) }} • {{ s.locationName || 'No location' }}</p>
+                <span class="vs-badge vs-badge--primary" *ngIf="nextSchedulerActions()">Next roster actions</span>
+                <h3>{{ s.title || 'Shift' }}</h3>
+                <p>{{ fmtShiftWindow(s) }} · {{ s.locationName || 'No location' }} · {{ coverageSignal(s) }}</p>
               </div>
-              <span class="vs-badge" [class.vs-badge--success]="s.status === 'published'" [class.vs-badge--warning]="!s.assignedUserId">
-                {{ s.status | uppercase }}
+              <span class="vs-badge"
+                    [class.vs-badge--success]="s.assignedUserId"
+                    [class.vs-badge--warning]="!s.assignedUserId">
+                {{ s.assignedUserId ? 'Covered' : 'Needs coverage' }}
               </span>
             </div>
 
-            <div class="sch-action-grid" [class.sch-action-grid--next]="nextSchedulerActions()">
-              <button class="sch-command-card sch-command-card--primary" (click)="openEditDrawer(s)" [disabled]="isLockedShift(s)">
+            <div class="sch-action-grid">
+              <button class="sch-command-card" type="button" (click)="openEditDrawer(s)" [disabled]="isLockedShift(s)">
                 <mat-icon>edit_calendar</mat-icon>
-                <span>
-                  <strong>Edit shift</strong>
-                  <small>Adjust date, time, role, rate, or site</small>
-                </span>
+                <strong>{{ 'scheduler.edit' | transloco }}</strong>
+                <span>Update time, site, role, pay, or notes.</span>
               </button>
-              <button class="sch-command-card sch-command-card--market" (click)="publish(s,true)" *ngIf="canPublishToMarket(s)">
-                <mat-icon>campaign</mat-icon>
-                <span>
-                  <strong>Push to market</strong>
-                  <small>Alert available and qualified employees</small>
-                </span>
-              </button>
-              <button class="sch-command-card" (click)="publish(s,false)" *ngIf="s.status === 'published'">
-                <mat-icon>visibility_off</mat-icon>
-                <span>
-                  <strong>Remove from market</strong>
-                  <small>Keep shift open but hidden from staff</small>
-                </span>
-              </button>
-              <button class="sch-command-card sch-command-card--primary" (click)="openStaffPicker(s)" [disabled]="isLockedShift(s)">
+              <button class="sch-command-card" type="button" (click)="openStaffPicker(s)" [disabled]="isLockedShift(s)">
                 <mat-icon>person_add</mat-icon>
-                <span>
-                  <strong>Assign employee</strong>
-                  <small>Choose staff from this organization</small>
-                </span>
+                <strong>{{ 'scheduler.assign' | transloco }}</strong>
+                <span>Pick a qualified employee for this shift.</span>
               </button>
-              <button class="sch-command-card" (click)="unassign(s)" *ngIf="s.assignedUserId" [disabled]="isLockedShift(s)">
+              <button class="sch-command-card" type="button" (click)="publish(s,true)" *ngIf="canPublishToMarket(s)">
+                <mat-icon>campaign</mat-icon>
+                <strong>{{ 'scheduler.publishToMarketplace' | transloco }}</strong>
+                <span>Alert available staff and open claiming.</span>
+              </button>
+              <button class="sch-command-card" type="button" (click)="publish(s,false)" *ngIf="normalizeStatus(s.status) === 'published'">
+                <mat-icon>visibility_off</mat-icon>
+                <strong>{{ 'scheduler.unpublish' | transloco }}</strong>
+                <span>Remove this shift from marketplace visibility.</span>
+              </button>
+              <button class="sch-command-card" type="button" (click)="unassign(s)" *ngIf="s.assignedUserId" [disabled]="isLockedShift(s)">
                 <mat-icon>person_remove</mat-icon>
-                <span>
-                  <strong>Vacate shift</strong>
-                  <small>Remove current assignee</small>
-                </span>
+                <strong>{{ 'scheduler.unassignAction' | transloco }}</strong>
+                <span>Make the shift vacant for reassignment.</span>
               </button>
-              <button class="sch-command-card" (click)="openShiftChat(s.id)">
+              <button class="sch-command-card" type="button" (click)="openShiftChat(s.id)">
                 <mat-icon>chat</mat-icon>
-                <span>
-                  <strong>Open chat</strong>
-                  <small>Coordinate with team</small>
-                </span>
+                <strong>{{ 'scheduler.openChat' | transloco }}</strong>
+                <span>Coordinate directly with the assigned team.</span>
               </button>
             </div>
 
             <div class="sch-shift-details">
-              <div class="sch-detail-item"><span>Title</span> {{ s.title }}</div>
-              <div class="sch-detail-item"><span>Status</span> <span class="vs-badge vs-badge--neutral">{{ s.status | uppercase }}</span></div>
-              <div class="sch-detail-item"><span>Location</span> {{ s.locationName }}</div>
-              <div class="sch-detail-item"><span>Assigned</span> {{ s.assignedUserId ? userLabel(s.assignedUserId) : '—' }}</div>
-              <div class="sch-detail-item" *ngIf="nextSchedulerActions()"><span>Coverage signal</span> {{ coverageSignal(s) }}</div>
+              <div class="sch-detail-item"><span>{{ 'scheduler.titleLabel' | transloco }}</span> {{ s.title }}</div>
+              <div class="sch-detail-item"><span>{{ 'scheduler.status' | transloco }}</span> <span class="vs-badge vs-badge--neutral">{{ s.status | uppercase }}</span></div>
+              <div class="sch-detail-item"><span>{{ 'scheduler.location' | transloco }}</span> {{ s.locationName }}</div>
+              <div class="sch-detail-item"><span>{{ 'scheduler.assignedLabel' | transloco }}</span> {{ s.assignedUserId ? userLabel(s.assignedUserId) : '—' }}</div>
             </div>
           </div>
         </ng-template>
@@ -232,113 +226,113 @@ interface OrgSite {
         <ng-template #staffPickerTpl>
           <div class="sch-modal-content">
             <div class="vs-input-wrap" style="margin-bottom:14px;">
-              <input class="vs-input" [(ngModel)]="staffSearch" placeholder="Search staff (name/email/role)">
+              <input class="vs-input" [(ngModel)]="staffSearch" [placeholder]="'scheduler.searchStaffPlaceholder' | transloco">
             </div>
 
             <div class="sch-staff-list">
               <div *ngFor="let u of filteredUsers(); let i = index" class="sch-staff-item">
                 <div class="sch-staff-info">
-                  <div class="sch-staff-name">{{ u.displayName || u.email || 'Staff member' }}</div>
+                  <div class="sch-staff-name">{{ u.displayName || u.email || ('scheduler.staffMemberFallback' | transloco) }}</div>
                   <div class="sch-staff-role">{{ u.jobRole || '—' }}</div>
                 </div>
-                <button class="vs-btn-ghost sch-assign-btn" (click)="pickStaff(u.uid)">Select</button>
+                <button class="vs-btn-ghost sch-assign-btn" (click)="pickStaff(u.uid)">{{ 'scheduler.select' | transloco }}</button>
               </div>
-              <div *ngIf="filteredUsers().length === 0" class="vs-muted" style="padding:20px;text-align:center;">No staff found.</div>
+              <div *ngIf="filteredUsers().length === 0" class="vs-muted" style="padding:20px;text-align:center;">{{ 'scheduler.noStaffFound' | transloco }}</div>
             </div>
           </div>
         </ng-template>
       </div>
 
-      <app-drawer [open]="drawerOpen" [title]="drawerTitle" (close)="closeDrawer()">
+      <app-drawer [open]="drawerOpen" [title]="drawerTitle | transloco" (close)="closeDrawer()">
         <div class="sch-drawer-body">
           <div class="sch-preset-row" *ngIf="!editingShiftId">
             <button class="vs-btn-ghost" type="button" (click)="applyWeekdayPreset()">
               <mat-icon>auto_fix_high</mat-icon>
-              Standard Mon-Fri 8h
+              {{ 'scheduler.standardMonFri8h' | transloco }}
             </button>
           </div>
 
           <div class="vs-form-row">
             <div>
-              <label class="vs-field-label">Title *</label>
-              <input class="vs-input" [(ngModel)]="draft.title" placeholder="e.g. Morning Shift">
+              <label class="vs-field-label">{{ 'scheduler.titleRequired' | transloco }}</label>
+              <input class="vs-input" [(ngModel)]="draft.title" [placeholder]="'scheduler.titlePlaceholder' | transloco">
             </div>
           </div>
           <div class="vs-form-row">
             <div>
-              <label class="vs-field-label">Location *</label>
+              <label class="vs-field-label">{{ 'scheduler.locationRequired' | transloco }}</label>
               <select *ngIf="sites.length" class="vs-select" [(ngModel)]="draft.locationId" (ngModelChange)="onDraftSiteChange($event)">
-                <option value="">Select a site</option>
+                <option value="">{{ 'scheduler.selectASite' | transloco }}</option>
                 <option *ngFor="let site of sites" [value]="site.id">{{ site.name }}</option>
               </select>
-              <input *ngIf="!sites.length" class="vs-input" [(ngModel)]="draft.locationName" placeholder="e.g. Main Clinic">
+              <input *ngIf="!sites.length" class="vs-input" [(ngModel)]="draft.locationName" [placeholder]="'scheduler.locationPlaceholder' | transloco">
             </div>
           </div>
 
           <div class="vs-form-row vs-form-row--2">
             <div>
-              <label class="vs-field-label">Start Time *</label>
+              <label class="vs-field-label">{{ 'scheduler.startTimeRequired' | transloco }}</label>
               <input type="datetime-local" class="vs-input" [(ngModel)]="draft.startLocal">
             </div>
             <div>
-              <label class="vs-field-label">End Time *</label>
+              <label class="vs-field-label">{{ 'scheduler.endTimeRequired' | transloco }}</label>
               <input type="datetime-local" class="vs-input" [(ngModel)]="draft.endLocal">
             </div>
           </div>
 
           <div class="vs-form-row vs-form-row--2">
             <div>
-              <label class="vs-field-label">Required Role</label>
+              <label class="vs-field-label">{{ 'scheduler.requiredRole' | transloco }}</label>
               <select class="vs-select" [(ngModel)]="draft.requiredJobRole">
-                <option value="">Any</option>
+                <option value="">{{ 'scheduler.any' | transloco }}</option>
                 <option>RN</option><option>CNA</option><option>LPN</option><option>Caregiver</option>
                 <option>NP</option><option>MD</option><option>Manager</option><option>Admin</option><option>HR</option>
               </select>
             </div>
             <div>
-              <label class="vs-field-label">Pay Rate ({{ moneyCurrency() }}/hr)</label>
-              <input type="number" class="vs-input" [(ngModel)]="draft.payRate" placeholder="e.g. 45">
+              <label class="vs-field-label">{{ 'scheduler.payRate' | transloco: { currency: moneyCurrency() } }}</label>
+              <input type="number" class="vs-input" [(ngModel)]="draft.payRate" [placeholder]="'scheduler.payRatePlaceholder' | transloco">
             </div>
           </div>
 
           <div class="vs-form-row">
             <div>
-              <label class="vs-field-label">Notes</label>
-              <textarea rows="3" class="vs-input" [(ngModel)]="draft.notes" placeholder="Shift instructions..."></textarea>
+              <label class="vs-field-label">{{ 'scheduler.notes' | transloco }}</label>
+              <textarea rows="3" class="vs-input" [(ngModel)]="draft.notes" [placeholder]="'scheduler.notesPlaceholder' | transloco"></textarea>
             </div>
           </div>
 
           <div class="vs-form-row vs-form-row--2" *ngIf="!editingShiftId">
             <div>
-              <label class="vs-field-label">Assign to Employee (optional)</label>
+              <label class="vs-field-label">{{ 'scheduler.assignToEmployeeOptional' | transloco }}</label>
               <select class="vs-select" [(ngModel)]="draft.assigneeUid">
-                <option value="">Unassigned</option>
+                <option value="">{{ 'scheduler.unassignedOption' | transloco }}</option>
                 <option *ngFor="let u of users()" [value]="u.uid">{{ userLabel(u.uid) }}</option>
               </select>
             </div>
             <div class="sch-inline-checks">
               <label class="sch-toggle-inline">
                 <input type="checkbox" [(ngModel)]="draft.publishIfUnassigned">
-                <span>Publish to marketplace if unassigned</span>
+                <span>{{ 'scheduler.publishIfUnassigned' | transloco }}</span>
               </label>
               <label class="sch-toggle-inline">
                 <input type="checkbox" [(ngModel)]="draft.repeatWeekdays">
-                <span>Repeat weekdays</span>
+                <span>{{ 'scheduler.repeatWeekdays' | transloco }}</span>
               </label>
             </div>
           </div>
 
           <div class="vs-form-row" *ngIf="!editingShiftId && draft.repeatWeekdays">
             <div>
-              <label class="vs-field-label">Number of weeks</label>
+              <label class="vs-field-label">{{ 'scheduler.numberOfWeeks' | transloco }}</label>
               <input type="number" min="1" max="12" class="vs-input" [(ngModel)]="draft.repeatWeeks" placeholder="1">
             </div>
           </div>
 
           <div class="sch-drawer-actions">
-            <button class="vs-btn-ghost" (click)="closeDrawer()">Cancel</button>
+            <button class="vs-btn-ghost" (click)="closeDrawer()">{{ 'scheduler.cancel' | transloco }}</button>
             <button class="vs-btn-primary" (click)="saveDrawer()" [disabled]="!draft.title || !draft.locationName || !draft.startLocal || !draft.endLocal">
-              <mat-icon>{{ editingShiftId ? 'save' : 'add' }}</mat-icon> {{ editingShiftId ? 'Save Changes' : 'Create Shift' }}
+              <mat-icon>{{ editingShiftId ? 'save' : 'add' }}</mat-icon> {{ (editingShiftId ? 'scheduler.saveChanges' : 'scheduler.createShift') | transloco }}
             </button>
           </div>
         </div>
@@ -593,60 +587,6 @@ interface OrgSite {
 
     /* Modals & Drawer */
     .sch-modal-content { display:flex; flex-direction:column; gap:16px; }
-    .sch-action-hero {
-      display:flex;
-      justify-content:space-between;
-      gap:16px;
-      align-items:flex-start;
-      padding:16px;
-      border:1px solid rgba(37,99,235,0.18);
-      border-radius:var(--radius-md);
-      background:linear-gradient(135deg, rgba(37,99,235,0.10), rgba(14,165,233,0.06));
-    }
-    .sch-action-kicker {
-      color:var(--primary);
-      font-weight:900;
-      font-size:11px;
-      text-transform:uppercase;
-      letter-spacing:0.08em;
-      margin-bottom:4px;
-    }
-    .sch-action-hero h3 { margin:0; font-size:20px; color:var(--text); }
-    .sch-action-hero p { margin:4px 0 0; color:var(--text-muted); }
-    .sch-action-grid {
-      display:grid;
-      grid-template-columns:repeat(2, minmax(0, 1fr));
-      gap:10px;
-    }
-    .sch-action-grid--next { grid-template-columns:repeat(3, minmax(0, 1fr)); }
-    .sch-command-card {
-      min-height:74px;
-      display:grid;
-      grid-template-columns:auto 1fr;
-      gap:10px;
-      align-items:center;
-      text-align:left;
-      border:1px solid var(--border);
-      border-radius:var(--radius-md);
-      background:var(--bg-surface);
-      color:var(--text);
-      padding:12px;
-      cursor:pointer;
-      transition:transform var(--t-fast), box-shadow var(--t-fast), border-color var(--t-fast);
-    }
-    .sch-command-card:hover:not(:disabled) {
-      border-color:rgba(37,99,235,0.35);
-      box-shadow:0 12px 28px rgba(15,23,42,0.10);
-      transform:translateY(-1px);
-    }
-    .sch-command-card:disabled { opacity:0.5; cursor:not-allowed; }
-    .sch-command-card mat-icon { color:var(--primary); }
-    .sch-command-card strong,
-    .sch-command-card small { display:block; }
-    .sch-command-card small { margin-top:3px; color:var(--text-muted); line-height:1.3; }
-    .sch-command-card--primary { border-color:rgba(37,99,235,0.28); }
-    .sch-command-card--market { border-color:rgba(16,185,129,0.32); background:rgba(16,185,129,0.08); }
-    .sch-command-card--market mat-icon { color:var(--success); }
     .sch-shift-details { background:var(--panel-2); border-radius:var(--radius); padding:16px; display:flex; flex-direction:column; gap:10px; }
     .sch-detail-item { display:flex; justify-content:space-between; font-size:14px; color:var(--text); }
     .sch-detail-item span:first-child { color:var(--text-muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
@@ -976,8 +916,6 @@ interface OrgSite {
       .sch-filters { grid-template-columns: 1fr; }
       .sch-planning-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
       .sch-plan-card { align-items:flex-start; }
-      .sch-action-grid,
-      .sch-action-grid--next { grid-template-columns:1fr; }
       ::ng-deep .vs-calendar .fc-toolbar.fc-header-toolbar {
         grid-template-columns: 1fr;
       }
@@ -999,12 +937,53 @@ interface OrgSite {
         align-items:flex-start;
         flex-direction:column;
       }
-      .sch-page .vs-btn-ghost,
+    .sch-page .vs-btn-ghost,
       .sch-create-btn {
         width: 100%;
         justify-content: center;
       }
     }
+    .sch-action-hero {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(37, 99, 235, 0.18);
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.10), rgba(20, 184, 166, 0.08));
+      margin-bottom: 14px;
+    }
+    .sch-action-hero h3 { margin: 8px 0 4px; font-size: 20px; color: var(--text); }
+    .sch-action-hero p { margin: 0; color: var(--text-muted); line-height: 1.45; }
+    .sch-action-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+    }
+    .sch-command-card {
+      appearance: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--panel);
+      color: var(--text);
+      padding: 14px;
+      text-align: left;
+      display: grid;
+      gap: 6px;
+      cursor: pointer;
+      min-height: 132px;
+      transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+    }
+    .sch-command-card:hover:not(:disabled) {
+      transform: translateY(-1px);
+      border-color: rgba(37, 99, 235, 0.35);
+      box-shadow: var(--shadow-sm);
+    }
+    .sch-command-card:disabled { opacity: .48; cursor: not-allowed; }
+    .sch-command-card mat-icon { color: var(--primary); }
+    .sch-command-card strong { font-weight: 900; }
+    .sch-command-card span { color: var(--text-muted); font-size: 12px; line-height: 1.35; }
   `]
 })
 export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
@@ -1020,13 +999,13 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   filterAssigned: 'all' | 'assigned' | 'unassigned' = 'all';
   statusOptions = ['draft', 'open', 'published', 'assigned', 'claimed', 'in_progress', 'completed', 'cancelled', 'expired', 'no_show'];
   statusLegend = [
-    { key: 'draft', label: 'Draft' },
-    { key: 'open', label: 'Open' },
-    { key: 'published', label: 'Published' },
-    { key: 'assigned', label: 'Assigned/Claimed' },
-    { key: 'in_progress', label: 'In Progress' },
-    { key: 'completed', label: 'Completed' },
-    { key: 'cancelled', label: 'Cancelled/Expired' },
+    { key: 'draft', label: 'scheduler.legendDraft' },
+    { key: 'open', label: 'scheduler.legendOpen' },
+    { key: 'published', label: 'scheduler.legendPublished' },
+    { key: 'assigned', label: 'scheduler.legendAssignedClaimed' },
+    { key: 'in_progress', label: 'scheduler.legendInProgress' },
+    { key: 'completed', label: 'scheduler.legendCompleted' },
+    { key: 'cancelled', label: 'scheduler.legendCancelledExpired' },
   ];
   
   calendarOptions: any = {
@@ -1064,7 +1043,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   publishingBatch = false;
 
   drawerOpen = false;
-  drawerTitle = 'Create Shift';
+  drawerTitle = 'scheduler.drawerTitleCreate';
   editingShiftId: string | null = null;
   draft: any = {
     title: 'Shift',
@@ -1090,9 +1069,13 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   // permanently empty once orgId did load.
   @ViewChild('shiftActionsTpl') shiftActionsTpl!: TemplateRef<any>;
   @ViewChild('staffPickerTpl') staffPickerTpl!: TemplateRef<any>;
+  @ViewChild('calendar') calendarRef!: FullCalendarComponent;
+
+  private periodEffect!: EffectRef;
 
   constructor(
     private ctx: OrgContextService,
+    private payPeriod: PayPeriodService,
     private repo: ShiftsRepo,
     private cmd: SchedulerCommands,
     private adminCmd: ShiftAdminCommands,
@@ -1101,61 +1084,45 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     private router: Router,
     private zone: NgZone,
     private toast: ToastService,
-    private experience: ExperienceFlagsService
+    private i18n: TranslocoService,
+    private experience: ExperienceFlagsService,
   ) {
+    // Sites/users are org-readiness concerns, unrelated to pay period —
+    // keep the existing bind-once-per-org-id retry pattern for those.
     const bind = () => {
       const orgId = this.ctx.orgId();
       this.orgId = orgId;
       if (!orgId) return;
-      if (this.unsub) return;
-
-      const start = Timestamp.fromMillis(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const end = Timestamp.fromMillis(Date.now() + 14 * 24 * 60 * 60 * 1000);
       void this.loadSites(orgId);
-
       if (!this.unsubUsers) {
         this.unsubUsers = this.usersRepo.watchOrgUsers(orgId, (u) => this.users.set(u));
       }
+    };
+    bind();
+    setTimeout(bind, 800);
+    setTimeout(bind, 2200);
 
+    // Shift data IS period-scoped: unsubscribe/resubscribe whenever orgId
+    // or the selected pay period changes.
+    this.periodEffect = effect(() => {
+      const orgId = this.ctx.orgId();
+      const period = this.payPeriod.selectedPeriod();
+      this.unsub?.();
+      this.unsub = null;
+      if (!orgId) return;
+
+      const start = Timestamp.fromDate(period.start);
+      const end = Timestamp.fromDate(period.end);
       this.unsub = this.repo.watchOrgRange(orgId, start, end, (items) => {
         this.items.set(items);
         this.refreshCalendarEvents();
       });
-    };
 
-    bind();
-    setTimeout(bind, 800);
-    setTimeout(bind, 2200);
+      this.calendarRef?.getApi()?.gotoDate(period.start);
+    });
   }
 
   ngAfterViewInit() {}
-
-  nextSchedulerActions() {
-    return this.experience.enabled('nextSchedulerActions');
-  }
-
-  isLockedShift(s: Shift): boolean {
-    return ['completed', 'cancelled', 'expired', 'no_show'].includes(this.normalizeStatus(s.status));
-  }
-
-  canPublishToMarket(s: Shift): boolean {
-    return !s.assignedUserId && ['draft', 'open'].includes(this.normalizeStatus(s.status));
-  }
-
-  coverageSignal(s: Shift): string {
-    if (s.assignedUserId) return `Covered by ${this.userLabel(s.assignedUserId)}`;
-    if (this.normalizeStatus(s.status) === 'published') return 'Vacant and visible in marketplace';
-    return 'Vacant, not visible to staff yet';
-  }
-
-  fmtShiftWindow(s: Shift): string {
-    const start = tsToDate(s.startAt);
-    const end = tsToDate(s.endAt);
-    const date = start ? start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'No date';
-    const startTime = start ? start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '--';
-    const endTime = end ? end.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '--';
-    return `${date}, ${startTime} - ${endTime}`;
-  }
 
   onEventClick(arg: any) {
     const shiftFromProps: Shift | null = (arg?.event?.extendedProps?.shift as Shift) || null;
@@ -1173,10 +1140,10 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       await this.cmd.publishShift(s.id, yes);
       this.zone.run(() => {
         this.modal.close();
-        this.toast.success(yes ? 'Shift published.' : 'Shift unpublished.');
+        this.toast.success(this.i18n.translate(yes ? 'scheduler.shiftPublished' : 'scheduler.shiftUnpublished'));
       });
     } catch (e: any) {
-      this.zone.run(() => this.toast.errorFrom(e, 'Publish failed.'));
+      this.zone.run(() => this.toast.errorFrom(e, this.i18n.translate('scheduler.publishFailed')));
     }
   }
 
@@ -1205,10 +1172,10 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       await this.cmd.assignShift(this.staffPickForShiftId, uid);
       this.zone.run(() => {
         this.modal.close();
-        this.toast.success('Staff assigned successfully.');
+        this.toast.success(this.i18n.translate('scheduler.staffAssigned'));
       });
     } catch (e: any) {
-      this.zone.run(() => this.toast.errorFrom(e, mapAttendancePolicyError(e, 'Assign failed.')));
+      this.zone.run(() => this.toast.errorFrom(e, mapAttendancePolicyError(e, this.i18n.translate('scheduler.assignFailed'))));
     }
   }
 
@@ -1217,10 +1184,10 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       await this.cmd.unassignShift(s.id);
       this.zone.run(() => {
         this.modal.close();
-        this.toast.success('Staff unassigned.');
+        this.toast.success(this.i18n.translate('scheduler.staffUnassigned'));
       });
     } catch (e: any) {
-      this.zone.run(() => this.toast.errorFrom(e, 'Unassign failed.'));
+      this.zone.run(() => this.toast.errorFrom(e, this.i18n.translate('scheduler.unassignFailed')));
     }
   }
 
@@ -1238,10 +1205,10 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
 
     try {
       await this.adminCmd.rescheduleShift(s.id, start, end);
-      this.toast.success('Shift rescheduled.');
+      this.toast.success(this.i18n.translate('scheduler.shiftRescheduled'));
     } catch (e: any) {
       if (typeof info.revert === 'function') info.revert();
-      this.toast.errorFrom(e, mapAttendancePolicyError(e, 'Reschedule failed.'));
+      this.toast.errorFrom(e, mapAttendancePolicyError(e, this.i18n.translate('scheduler.rescheduleFailed')));
     }
   }
 
@@ -1271,7 +1238,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   }
 
   openDrawerForNew() {
-    this.drawerTitle = 'Create Shift';
+    this.drawerTitle = 'scheduler.drawerTitleCreate';
     this.editingShiftId = null;
     this.drawerOpen = true;
     this.draft = {
@@ -1306,7 +1273,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       this.modal.close();
       const start = tsToDate(s.startAt);
       const end = tsToDate(s.endAt);
-      this.drawerTitle = 'Edit Shift';
+      this.drawerTitle = 'scheduler.drawerTitleEdit';
       this.editingShiftId = s.id;
       this.drawerOpen = true;
       this.draft = {
@@ -1347,11 +1314,11 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       const endAtMs = this.draft.endLocal ? new Date(this.draft.endLocal).getTime() : 0;
 
       if (!startAtMs || !endAtMs) {
-        this.toast.error('Please provide valid Start and End times. [E_VALIDATION_TIME_RANGE]');
+        this.toast.error(`${this.i18n.translate('scheduler.validTimeRangeRequired')} [E_VALIDATION_TIME_RANGE]`);
         return;
       }
       if (endAtMs <= startAtMs) {
-        this.toast.error('End time cannot be before start time. [E_VALIDATION_TIME_ORDER]');
+        this.toast.error(`${this.i18n.translate('scheduler.endBeforeStart')} [E_VALIDATION_TIME_ORDER]`);
         return;
       }
 
@@ -1367,9 +1334,9 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       });
 
       this.closeDrawer();
-      this.toast.success('Shift updated successfully.');
+      this.toast.success(this.i18n.translate('scheduler.shiftUpdated'));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Update shift failed.');
+      this.toast.errorFrom(e, this.i18n.translate('scheduler.updateShiftFailed'));
     }
   }
 
@@ -1379,12 +1346,12 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       const endAtMs = this.draft.endLocal ? new Date(this.draft.endLocal).getTime() : 0;
 
       if (!startAtMs || !endAtMs) {
-        this.toast.error('Please provide valid Start and End times. [E_VALIDATION_TIME_RANGE]');
+        this.toast.error(`${this.i18n.translate('scheduler.validTimeRangeRequired')} [E_VALIDATION_TIME_RANGE]`);
         return;
       }
 
       if (endAtMs <= startAtMs) {
-        this.toast.error('End time cannot be before start time. [E_VALIDATION_TIME_ORDER]');
+        this.toast.error(`${this.i18n.translate('scheduler.endBeforeStart')} [E_VALIDATION_TIME_ORDER]`);
         return;
       }
 
@@ -1421,9 +1388,11 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       }
 
       this.drawerOpen = false;
-      this.toast.success(slots.length > 1 ? `${slots.length} shifts created successfully.` : 'Shift created successfully.');
+      this.toast.success(slots.length > 1
+        ? this.i18n.translate('scheduler.shiftsCreated', { count: slots.length })
+        : this.i18n.translate('scheduler.shiftCreated'));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Create shift failed.');
+      this.toast.errorFrom(e, this.i18n.translate('scheduler.createShiftFailed'));
     }
   }
 
@@ -1485,6 +1454,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     if (this.unsubUsers) this.unsubUsers();
     this.unsub = null;
     this.unsubUsers = null;
+    this.periodEffect.destroy();
   }
 
   onDraftSiteChange(siteId: string) {
@@ -1510,6 +1480,31 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
 
   private normalizeStatus(status: string | undefined): string {
     return String(status || '').trim().toLowerCase();
+  }
+
+  nextSchedulerActions() {
+    return this.experience.enabled('nextSchedulerActions');
+  }
+
+  isLockedShift(s: Shift): boolean {
+    return ['completed', 'cancelled', 'expired', 'no_show'].includes(this.normalizeStatus(s.status));
+  }
+
+  canPublishToMarket(s: Shift): boolean {
+    return !s.assignedUserId && ['draft', 'open'].includes(this.normalizeStatus(s.status));
+  }
+
+  coverageSignal(s: Shift): string {
+    if (s.assignedUserId) return `Assigned to ${this.userLabel(s.assignedUserId)}`;
+    if (this.normalizeStatus(s.status) === 'published') return 'Visible in marketplace';
+    return 'Unassigned';
+  }
+
+  fmtShiftWindow(s: Shift): string {
+    const start = tsToDate(s.startAt);
+    const end = tsToDate(s.endAt);
+    if (!start || !end) return 'Time not set';
+    return `${start.toLocaleDateString()} ${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
   }
 
   eventClassNames(arg: any): string[] {
@@ -1664,9 +1659,11 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       for (const shift of targets) {
         await this.cmd.publishShift(shift.id, true);
       }
-      this.toast.success(targets.length === 1 ? 'Shift published.' : `${targets.length} shifts published.`);
+      this.toast.success(targets.length === 1
+        ? this.i18n.translate('scheduler.shiftPublished')
+        : this.i18n.translate('scheduler.shiftsPublished', { count: targets.length }));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Batch publish failed.');
+      this.toast.errorFrom(e, this.i18n.translate('scheduler.batchPublishFailed'));
     } finally {
       this.publishingBatch = false;
     }

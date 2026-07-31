@@ -118,4 +118,66 @@ export class SuperAdminService {
     const res = await call({ limit });
     return res.data as any[];
   }
+
+  async createUsers(users: NewEmployeeInput[]): Promise<CreateUsersResult> {
+    const call = this.fn('superAdminCreateUsers');
+    const res = await call({ users });
+    return res.data as CreateUsersResult;
+  }
+
+  async listContactRequests(limit: number = 100): Promise<ContactRequestItem[]> {
+    const call = this.fn('listContactRequests');
+    const res = await call({ limit });
+    return Array.isArray(res.data?.items) ? res.data.items as ContactRequestItem[] : [];
+  }
+
+  async updateContactRequestStatus(requestId: string, status: ContactRequestStatus, convertedOrgId?: string) {
+    const call = this.fn('updateContactRequestStatus');
+    const res = await call({ requestId, status, convertedOrgId });
+    return res.data;
+  }
+}
+
+export type ContactRequestStatus = 'new' | 'contacted' | 'converted' | 'dismissed';
+
+export interface ContactRequestItem {
+  id: string;
+  name: string;
+  organization: string;
+  email: string;
+  size: string;
+  message?: string | null;
+  status: ContactRequestStatus;
+  createdAt: any;
+  updatedAt?: any;
+  reviewedBy?: string | null;
+  convertedOrgId?: string | null;
+}
+
+export interface NewEmployeeInput {
+  email: string;
+  displayName: string;
+  orgId: string;
+  accessRole: AccessRole;
+  jobRole: string;
+  payRate?: number | null;
+  payType?: string;
+  phone?: string;
+  employeeNumber?: string;
+  department?: string;
+  hireDate?: string;
+  photoURL?: string;
+}
+
+export interface CreateUsersRowResult {
+  email: string;
+  ok: boolean;
+  uid?: string;
+  isNewUser?: boolean;
+  passwordResetLink?: string;
+  error?: string;
+}
+
+export interface CreateUsersResult {
+  results: CreateUsersRowResult[];
 }

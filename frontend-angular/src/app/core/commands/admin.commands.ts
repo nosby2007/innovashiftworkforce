@@ -55,4 +55,8 @@ export class AdminCommands {
   }) {
     return this.fx.call('reviewEmployeeDocument', payload);
   }
+
+  async deleteTimeEntry(entryId: string, reason: string) {
+    return this.fx.call('deleteTimeEntry', { entryId, reason });
+  }
 }

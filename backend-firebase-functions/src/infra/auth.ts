@@ -8,6 +8,10 @@ export function getClaims(ctx:any){ const a=requireAuth(ctx); const t=a.token||{
 export function requireOrg(c:{orgId?:string}){ if(!c.orgId) throw new HttpsError('failed-precondition','Missing orgId claim.'); return c.orgId; }
 export function requireOrgAdminLike(c:{accessRole?:AccessRole, platformRole?:string}){ if(normalizePlatformRole(c.platformRole)==='superAdmin') return true; if(!c.accessRole||!['admin','scheduler','hr','manager'].includes(c.accessRole)) throw new HttpsError('permission-denied','Admin-like required.'); return true; }
 
+// Payroll, PTO decisions, and employee documents are discretionary/sensitive
+// data — restricted to admin and hr, unlike requireOrgAdminLike's broader set.
+export function requireOrgAdminOrHr(c:{accessRole?:AccessRole, platformRole?:string}){ if(normalizePlatformRole(c.platformRole)==='superAdmin') return true; if(!c.accessRole||!['admin','hr'].includes(c.accessRole)) throw new HttpsError('permission-denied','Admin/HR required.'); return true; }
+
 export function requireAdminOrScheduler(claims: any) {
   const role = normalizeAccessRole(claims?.accessRole || claims?.role || null);
   if (!role || !['admin','scheduler','manager','hr'].includes(String(role))) {

@@ -59,6 +59,13 @@ export async function runMembershipAction(input: RunMembershipActionInput) {
     if (!scopedOrgId || scopedOrgId !== currentOrgId) {
       throw new HttpsError('permission-denied', 'Cross-organization membership update is not allowed.');
     }
+
+    // A manager/scheduler is org-admin-like but must not be able to
+    // revoke/suspend an admin or hr account — only an admin (or hr, for
+    // other hr accounts) may act on peer/higher-privilege users.
+    if (['admin', 'hr'].includes(currentAccessRole) && !['admin', 'hr'].includes(String(caller.accessRole))) {
+      throw new HttpsError('permission-denied', 'Only admin/hr can modify an admin or hr account.');
+    }
   }
 
   if (action === 'transfer') {
@@ -84,6 +91,14 @@ export async function runMembershipAction(input: RunMembershipActionInput) {
       }, { merge: true });
     }
 
+    // Revoke (employment ended) keeps the Auth account enabled so the
+    // former employee can still sign in — Firestore/rules access is still
+    // fully cut off via orgId/accessRole going null below, except a
+    // narrow self-read of their own historical payroll/payslips
+    // (firestore.rules' formerOrgId() check), which is the point: they
+    // need their paystubs for tax purposes after they're gone. Suspend
+    // (a temporary hold, e.g. pending investigation) keeps today's full
+    // lockout — that one's meant to cut off access immediately.
     await db.doc(`users/${uid}`).set({
       uid,
       email: authUser.email ?? rootData.email ?? null,
@@ -92,6 +107,7 @@ export async function runMembershipAction(input: RunMembershipActionInput) {
       accessRole: null,
       jobRole: rootData.jobRole ?? null,
       active: false,
+      formerOrgId: action === 'revoke' ? orgId || null : rootData.formerOrgId ?? null,
       updatedAt: now,
       revokedAt: now,
       revokedBy: caller.uid,
@@ -104,7 +120,7 @@ export async function runMembershipAction(input: RunMembershipActionInput) {
       platformRole,
     });
 
-    if (platformRole !== 'superAdmin') {
+    if (platformRole !== 'superAdmin' && action === 'suspend') {
       await admin.auth().updateUser(uid, { disabled: true });
     }
 
@@ -168,6 +184,7 @@ export async function runMembershipAction(input: RunMembershipActionInput) {
     accessRole,
     jobRole,
     active: true,
+    formerOrgId: null,
     transferredFromOrgId: oldOrgId,
     transferredAt: now,
     transferredBy: caller.uid,

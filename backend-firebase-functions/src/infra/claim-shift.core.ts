@@ -1,6 +1,7 @@
 import { HttpsError } from 'firebase-functions/v2/https';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { shiftRoleMatches } from '../domain/job-roles';
+import { dayBoundsMs } from '../domain/dates';
 
 const MAX_ASSIGNED_HOURS_PER_DAY = 16;
 
@@ -67,6 +68,24 @@ export async function claimShiftForUser(db: FirebaseFirestore.Firestore, orgId: 
     const startMs = s.startAt?.toMillis ? s.startAt.toMillis() : Number(s.startAt || 0);
     if (!startMs || !endMs || endMs <= startMs) {
       throw new HttpsError('failed-precondition', 'Invalid shift schedule.');
+    }
+
+    // A staff member with approved PTO/time-off overlapping this shift's
+    // window must not be able to claim it in the first place — mirrors the
+    // same guard checkInOut.ts enforces at clock-in time.
+    const timeOffSnap = await tx.get(
+      db.collection('orgs').doc(orgId).collection('requests')
+        .where('userId', '==', uid)
+        .limit(200)
+    );
+    for (const doc of timeOffSnap.docs) {
+      const r = doc.data() as any;
+      if (String(r.type || '') !== 'time_off' || String(r.status || '') !== 'approved') continue;
+      const rStart = dayBoundsMs(String(r.startDate || ''), false);
+      const rEnd = dayBoundsMs(String(r.endDate || r.startDate || ''), true);
+      if (rStart && rEnd && startMs < rEnd && rStart < endMs) {
+        throw new HttpsError('failed-precondition', 'You have approved time off during this shift and cannot claim it.');
+      }
     }
 
     const targetDay = utcDayKeyFromMillis(startMs);

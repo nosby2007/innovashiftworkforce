@@ -46,7 +46,11 @@ export const adminSetUserClaims = onCall(async (req) => {
   if(!callerIsSuper){
     if(!callerOrg) throw new HttpsError('permission-denied','Caller has no orgId claim.');
     if(targetOrgId!==callerOrg) throw new HttpsError('permission-denied','Cross-org update not allowed.');
-    if(!['admin','scheduler','hr','manager'].includes(String(caller.accessRole))) throw new HttpsError('permission-denied','Admin-like required.');
+    // Role assignment (including granting 'admin' itself) is admin-only —
+    // scheduler/manager/hr must not be able to escalate their own or
+    // anyone else's accessRole. Mirrors adminInviteUser's "elevated roles
+    // are provisioned by super-admin workflows" policy for org-level callers.
+    if(String(caller.accessRole)!=='admin') throw new HttpsError('permission-denied','Admin required.');
     if(platformRole==='superAdmin') throw new HttpsError('permission-denied','Only superAdmin can assign superAdmin.');
   }
 

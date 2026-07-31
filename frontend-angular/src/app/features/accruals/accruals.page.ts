@@ -2,6 +2,7 @@ import { Component, effect, EffectRef, OnDestroy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { ToastService } from '../../core/ui/toast.service';
 import {
@@ -14,89 +15,89 @@ import {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule],
+  imports: [CommonModule, FormsModule, MatIconModule, TranslocoModule],
   template: `
     <div class="acr-page">
       <header class="acr-header">
         <div>
-          <h1>My Accruals</h1>
-          <p>Review real balances, request time off, and track manager decisions.</p>
+          <h1>{{ 'accruals.title' | transloco }}</h1>
+          <p>{{ 'accruals.subtitle' | transloco }}</p>
         </div>
         <div class="acr-asof">
-          <span>Balance as of</span>
+          <span>{{ 'accruals.balanceAsOf' | transloco }}</span>
           <strong>{{ asOfLabel() }}</strong>
         </div>
       </header>
 
       <div *ngIf="!orgId || !uid" class="acr-alert">
         <mat-icon>warning_amber</mat-icon>
-        Missing staff context. Sign in again or contact your administrator.
+        {{ 'accruals.missingStaffContext' | transloco }}
       </div>
 
       <section class="acr-grid" *ngIf="orgId && uid">
         <article class="acr-card acr-balance">
           <div class="acr-card-head">
-            <h2>Sick</h2>
+            <h2>{{ 'accruals.sick' | transloco }}</h2>
             <mat-icon>health_and_safety</mat-icon>
           </div>
           <div class="acr-balance-value">{{ balance().sickBalance }} h</div>
           <div class="acr-meter"><span [style.width.%]="balancePercent(balance().sickBalance, 40)"></span></div>
           <dl>
-            <div><dt>Available Balance</dt><dd>{{ balance().sickBalance }} h</dd></div>
-            <div><dt>Planned Takings</dt><dd>{{ balance().plannedSick }} h</dd></div>
-            <div><dt>Taken to Date</dt><dd>{{ balance().sickTaken }} h</dd></div>
+            <div><dt>{{ 'accruals.availableBalance' | transloco }}</dt><dd>{{ balance().sickBalance }} h</dd></div>
+            <div><dt>{{ 'accruals.plannedTakings' | transloco }}</dt><dd>{{ balance().plannedSick }} h</dd></div>
+            <div><dt>{{ 'accruals.takenToDate' | transloco }}</dt><dd>{{ balance().sickTaken }} h</dd></div>
           </dl>
         </article>
 
         <article class="acr-card acr-balance">
           <div class="acr-card-head">
-            <h2>PTO</h2>
+            <h2>{{ 'accruals.pto' | transloco }}</h2>
             <mat-icon>beach_access</mat-icon>
           </div>
           <div class="acr-balance-value">{{ balance().ptoBalance }} h</div>
           <div class="acr-meter acr-meter-blue"><span [style.width.%]="balancePercent(balance().ptoBalance, 80)"></span></div>
           <dl>
-            <div><dt>Available Balance</dt><dd>{{ balance().ptoBalance }} h</dd></div>
-            <div><dt>Planned Takings</dt><dd>{{ balance().plannedPto }} h</dd></div>
-            <div><dt>Taken to Date</dt><dd>{{ balance().ptoTaken }} h</dd></div>
+            <div><dt>{{ 'accruals.availableBalance' | transloco }}</dt><dd>{{ balance().ptoBalance }} h</dd></div>
+            <div><dt>{{ 'accruals.plannedTakings' | transloco }}</dt><dd>{{ balance().plannedPto }} h</dd></div>
+            <div><dt>{{ 'accruals.takenToDate' | transloco }}</dt><dd>{{ balance().ptoTaken }} h</dd></div>
           </dl>
         </article>
 
         <article class="acr-card acr-request">
           <div class="acr-card-head">
-            <h2>Time-Off Request</h2>
+            <h2>{{ 'accruals.timeOffRequest' | transloco }}</h2>
             <mat-icon>event_available</mat-icon>
           </div>
           <form (ngSubmit)="submitRequest()">
             <label>
-              <span>Request type</span>
+              <span>{{ 'accruals.requestType' | transloco }}</span>
               <select [(ngModel)]="requestType" name="type">
-                <option value="pto">PTO</option>
-                <option value="sick">Sick</option>
-                <option value="unpaid">Unpaid</option>
+                <option value="pto">{{ 'accruals.typePto' | transloco }}</option>
+                <option value="sick">{{ 'accruals.typeSick' | transloco }}</option>
+                <option value="unpaid">{{ 'accruals.typeUnpaid' | transloco }}</option>
               </select>
             </label>
             <div class="acr-two">
               <label>
-                <span>Start date</span>
+                <span>{{ 'accruals.startDate' | transloco }}</span>
                 <input type="date" [(ngModel)]="startDate" name="startDate">
               </label>
               <label>
-                <span>End date</span>
+                <span>{{ 'accruals.endDate' | transloco }}</span>
                 <input type="date" [(ngModel)]="endDate" name="endDate">
               </label>
             </div>
             <label>
-              <span>Hours</span>
+              <span>{{ 'accruals.hours' | transloco }}</span>
               <input type="number" min="1" step="0.25" [(ngModel)]="hours" name="hours">
             </label>
             <label>
-              <span>Notes</span>
-              <textarea rows="4" [(ngModel)]="notes" name="notes" placeholder="Optional details for your manager"></textarea>
+              <span>{{ 'accruals.notes' | transloco }}</span>
+              <textarea rows="4" [(ngModel)]="notes" name="notes" [placeholder]="'accruals.notesPlaceholder' | transloco"></textarea>
             </label>
             <button class="acr-submit" type="submit" [disabled]="busy">
               <mat-icon>{{ busy ? 'hourglass_top' : 'send' }}</mat-icon>
-              {{ busy ? 'Submitting...' : 'Submit Request' }}
+              {{ (busy ? 'accruals.submitting' : 'accruals.submitRequest') | transloco }}
             </button>
           </form>
         </article>
@@ -105,16 +106,16 @@ import {
       <section class="acr-lower" *ngIf="orgId && uid">
         <article class="acr-card acr-history">
           <div class="acr-card-head">
-            <h2>My Requests</h2>
+            <h2>{{ 'accruals.myRequests' | transloco }}</h2>
             <mat-icon>assignment</mat-icon>
           </div>
           <div class="acr-empty" *ngIf="requests().length === 0">
             <mat-icon>inbox</mat-icon>
-            No time-off requests yet.
+            {{ 'accruals.noRequestsYet' | transloco }}
           </div>
           <div class="acr-history-row" *ngFor="let r of requests()">
             <span>
-              <strong>{{ requestLabel(r) }}</strong>
+              <strong>{{ requestLabel(r) | transloco }}</strong>
               <em>{{ r.startDate }} to {{ r.endDate }}</em>
             </span>
             <strong>{{ r.hours }} h</strong>
@@ -126,12 +127,12 @@ import {
 
         <article class="acr-card acr-history">
           <div class="acr-card-head">
-            <h2>Recent Accrual Activity</h2>
+            <h2>{{ 'accruals.recentAccrualActivity' | transloco }}</h2>
             <mat-icon>history</mat-icon>
           </div>
           <div class="acr-empty" *ngIf="ledger().length === 0">
             <mat-icon>history</mat-icon>
-            No accrual ledger entries published yet.
+            {{ 'accruals.noLedgerEntries' | transloco }}
           </div>
           <div class="acr-history-row" *ngFor="let item of ledger()">
             <span>
@@ -139,7 +140,7 @@ import {
               <em>{{ fmtDate(item.createdAt) }}</em>
             </span>
             <strong [class.is-negative]="item.hours < 0">{{ signedHours(item.hours) }}</strong>
-            <em>{{ item.source || 'Accrual' }}</em>
+            <em>{{ item.source || ('accruals.accrualFallback' | transloco) }}</em>
           </div>
         </article>
       </section>
@@ -222,6 +223,7 @@ export class AccrualsPage implements OnDestroy {
     private ctx: OrgContextService,
     private toast: ToastService,
     private accruals: AccrualsRepo,
+    private i18n: TranslocoService,
   ) {
     this.ctxEffect = effect(() => {
       this.orgId = this.ctx.orgId();
@@ -248,15 +250,15 @@ export class AccrualsPage implements OnDestroy {
 
   async submitRequest() {
     if (!this.orgId || !this.uid) {
-      this.toast.error('Missing staff context.');
+      this.toast.error(this.i18n.translate('accruals.missingStaffContextError'));
       return;
     }
     if (!this.startDate || !this.endDate || !this.hours || this.hours <= 0) {
-      this.toast.error('Select dates and valid hours before submitting.');
+      this.toast.error(this.i18n.translate('accruals.selectDatesHours'));
       return;
     }
     if (this.endDate < this.startDate) {
-      this.toast.error('End date must be after the start date.');
+      this.toast.error(this.i18n.translate('accruals.endAfterStartDate'));
       return;
     }
 
@@ -272,13 +274,13 @@ export class AccrualsPage implements OnDestroy {
         hours: Number(this.hours),
         notes: this.notes,
       });
-      this.toast.success('Time-off request sent to manager review.');
+      this.toast.success(this.i18n.translate('accruals.requestSent'));
       this.startDate = '';
       this.endDate = '';
       this.hours = 8;
       this.notes = '';
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Time-off request failed.');
+      this.toast.errorFrom(e, this.i18n.translate('accruals.requestFailed'));
     } finally {
       this.busy = false;
     }
@@ -289,8 +291,8 @@ export class AccrualsPage implements OnDestroy {
   }
 
   requestLabel(r: TimeOffRequest): string {
-    const map: Record<string, string> = { pto: 'PTO request', sick: 'Sick request', unpaid: 'Unpaid request' };
-    return map[r.requestType] || 'Time-off request';
+    const map: Record<string, string> = { pto: 'accruals.ptoRequest', sick: 'accruals.sickRequest', unpaid: 'accruals.unpaidRequest' };
+    return map[r.requestType] || 'accruals.timeOffRequestFallback';
   }
 
   ledgerLabel(item: AccrualLedgerItem): string {

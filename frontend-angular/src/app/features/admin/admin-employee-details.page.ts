@@ -3,7 +3,7 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
-import { doc, getFirestore, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, getFirestore, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
@@ -19,6 +19,8 @@ import { TimeEntry } from '../../shared/models/time-entry.model';
 import { tsToDate, formatDateTime } from '../../shared/utils/date.util';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
+import { BenefitLine, defaultDeductionElectionsForCountry } from '../../shared/utils/payroll.util';
+import { DirectDepositRepo, DirectDepositInfo, maskLast4 } from '../../core/repos/direct-deposit.repo';
 
 interface TsRow {
   entry: TimeEntry;
@@ -50,6 +52,14 @@ type EmployeeProfileDraft = {
   w4ExtraWithholding: number;
   w2Delivery: string;
   w2ElectronicConsent: boolean;
+  federalTaxPercent: number | null;
+  stateTaxPercent: number | null;
+  socialSecurityPercent: number | null;
+  medicarePercent: number | null;
+  retirement401kPercent: number;
+  retirement401kMatchPercent: number | null;
+  retirement401kProvider: string | null;
+  benefits: BenefitLine[];
 };
 
 @Component({
@@ -152,10 +162,10 @@ type EmployeeProfileDraft = {
                 <mat-icon>{{ profileDraft.active ? 'person_off' : 'person' }}</mat-icon>
                 {{ profileDraft.active ? 'Deactivate' : 'Activate' }}
               </button>
-              <button class="vs-btn-ghost empd-btn" type="button" (click)="openEmployeePto()">
+              <button class="vs-btn-ghost empd-btn" type="button" *ngIf="isAdminOrHr()" (click)="openEmployeePto()">
                 <mat-icon>event_available</mat-icon> PTO Center
               </button>
-              <button class="vs-btn-ghost empd-btn" type="button" (click)="openEmployeePayslip()">
+              <button class="vs-btn-ghost empd-btn" type="button" *ngIf="isAdminOrHr()" (click)="openEmployeePayslip()">
                 <mat-icon>picture_as_pdf</mat-icon> Payslip
               </button>
               <button class="vs-btn-primary empd-btn" type="button" (click)="saveEmployeeProfile()" [disabled]="profileSaving">
@@ -181,7 +191,7 @@ type EmployeeProfileDraft = {
               </div>
             </article>
 
-            <article class="empd-admin-card">
+            <article class="empd-admin-card" *ngIf="isAdminOrHr()">
               <h3><mat-icon>payments</mat-icon> Payroll Details</h3>
               <div class="empd-mini-grid">
                 <label>
@@ -207,12 +217,35 @@ type EmployeeProfileDraft = {
               </div>
               <div class="empd-payroll-facts">
                 <div><span>Timesheet hours</span><strong>{{ totalHours() }}</strong></div>
-                <div><span>PTO balance</span><strong>{{ accrualBalance().ptoBalance.toFixed(2) }}</strong></div>
-                <div><span>Sick balance</span><strong>{{ accrualBalance().sickBalance.toFixed(2) }}</strong></div>
+                <ng-container *ngIf="isAdminOrHr()">
+                  <div><span>PTO balance</span><strong>{{ accrualBalance().ptoBalance.toFixed(2) }}</strong></div>
+                  <div><span>Sick balance</span><strong>{{ accrualBalance().sickBalance.toFixed(2) }}</strong></div>
+                </ng-container>
               </div>
             </article>
 
-            <article class="empd-admin-card">
+            <article class="empd-admin-card" *ngIf="isAdminOrHr()">
+              <h3><mat-icon>account_balance</mat-icon> Direct Deposit</h3>
+              <div *ngIf="directDeposit() as dd; else noDirectDeposit">
+                <div class="empd-dd-row">
+                  <div>
+                    <strong>{{ dd.bankName }}</strong>
+                    <span>{{ dd.accountType === 'savings' ? 'Savings' : 'Checking' }} · {{ ddRevealed ? dd.accountNumber : maskedDdAccountNumber() }}</span>
+                  </div>
+                  <button class="vs-btn-ghost" type="button" (click)="ddRevealed = !ddRevealed">
+                    <mat-icon>{{ ddRevealed ? 'visibility_off' : 'visibility' }}</mat-icon> {{ ddRevealed ? 'Hide' : 'Reveal' }}
+                  </button>
+                </div>
+                <div class="empd-dd-row" *ngIf="ddRevealed">
+                  <span class="vs-muted">Routing number: {{ dd.routingNumber }}</span>
+                </div>
+              </div>
+              <ng-template #noDirectDeposit>
+                <div class="empd-benefit-empty">No direct deposit account on file. The employee can add one from their own profile.</div>
+              </ng-template>
+            </article>
+
+            <article class="empd-admin-card" *ngIf="isAdminOrHr()">
               <h3><mat-icon>receipt_long</mat-icon> W-4 / W-2 / Dependents</h3>
               <div class="empd-mini-grid">
                 <label>
@@ -243,7 +276,49 @@ type EmployeeProfileDraft = {
               </label>
             </article>
 
-            <article class="empd-admin-card">
+            <article class="empd-admin-card" *ngIf="isAdminOrHr()">
+              <h3><mat-icon>account_balance_wallet</mat-icon> Payroll Deductions & Benefits</h3>
+              <div class="vs-muted" style="margin-bottom:10px;font-size:12px;">Leave a tax field blank to use the organization's default rate. These apply to this employee's payroll and payslip.</div>
+              <div class="empd-mini-grid">
+                <label><span>Federal Tax % (org default {{ orgDeductionDefaults.federalTaxPercent }})</span><input class="vs-input" type="number" min="0" step="0.1" [(ngModel)]="profileDraft.federalTaxPercent" placeholder="default"></label>
+                <label><span>State Tax % (org default {{ orgDeductionDefaults.stateTaxPercent }})</span><input class="vs-input" type="number" min="0" step="0.1" [(ngModel)]="profileDraft.stateTaxPercent" placeholder="default"></label>
+                <label><span>Social Security % (org default {{ orgDeductionDefaults.socialSecurityPercent }})</span><input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="profileDraft.socialSecurityPercent" placeholder="default"></label>
+                <label><span>Medicare % (org default {{ orgDeductionDefaults.medicarePercent }})</span><input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="profileDraft.medicarePercent" placeholder="default"></label>
+                <label><span>401(k) Employee %</span><input class="vs-input" type="number" min="0" step="0.1" [(ngModel)]="profileDraft.retirement401kPercent"></label>
+                <label><span>401(k) Employer Match % (org default {{ orgDeductionDefaults.retirement401kMatchPercent }})</span><input class="vs-input" type="number" min="0" step="0.1" [(ngModel)]="profileDraft.retirement401kMatchPercent" placeholder="default"></label>
+                <label><span>401(k) Provider (org default: {{ orgDeductionDefaults.retirement401kProvider || 'not set' }})</span><input class="vs-input" [(ngModel)]="profileDraft.retirement401kProvider" placeholder="default"></label>
+              </div>
+
+              <div class="empd-benefit-head">
+                <strong>Benefits</strong>
+                <div class="empd-benefit-add" *ngIf="orgBenefitPlans().length > 0">
+                  <select class="vs-select" [(ngModel)]="selectedBenefitPlanId">
+                    <option value="">Add from plan…</option>
+                    <option *ngFor="let plan of orgBenefitPlans()" [value]="plan.id">{{ plan.label }}</option>
+                  </select>
+                  <button class="vs-btn-ghost" type="button" [disabled]="!selectedBenefitPlanId" (click)="addBenefitFromPlan()">
+                    <mat-icon>add</mat-icon> Add
+                  </button>
+                </div>
+                <button class="vs-btn-ghost" type="button" (click)="addCustomBenefit()">
+                  <mat-icon>add_circle_outline</mat-icon> Custom Benefit
+                </button>
+              </div>
+
+              <div class="empd-benefit-empty" *ngIf="profileDraft.benefits.length === 0">No benefits attached to this employee.</div>
+
+              <div class="empd-benefit-row" *ngFor="let b of profileDraft.benefits; index as i">
+                <input class="vs-input" [(ngModel)]="b.label" placeholder="Benefit name">
+                <input class="vs-input" [(ngModel)]="b.provider" placeholder="Provider / carrier">
+                <input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="b.employeeAmount" placeholder="Employee $/paycheck">
+                <input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="b.employerAmount" placeholder="Employer $/paycheck">
+                <button class="vs-btn-ghost" type="button" (click)="removeEmployeeBenefit(i)">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </div>
+            </article>
+
+            <article class="empd-admin-card" *ngIf="isAdminOrHr()">
               <h3><mat-icon>beach_access</mat-icon> Time-Off Requests</h3>
               <div class="empd-pto-list" *ngIf="timeOffRequests().length > 0; else noTimeOff">
                 <div class="empd-pto-row" *ngFor="let req of timeOffRequests() | slice:0:6">
@@ -265,7 +340,7 @@ type EmployeeProfileDraft = {
               </ng-template>
             </article>
 
-            <article class="empd-admin-card empd-doc-card">
+            <article class="empd-admin-card empd-doc-card" *ngIf="isAdminOrHr()">
               <h3><mat-icon>verified_user</mat-icon> Document Verification</h3>
               <div class="empd-doc-list" *ngIf="employeeDocuments().length > 0; else noEmployeeDocs">
                 <div class="empd-doc-row" *ngFor="let item of employeeDocuments()">
@@ -506,6 +581,15 @@ type EmployeeProfileDraft = {
     .empd-payroll-facts span { display:block; color:var(--text-subtle); font-size:11px; font-weight:800; text-transform:uppercase; margin-bottom:4px; }
     .empd-payroll-facts strong { color:var(--text); }
     .empd-check { display:flex; align-items:center; gap:8px; color:var(--text-muted); font-size:13px; }
+    .empd-benefit-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin:16px 0 10px; }
+    .empd-benefit-add { display:flex; gap:8px; align-items:center; }
+    .empd-benefit-add .vs-select { min-width:160px; }
+    .empd-benefit-empty { border:1px dashed var(--border); border-radius:12px; padding:14px; color:var(--text-muted); font-size:13px; }
+    .empd-dd-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 0; }
+    .empd-dd-row strong { display:block; color:var(--text); }
+    .empd-dd-row span { display:block; margin-top:3px; color:var(--text-muted); font-size:13px; }
+    .empd-benefit-row { display:grid; grid-template-columns:1.4fr 1.4fr 1fr 1fr auto; gap:8px; align-items:center; margin-bottom:8px; }
+    @media (max-width:900px) { .empd-benefit-row { grid-template-columns:1fr 1fr; } }
     .empd-text-lines textarea { min-height:96px; resize:vertical; }
     .empd-pto-list { display:grid; gap:8px; }
     .empd-pto-row { display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid var(--border); border-radius:12px; padding:10px; background:rgba(255,255,255,0.03); }
@@ -602,6 +686,11 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
   profileSaving = false;
   profileDraft: EmployeeProfileDraft = this.emptyProfileDraft();
   dependentsText = '';
+  orgBenefitPlans = signal<BenefitLine[]>([]);
+  orgDeductionDefaults = { federalTaxPercent: 0, stateTaxPercent: 0, socialSecurityPercent: 0, medicarePercent: 0, retirement401kMatchPercent: 0, retirement401kProvider: '' };
+  selectedBenefitPlanId = '';
+  private directDepositSig: DirectDepositInfo | null = null;
+  ddRevealed = false;
   timeOffRequests = signal<TimeOffRequest[]>([]);
   employeeDocuments = signal<EmployeeDocumentRecord[]>([]);
   documentReviewBusy = false;
@@ -641,6 +730,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
   private unsubTimeOff: (() => void) | null = null;
   private unsubAccrual: (() => void) | null = null;
   private unsubDocs: (() => void) | null = null;
+  private unsubDirectDeposit: (() => void) | null = null;
   private routeSub: any;
 
   constructor(
@@ -655,6 +745,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
     private adminCmd: AdminCommands,
     private schedulerCmd: SchedulerCommands,
     private toast: ToastService,
+    private directDepositRepo: DirectDepositRepo,
   ) {
     const now = new Date();
     const monday = new Date(now);
@@ -669,6 +760,50 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
       this.userId = String(params.get('uid') || '').trim();
       this.bindData();
     });
+    void this.loadOrgPayrollSettings();
+  }
+
+  private async loadOrgPayrollSettings() {
+    if (!this.orgId) return;
+    try {
+      const snap = await getDoc(doc(getFirestore(), 'orgs', this.orgId));
+      const data: any = snap.exists() ? snap.data() : {};
+      const countryDefaults = defaultDeductionElectionsForCountry(data.countryCode);
+      this.orgDeductionDefaults = {
+        federalTaxPercent: Number(data.defaultFederalTaxPercent ?? countryDefaults.federalTaxPercent),
+        stateTaxPercent: Number(data.defaultStateTaxPercent ?? countryDefaults.stateTaxPercent),
+        socialSecurityPercent: Number(data.defaultSocialSecurityPercent ?? countryDefaults.socialSecurityPercent),
+        medicarePercent: Number(data.defaultMedicarePercent ?? countryDefaults.medicarePercent),
+        retirement401kMatchPercent: Number(data.default401kMatchPercent ?? 0),
+        retirement401kProvider: String(data.default401kProvider || ''),
+      };
+      this.orgBenefitPlans.set(Array.isArray(data.benefitPlans) ? data.benefitPlans : []);
+    } catch { /* non-critical */ }
+  }
+
+  addBenefitFromPlan() {
+    const plan = this.orgBenefitPlans().find((p) => p.id === this.selectedBenefitPlanId);
+    if (!plan) return;
+    this.profileDraft.benefits = [
+      ...this.profileDraft.benefits,
+      { id: this.createLocalId('benefit'), label: plan.label, provider: plan.provider || '', employeeAmount: plan.employeeAmount, employerAmount: plan.employerAmount },
+    ];
+    this.selectedBenefitPlanId = '';
+  }
+
+  addCustomBenefit() {
+    this.profileDraft.benefits = [
+      ...this.profileDraft.benefits,
+      { id: this.createLocalId('benefit'), label: '', provider: '', employeeAmount: 0, employerAmount: 0 },
+    ];
+  }
+
+  removeEmployeeBenefit(index: number) {
+    this.profileDraft.benefits = this.profileDraft.benefits.filter((_, i) => i !== index);
+  }
+
+  private createLocalId(prefix: string) {
+    return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
   ngOnDestroy() {
@@ -678,6 +813,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
     this.unsubTimeOff?.();
     this.unsubAccrual?.();
     this.unsubDocs?.();
+    this.unsubDirectDeposit?.();
     if (this.routeSub?.unsubscribe) this.routeSub.unsubscribe();
   }
 
@@ -929,6 +1065,18 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
         payroll: {
           payType: this.profileDraft.payType || 'hourly',
           payRate: this.num(this.profileDraft.payRate),
+          deductions: {
+            federalTaxPercent: this.profileDraft.federalTaxPercent != null ? this.num(this.profileDraft.federalTaxPercent) : null,
+            stateTaxPercent: this.profileDraft.stateTaxPercent != null ? this.num(this.profileDraft.stateTaxPercent) : null,
+            socialSecurityPercent: this.profileDraft.socialSecurityPercent != null ? this.num(this.profileDraft.socialSecurityPercent) : null,
+            medicarePercent: this.profileDraft.medicarePercent != null ? this.num(this.profileDraft.medicarePercent) : null,
+            retirement401kPercent: this.num(this.profileDraft.retirement401kPercent),
+            retirement401kMatchPercent: this.profileDraft.retirement401kMatchPercent != null ? this.num(this.profileDraft.retirement401kMatchPercent) : null,
+            retirement401kProvider: this.profileDraft.retirement401kProvider != null ? this.profileDraft.retirement401kProvider.trim() || null : null,
+            benefits: this.profileDraft.benefits
+              .map((b) => ({ id: b.id, label: b.label.trim(), provider: (b.provider || '').trim(), employeeAmount: this.num(b.employeeAmount), employerAmount: this.num(b.employerAmount) }))
+              .filter((b) => b.label),
+          },
           updatedAt: serverTimestamp(),
         },
         taxWithholding: {
@@ -985,6 +1133,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
     const payroll = data.payroll || {};
     const tax = data.taxWithholding || {};
     const w2 = data.w2 || {};
+    const deductions = payroll.deductions || {};
     this.profileDraft = {
       displayName: String(data.displayName || ''),
       email: String(data.email || ''),
@@ -1007,6 +1156,14 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
       w4ExtraWithholding: this.num(tax.extraWithholding || 0),
       w2Delivery: String(w2.delivery || 'electronic'),
       w2ElectronicConsent: w2.electronicConsent !== false,
+      federalTaxPercent: deductions.federalTaxPercent != null ? this.num(deductions.federalTaxPercent) : null,
+      stateTaxPercent: deductions.stateTaxPercent != null ? this.num(deductions.stateTaxPercent) : null,
+      socialSecurityPercent: deductions.socialSecurityPercent != null ? this.num(deductions.socialSecurityPercent) : null,
+      medicarePercent: deductions.medicarePercent != null ? this.num(deductions.medicarePercent) : null,
+      retirement401kPercent: this.num(deductions.retirement401kPercent || 0),
+      retirement401kMatchPercent: deductions.retirement401kMatchPercent != null ? this.num(deductions.retirement401kMatchPercent) : null,
+      retirement401kProvider: deductions.retirement401kProvider != null ? String(deductions.retirement401kProvider) : null,
+      benefits: Array.isArray(deductions.benefits) ? deductions.benefits.map((b: any) => ({ id: String(b.id || this.createLocalId('benefit')), label: String(b.label || ''), provider: String(b.provider || ''), employeeAmount: this.num(b.employeeAmount || 0), employerAmount: this.num(b.employerAmount || 0) })) : [],
     };
     this.dependentsText = Array.isArray(data.dependents)
       ? data.dependents
@@ -1038,6 +1195,14 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
       w4ExtraWithholding: 0,
       w2Delivery: 'electronic',
       w2ElectronicConsent: true,
+      federalTaxPercent: null,
+      stateTaxPercent: null,
+      socialSecurityPercent: null,
+      medicarePercent: null,
+      retirement401kPercent: 0,
+      retirement401kMatchPercent: null,
+      retirement401kProvider: null,
+      benefits: [],
     };
   }
 
@@ -1070,6 +1235,9 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
     this.unsubTimeOff?.();
     this.unsubAccrual?.();
     this.unsubDocs?.();
+    this.unsubDirectDeposit?.();
+    this.directDepositSig = null;
+    this.ddRevealed = false;
     this.user.set(null);
     this.shifts.set([]);
     this.tsRows.set([]);
@@ -1091,14 +1259,34 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
     });
 
     this.rebindTimesheet();
-    this.unsubTimeOff = this.accruals.watchRequests(this.orgId, this.userId, (items) => {
-      this.timeOffRequests.set(items);
-    }, 20);
-    this.unsubAccrual = this.accruals.watchBalance(this.orgId, this.userId, (balance) => {
-      this.accrualBalance.set(balance);
-    });
-    this.unsubDocs = this.docsRepo.watchForUser(this.orgId, this.userId, (items) => {
-      this.employeeDocuments.set(items);
-    });
+    if (this.isAdminOrHr()) {
+      this.unsubTimeOff = this.accruals.watchRequests(this.orgId, this.userId, (items) => {
+        this.timeOffRequests.set(items);
+      }, 20);
+      this.unsubAccrual = this.accruals.watchBalance(this.orgId, this.userId, (balance) => {
+        this.accrualBalance.set(balance);
+      });
+      this.unsubDocs = this.docsRepo.watchForUser(this.orgId, this.userId, (items) => {
+        this.employeeDocuments.set(items);
+      });
+      this.unsubDirectDeposit = this.directDepositRepo.watch(this.orgId, this.userId, (info) => {
+        this.directDepositSig = info;
+      });
+    }
+  }
+
+  directDeposit(): DirectDepositInfo | null {
+    return this.directDepositSig;
+  }
+
+  maskedDdAccountNumber(): string {
+    return maskLast4(this.directDepositSig?.accountNumber || '');
+  }
+
+  // Payroll, PTO requests, and employee documents are admin/hr-only —
+  // gates both the Firestore watchers above and the template cards below.
+  isAdminOrHr(): boolean {
+    const role = this.ctx.accessRole();
+    return role === 'admin' || role === 'hr';
   }
 }

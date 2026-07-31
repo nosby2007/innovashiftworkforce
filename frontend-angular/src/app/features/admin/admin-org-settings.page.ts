@@ -1,5 +1,5 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, PLATFORM_ID, ViewChild, inject, signal } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -30,7 +30,11 @@ import {
   ExperienceFlags,
   normalizeExperienceFlags,
 } from '../../core/experience/experience-flags.model';
-import * as L from 'leaflet';
+import { OrgHoliday, BenefitLine, defaultDeductionElectionsForCountry } from '../../shared/utils/payroll.util';
+// Leaflet touches `window` at module-evaluation time, so it's type-only here
+// and loaded dynamically (gated on isPlatformBrowser) in ensureMapReady() —
+// see geofence-map.component.ts for the full rationale.
+import type * as Leaflet from 'leaflet';
 
 interface OrgSite {
   id: string;
@@ -62,6 +66,18 @@ interface OrgSettings {
   payrollTaxNotes: string;
   maxEmployees: number;
   defaultPayRate: number;
+  overtimeEnabled: boolean;
+  overtimeMultiplier: number;
+  overtimeWeeklyThresholdHours: number;
+  holidayWorkMultiplier: number;
+  holidays: OrgHoliday[];
+  defaultFederalTaxPercent: number;
+  defaultStateTaxPercent: number;
+  defaultSocialSecurityPercent: number;
+  defaultMedicarePercent: number;
+  default401kMatchPercent: number;
+  default401kProvider: string;
+  benefitPlans: BenefitLine[];
   breakRequiredAfterHours: number;
   minRequiredBreakMinutes: number;
   gpsAttendanceEnabled: boolean;
@@ -71,10 +87,35 @@ interface OrgSettings {
   ssoProvider: string;
   integrationConfigs: OrgIntegrationConfig[];
   experienceFlags: ExperienceFlags;
+  dataRetention: DataRetentionSettings;
   stripeCustomerId?: string;
   createdAt?: any;
   updatedAt?: any;
 }
+
+// Years null = "not confirmed yet, never auto-delete this category" — the
+// safe default. Only an explicit number (set after legal/counsel confirms
+// the figure for this org's jurisdiction) turns on automated purging for
+// that category in enforceDataRetention. See docs/DATA_RETENTION_POLICY.md.
+interface DataRetentionSettings {
+  timeEntriesYears: number | null;
+  payrollRunsYears: number | null;
+  accrualLedgerYears: number | null;
+  timeOffRequestsYears: number | null;
+  employeeDocumentsYearsAfterTermination: number | null;
+  confirmedBy: string | null;
+  confirmedAt: any;
+}
+
+const DEFAULT_DATA_RETENTION: DataRetentionSettings = {
+  timeEntriesYears: null,
+  payrollRunsYears: null,
+  accrualLedgerYears: null,
+  timeOffRequestsYears: null,
+  employeeDocumentsYearsAfterTermination: null,
+  confirmedBy: null,
+  confirmedAt: null,
+};
 
 const DEFAULT_SETTINGS: OrgSettings = {
   name: '', industry: 'Healthcare', timezone: 'America/New_York',
@@ -85,6 +126,21 @@ const DEFAULT_SETTINGS: OrgSettings = {
   taxProfile: 'us_federal_state',
   payrollTaxNotes: '',
   defaultPayRate: 40,
+  overtimeEnabled: true,
+  overtimeMultiplier: 1.5,
+  overtimeWeeklyThresholdHours: 40,
+  holidayWorkMultiplier: 1.5,
+  holidays: [],
+  // Real US federal/state/FICA figures only get applied for US orgs — see
+  // ngOnInit(), which fills these in via defaultDeductionElectionsForCountry
+  // the first time an org's settings are loaded with none saved yet.
+  defaultFederalTaxPercent: 0,
+  defaultStateTaxPercent: 0,
+  defaultSocialSecurityPercent: 0,
+  defaultMedicarePercent: 0,
+  default401kMatchPercent: 0,
+  default401kProvider: '',
+  benefitPlans: [],
   breakRequiredAfterHours: 6,
   minRequiredBreakMinutes: 30,
   gpsAttendanceEnabled: false,
@@ -94,6 +150,7 @@ const DEFAULT_SETTINGS: OrgSettings = {
   ssoProvider: '',
   integrationConfigs: [],
   experienceFlags: { ...DEFAULT_EXPERIENCE_FLAGS },
+  dataRetention: { ...DEFAULT_DATA_RETENTION },
 };
 
 const INDUSTRIES = [
@@ -260,6 +317,267 @@ const PLAN_BADGE: Record<string, string> = {
           </div>
         </section>
 
+        <!-- Overtime & Paid Holidays section -->
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Overtime & Paid Holidays</div>
+              <div class="vs-panel-subtitle">Overtime premium and company-paid holidays used when calculating payroll</div>
+            </div>
+            <mat-icon class="ors-section-icon">schedule</mat-icon>
+          </div>
+          <div class="vs-panel-body ors-form">
+            <label class="ors-toggle-row">
+              <input type="checkbox" [(ngModel)]="draft.overtimeEnabled">
+              <div>
+                <div class="ors-toggle-title">Enable overtime pay</div>
+                <div class="vs-muted">When on, hours worked beyond the weekly threshold are paid at the overtime multiplier below.</div>
+              </div>
+            </label>
+
+            <div class="vs-form-row vs-form-row--2" style="margin-top:16px;" *ngIf="draft.overtimeEnabled">
+              <div>
+                <label class="vs-field-label" for="ors-ot-multiplier">Overtime Multiplier</label>
+                <input id="ors-ot-multiplier" type="number" class="vs-input" min="1" step="0.1" [(ngModel)]="draft.overtimeMultiplier" placeholder="1.5">
+                <div class="ors-quick-set">
+                  <button class="vs-btn-ghost ors-quick-set-btn" type="button" (click)="draft.overtimeMultiplier = 1.5">1.5x</button>
+                  <button class="vs-btn-ghost ors-quick-set-btn" type="button" (click)="draft.overtimeMultiplier = 2">2x</button>
+                </div>
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-ot-threshold">Weekly Overtime Threshold (hours)</label>
+                <input id="ors-ot-threshold" type="number" class="vs-input" min="1" [(ngModel)]="draft.overtimeWeeklyThresholdHours" placeholder="40">
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Hours worked beyond this in a Monday–Sunday week are paid as overtime.</div>
+              </div>
+            </div>
+
+            <div class="vs-form-row" style="margin-top:16px;">
+              <div>
+                <label class="vs-field-label" for="ors-holiday-multiplier">Holiday-Worked Multiplier</label>
+                <input id="ors-holiday-multiplier" type="number" class="vs-input" min="1" step="0.1" [(ngModel)]="draft.holidayWorkMultiplier" placeholder="1.5">
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Pay rate multiplier for hours actually worked on a paid holiday below (instead of overtime).</div>
+              </div>
+            </div>
+
+            <div class="ors-site-actions" style="justify-content:space-between; margin-top:16px;">
+              <strong>Paid Holidays</strong>
+              <button class="vs-btn-ghost" (click)="addHoliday()" type="button">
+                <mat-icon>add</mat-icon> Add Holiday
+              </button>
+            </div>
+
+            <div *ngIf="draft.holidays.length === 0" class="ors-empty-site vs-glass">
+              <mat-icon>event_busy</mat-icon>
+              <div>
+                <strong>No paid holidays configured.</strong>
+                <div class="vs-muted">Add a holiday so staff automatically get paid for it, and worked hours on that day use the holiday multiplier.</div>
+              </div>
+            </div>
+
+            <div class="ors-site-card" *ngFor="let holiday of draft.holidays; index as i">
+              <div class="vs-form-row vs-form-row--3">
+                <div>
+                  <label class="vs-field-label">Holiday Name *</label>
+                  <input class="vs-input" [(ngModel)]="holiday.name" placeholder="Independence Day">
+                </div>
+                <div>
+                  <label class="vs-field-label">Date</label>
+                  <input class="vs-input" type="date" [(ngModel)]="holiday.date">
+                </div>
+                <div>
+                  <label class="vs-field-label">Paid Hours</label>
+                  <input class="vs-input" type="number" min="0" step="0.5" [(ngModel)]="holiday.paidHours" placeholder="8">
+                </div>
+              </div>
+              <div class="ors-site-footer">
+                <span class="vs-muted">Staff who don't work this day are paid these hours automatically; staff who do work it get the holiday multiplier instead.</span>
+                <button class="vs-btn-ghost" type="button" (click)="removeHoliday(i)">
+                  <mat-icon>delete</mat-icon> Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Payroll Deductions & Benefits section -->
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Payroll Deductions & Benefits</div>
+              <div class="vs-panel-subtitle">Default withholding rates and reusable benefit plans used when payroll runs for staff who haven't overridden them on their own profile</div>
+            </div>
+            <mat-icon class="ors-section-icon">account_balance_wallet</mat-icon>
+          </div>
+          <div class="vs-panel-body ors-form">
+            <div class="vs-muted" style="margin-bottom:8px;" *ngIf="draft.countryCode === 'US'; else nonUsDeductionsNote">
+              Federal/state tax are flat estimated percentages, not real bracket-based withholding — set to whatever your accountant or external payroll provider estimates. Social Security and Medicare default to the actual US federal rates.
+            </div>
+            <ng-template #nonUsDeductionsNote>
+              <div class="vs-muted" style="margin-bottom:8px;">
+                These are general-purpose percentage fields — Social Security/Medicare are US-specific and don't apply outside the US. Set whatever rates match your own country's statutory deductions (or leave at 0 and handle payroll tax externally).
+              </div>
+            </ng-template>
+            <div class="vs-form-row vs-form-row--3">
+              <div>
+                <label class="vs-field-label" for="ors-fed-tax">Federal Tax %</label>
+                <input id="ors-fed-tax" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.defaultFederalTaxPercent" placeholder="0">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-state-tax">State Tax %</label>
+                <input id="ors-state-tax" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.defaultStateTaxPercent" placeholder="0">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-401k-match">401(k) Employer Match %</label>
+                <input id="ors-401k-match" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.default401kMatchPercent" placeholder="0">
+              </div>
+            </div>
+            <div class="vs-form-row vs-form-row--3" style="margin-top:16px;">
+              <div>
+                <label class="vs-field-label" for="ors-ss">Social Security %</label>
+                <input id="ors-ss" type="number" class="vs-input" min="0" step="0.01" [(ngModel)]="draft.defaultSocialSecurityPercent" placeholder="0">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-medicare">Medicare %</label>
+                <input id="ors-medicare" type="number" class="vs-input" min="0" step="0.01" [(ngModel)]="draft.defaultMedicarePercent" placeholder="0">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-401k-provider">401(k) Provider</label>
+                <input id="ors-401k-provider" class="vs-input" [(ngModel)]="draft.default401kProvider" placeholder="Fidelity, Empower, Vanguard…">
+              </div>
+            </div>
+            <button class="vs-btn-ghost ors-quick-set-btn" type="button" style="margin-top:10px;" *ngIf="draft.countryCode === 'US'" (click)="useUsDeductionDefaults()">
+              Use US rates (Federal 10% / State 4% / SS 6.2% / Medicare 1.45%)
+            </button>
+
+            <div class="ors-site-actions" style="justify-content:space-between; margin-top:16px;">
+              <strong>Benefit Plans</strong>
+              <button class="vs-btn-ghost" (click)="addBenefitPlan()" type="button">
+                <mat-icon>add</mat-icon> Add Benefit Plan
+              </button>
+            </div>
+
+            <div *ngIf="draft.benefitPlans.length === 0" class="ors-empty-site vs-glass">
+              <mat-icon>favorite_border</mat-icon>
+              <div>
+                <strong>No benefit plans configured.</strong>
+                <div class="vs-muted">Add plans like Health, Dental, Vision, or Life Insurance so HR can quickly attach them to an employee's profile with the right amounts pre-filled.</div>
+              </div>
+            </div>
+
+            <div class="ors-site-card" *ngFor="let plan of draft.benefitPlans; index as i">
+              <div class="vs-form-row vs-form-row--2">
+                <div>
+                  <label class="vs-field-label">Plan Name *</label>
+                  <input class="vs-input" [(ngModel)]="plan.label" placeholder="Health Insurance">
+                </div>
+                <div>
+                  <label class="vs-field-label">Provider / Carrier</label>
+                  <input class="vs-input" [(ngModel)]="plan.provider" placeholder="Blue Cross Blue Shield, VSP, Delta Dental…">
+                </div>
+              </div>
+              <div class="vs-form-row vs-form-row--2" style="margin-top:12px;">
+                <div>
+                  <label class="vs-field-label">Employee Cost / Paycheck</label>
+                  <input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="plan.employeeAmount" placeholder="50.00">
+                </div>
+                <div>
+                  <label class="vs-field-label">Employer Contribution / Paycheck</label>
+                  <input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="plan.employerAmount" placeholder="200.00">
+                </div>
+              </div>
+              <div class="ors-site-footer">
+                <span class="vs-muted">Available to attach to any employee from their profile's Payroll & Deductions section.</span>
+                <button class="vs-btn-ghost" type="button" (click)="removeBenefitPlan(i)">
+                  <mat-icon>delete</mat-icon> Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Next Experience Rollout</div>
+              <div class="vs-panel-subtitle">Safe feature flags for the futuristic roster upgrade. Keep them off until each workflow is validated.</div>
+            </div>
+            <mat-icon class="ors-section-icon">rocket_launch</mat-icon>
+          </div>
+          <div class="vs-panel-body">
+            <div class="ors-rollout-warning">
+              <mat-icon>published_with_changes</mat-icon>
+              <div>
+                <strong>Rollback protected</strong>
+                <span>These switches do not delete legacy screens. Turning a switch off returns users to the current stable experience.</span>
+              </div>
+            </div>
+            <div class="ors-flag-grid">
+              <label class="ors-flag-card" *ngFor="let option of experienceFlagOptions">
+                <input
+                  type="checkbox"
+                  [checked]="experienceFlagEnabled(option.key)"
+                  (change)="setExperienceFlag(option.key, $any($event.target).checked)">
+                <span class="ors-flag-copy">
+                  <strong>{{ option.label }}</strong>
+                  <small>{{ option.description }}</small>
+                </span>
+                <span class="vs-badge" [class.vs-badge--success]="experienceFlagEnabled(option.key)" [class.vs-badge--neutral]="!experienceFlagEnabled(option.key)">
+                  {{ experienceFlagEnabled(option.key) ? 'On' : 'Off' }}
+                </span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- Data Retention section -->
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Data Retention</div>
+              <div class="vs-panel-subtitle">How long payroll-adjacent records are kept before automatic deletion. See docs/DATA_RETENTION_POLICY.md for the legal basis and per-jurisdiction caveats.</div>
+            </div>
+            <mat-icon class="ors-section-icon">auto_delete</mat-icon>
+          </div>
+          <div class="vs-panel-body ors-form">
+            <div class="vs-muted" style="margin-bottom:8px;">
+              Leave a field blank to never auto-delete that category — this is the safe default. Only fill in a number once your own legal/compliance advisor has confirmed the retention period required for your country (this app spans many tax jurisdictions with different rules). A wrong number here is a real compliance risk in either direction, so nothing here defaults to anything except "keep forever."
+            </div>
+            <div class="vs-form-row vs-form-row--3">
+              <div>
+                <label class="vs-field-label" for="ors-ret-time">Time Entries (years)</label>
+                <input id="ors-ret-time" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.timeEntriesYears" placeholder="Never">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-ret-payroll">Payroll Runs (years)</label>
+                <input id="ors-ret-payroll" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.payrollRunsYears" placeholder="Never">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-ret-accrual">PTO/Accrual Ledger (years)</label>
+                <input id="ors-ret-accrual" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.accrualLedgerYears" placeholder="Never">
+              </div>
+            </div>
+            <div class="vs-form-row vs-form-row--3" style="margin-top:16px;">
+              <div>
+                <label class="vs-field-label" for="ors-ret-requests">Time-Off Requests (years)</label>
+                <input id="ors-ret-requests" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.timeOffRequestsYears" placeholder="Never">
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-ret-docs">Employee Documents, years after termination</label>
+                <input id="ors-ret-docs" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.employeeDocumentsYearsAfterTermination" placeholder="Never">
+              </div>
+              <div>
+                <label class="vs-field-label">Last confirmed</label>
+                <div class="vs-input" style="display:flex; align-items:center; background:transparent; cursor:default;">
+                  {{ draft.dataRetention.confirmedAt ? (draft.dataRetention.confirmedBy + ' · ' + formatConfirmedAt()) : 'Not yet confirmed' }}
+                </div>
+              </div>
+            </div>
+            <button class="vs-btn-ghost ors-quick-set-btn" type="button" style="margin-top:10px;" (click)="confirmDataRetention()">
+              Mark these figures as legally confirmed
+            </button>
+          </div>
+        </section>
+
         <!-- PTO Accrual Policy section -->
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
@@ -349,13 +667,19 @@ const PLAN_BADGE: Record<string, string> = {
                 <span class="vs-muted" style="font-size:12px;">seats included</span>
               </div>
               <div class="ors-plan-item vs-glass ors-plan-upgrade">
-                <div class="vs-stat-label">{{ hasBillingCustomer() ? 'Billing Portal' : 'Billing Setup' }}</div>
-                <div class="ors-plan-val" style="font-size:18px;">{{ hasBillingCustomer() ? 'Manage Subscription' : 'Upgrade Required' }}</div>
-                <button class="vs-btn-primary ors-upgrade-btn" (click)="manageBilling()" [disabled]="billingBusy()">
-                  <mat-icon>{{ billingBusy() ? 'hourglass_empty' : (hasBillingCustomer() ? 'credit_card' : 'workspace_premium') }}</mat-icon> 
-                  {{ billingBusy() ? 'Loading...' : (hasBillingCustomer() ? 'Open Portal' : 'Upgrade First') }}
+                <div class="vs-stat-label">Change Plan</div>
+                <div class="ors-plan-choices">
+                  <button class="vs-btn-ghost ors-plan-choice-btn" type="button" (click)="upgradeToPlan('starter')" [disabled]="billingBusy() || settings().plan === 'starter'">
+                    <mat-icon>{{ billingBusy() ? 'hourglass_empty' : 'bolt' }}</mat-icon> Starter — $49/mo
+                  </button>
+                  <button class="vs-btn-primary ors-plan-choice-btn" type="button" (click)="upgradeToPlan('pro')" [disabled]="billingBusy() || settings().plan === 'pro'">
+                    <mat-icon>{{ billingBusy() ? 'hourglass_empty' : 'workspace_premium' }}</mat-icon> Pro — $149/mo
+                  </button>
+                </div>
+                <button class="vs-btn-ghost ors-upgrade-btn" type="button" (click)="manageBilling()" [disabled]="billingBusy() || !hasBillingCustomer()" *ngIf="hasBillingCustomer()">
+                  <mat-icon>credit_card</mat-icon> Manage Subscription / Billing Portal
                 </button>
-                <span class="vs-muted" style="font-size:12px;" *ngIf="!hasBillingCustomer()">No Stripe customer is attached yet.</span>
+                <span class="vs-muted" style="font-size:12px;">Need Enterprise or a custom plan? <a href="mailto:contact@innovacarereview.com">Contact sales</a>.</span>
               </div>
             </div>
           </div>
@@ -553,40 +877,6 @@ const PLAN_BADGE: Record<string, string> = {
           </section>
         </ng-template>
 
-        <section class="vs-glass-strong ors-section">
-          <div class="vs-panel-head">
-            <div>
-              <div class="vs-panel-title">Next Experience Rollout</div>
-              <div class="vs-panel-subtitle">Safe feature flags for the futuristic roster upgrade. Keep them off until each workflow is validated.</div>
-            </div>
-            <mat-icon class="ors-section-icon">rocket_launch</mat-icon>
-          </div>
-          <div class="vs-panel-body">
-            <div class="ors-rollout-warning">
-              <mat-icon>undo</mat-icon>
-              <div>
-                <strong>Rollback protected</strong>
-                <span>These switches do not delete legacy screens. Turning a switch off returns users to the current stable experience.</span>
-              </div>
-            </div>
-            <div class="ors-flag-grid">
-              <label class="ors-flag-card" *ngFor="let option of experienceFlagOptions">
-                <input
-                  type="checkbox"
-                  [checked]="experienceFlagEnabled(option.key)"
-                  (change)="setExperienceFlag(option.key, $any($event.target).checked)">
-                <span class="ors-flag-copy">
-                  <strong>{{ option.label }}</strong>
-                  <small>{{ option.description }}</small>
-                </span>
-                <span class="vs-badge" [class.vs-badge--success]="experienceFlagEnabled(option.key)" [class.vs-badge--neutral]="!experienceFlagEnabled(option.key)">
-                  {{ experienceFlagEnabled(option.key) ? 'On' : 'Off' }}
-                </span>
-              </label>
-            </div>
-          </div>
-        </section>
-
         <!-- Save / feedback -->
         <div class="ors-save-row">
           <div *ngIf="saveMsg()" class="ors-msg ors-msg--ok">
@@ -648,6 +938,12 @@ const PLAN_BADGE: Record<string, string> = {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 7px 14px !important; font-size: 13px !important;
     }
+    .ors-plan-choices { display: flex; flex-direction: column; gap: 6px; }
+    .ors-plan-choice-btn {
+      display: inline-flex; align-items: center; gap: 6px; justify-content: center;
+      padding: 8px 14px !important; font-size: 13px !important;
+    }
+    .ors-plan-choice-btn mat-icon { font-size: 17px; width: 17px; height: 17px; }
 
     .ors-save-row {
       display: flex; align-items: center; justify-content: flex-end;
@@ -660,6 +956,8 @@ const PLAN_BADGE: Record<string, string> = {
       border:1px solid var(--border); border-radius:var(--radius-md); background:rgba(255,255,255,0.02);
     }
     .ors-toggle-title { font-weight:800; color:var(--text); margin-bottom:4px; }
+    .ors-quick-set { display:flex; gap:6px; margin-top:6px; }
+    .ors-quick-set-btn { padding:5px 10px !important; font-size:12px !important; }
     .ors-upgrade-card {
       display:flex; gap:12px; align-items:flex-start; padding:14px 16px;
       border:1px dashed rgba(250,204,21,0.35); border-radius:var(--radius-md);
@@ -682,38 +980,23 @@ const PLAN_BADGE: Record<string, string> = {
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
     }
     .ors-subhead { font-weight:900; text-transform:uppercase; letter-spacing:0.08em; font-size:12px; color:var(--text-subtle); }
-    .ors-msg {
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 14px;
-      border-radius: var(--radius-sm);
-      font-size: 13px; font-weight: 600;
-    }
-    .ors-msg mat-icon { font-size: 16px !important; }
-    .ors-msg--ok  { background: rgba(34,197,94,0.12); color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
-    .ors-msg--err { background: rgba(239,68,68,0.12); color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); }
-
     .ors-rollout-warning {
       display: flex;
       gap: 12px;
       align-items: flex-start;
-      padding: 14px;
-      border: 1px solid rgba(37, 99, 235, 0.22);
+      padding: 12px 14px;
+      margin-bottom: 14px;
       border-radius: var(--radius-md);
+      border: 1px solid rgba(37, 99, 235, 0.22);
       background: rgba(37, 99, 235, 0.08);
       color: var(--text);
-      margin-bottom: 14px;
     }
-    .ors-rollout-warning mat-icon { color: var(--primary); }
-    .ors-rollout-warning strong,
-    .ors-rollout-warning span { display: block; }
-    .ors-rollout-warning span {
-      margin-top: 2px;
-      color: var(--text-muted);
-      font-size: 13px;
-    }
+    .ors-rollout-warning mat-icon { color: var(--primary); flex: 0 0 auto; }
+    .ors-rollout-warning strong { display: block; font-weight: 900; margin-bottom: 2px; }
+    .ors-rollout-warning span { color: var(--text-muted); font-size: 13px; line-height: 1.45; }
     .ors-flag-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 12px;
     }
     .ors-flag-card {
@@ -724,26 +1007,22 @@ const PLAN_BADGE: Record<string, string> = {
       padding: 14px;
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
-      background: var(--bg-surface);
+      background: var(--panel);
       cursor: pointer;
     }
-    .ors-flag-card input {
-      width: 18px;
-      height: 18px;
-      accent-color: var(--primary);
+    .ors-flag-card input { width: 18px; height: 18px; accent-color: var(--primary); }
+    .ors-flag-copy { display: grid; gap: 3px; min-width: 0; }
+    .ors-flag-copy strong { color: var(--text); font-weight: 900; }
+    .ors-flag-copy small { color: var(--text-muted); line-height: 1.35; }
+    .ors-msg {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 600;
     }
-    .ors-flag-copy strong,
-    .ors-flag-copy small { display: block; }
-    .ors-flag-copy small {
-      margin-top: 3px;
-      color: var(--text-muted);
-      line-height: 1.35;
-    }
-    @media (max-width: 760px) {
-      .ors-flag-grid { grid-template-columns: 1fr; }
-      .ors-flag-card { grid-template-columns: auto 1fr; }
-      .ors-flag-card .vs-badge { grid-column: 2; width: max-content; }
-    }
+    .ors-msg mat-icon { font-size: 16px !important; }
+    .ors-msg--ok  { background: rgba(34,197,94,0.12); color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
+    .ors-msg--err { background: rgba(239,68,68,0.12); color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); }
 
     .ors-save-btn {
       display: inline-flex; align-items: center; gap: 6px;
@@ -777,15 +1056,18 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   selectedSiteIndex = 0;
 
   @ViewChild('geofenceMap') geofenceMap?: ElementRef<HTMLDivElement>;
-  private map: L.Map | null = null;
-  private marker: L.Marker | null = null;
-  private circle: L.Circle | null = null;
+  private platformId = inject(PLATFORM_ID);
+  private L: typeof Leaflet | null = null;
+  private map: Leaflet.Map | null = null;
+  private marker: Leaflet.Marker | null = null;
+  private circle: Leaflet.Circle | null = null;
 
   constructor(private ctx: OrgContextService, private toast: ToastService, private plans: PlanEntitlementsService) {
     this.orgId = this.ctx.orgId();
   }
 
   async ngOnInit() {
+    this.handleBillingReturn();
     if (!this.orgId) return;
     try {
       const db = getFirestore();
@@ -796,7 +1078,18 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
           ...DEFAULT_SETTINGS,
           ...data,
           experienceFlags: normalizeExperienceFlags((data as any).experienceFlags),
+          dataRetention: { ...DEFAULT_DATA_RETENTION, ...(data as any).dataRetention },
         };
+        // Real federal/state/FICA figures only make sense for a US org —
+        // only apply them the first time (nothing saved yet for these fields).
+        if (data.defaultFederalTaxPercent == null && data.defaultStateTaxPercent == null
+          && data.defaultSocialSecurityPercent == null && data.defaultMedicarePercent == null) {
+          const countryDefaults = defaultDeductionElectionsForCountry(loaded.countryCode);
+          loaded.defaultFederalTaxPercent = countryDefaults.federalTaxPercent;
+          loaded.defaultStateTaxPercent = countryDefaults.stateTaxPercent;
+          loaded.defaultSocialSecurityPercent = countryDefaults.socialSecurityPercent;
+          loaded.defaultMedicarePercent = countryDefaults.medicarePercent;
+        }
         this.settings.set(loaded);
         this.draft = { ...loaded };
         this.ctx.setContext({
@@ -822,6 +1115,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit() {
+    if (!isPlatformBrowser(this.platformId)) return;
     setTimeout(() => this.ensureMapReady(), 0);
   }
 
@@ -849,16 +1143,6 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   hasEnterpriseControls() { return this.hasSsoConfig() || this.hasCustomIntegrations(); }
   canManageSites() { return this.hasGpsAttendance() || this.hasMultiSite(); }
   hasBillingCustomer() { return !!String(this.settings().stripeCustomerId || '').trim(); }
-  experienceFlagEnabled(key: ExperienceFlagKey) { return this.draft.experienceFlags?.[key] === true; }
-  setExperienceFlag(key: ExperienceFlagKey, enabled: boolean) {
-    this.draft = {
-      ...this.draft,
-      experienceFlags: {
-        ...normalizeExperienceFlags(this.draft.experienceFlags),
-        [key]: enabled,
-      },
-    };
-  }
 
   addSite() {
     if (!this.canManageSites()) {
@@ -896,6 +1180,79 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     };
     this.selectedSiteIndex = Math.max(0, Math.min(this.selectedSiteIndex, this.draft.sites.length - 1));
     this.refreshMapFromSelectedSite();
+  }
+
+  useUsDeductionDefaults() {
+    const defaults = defaultDeductionElectionsForCountry('US');
+    this.draft.defaultFederalTaxPercent = defaults.federalTaxPercent;
+    this.draft.defaultStateTaxPercent = defaults.stateTaxPercent;
+    this.draft.defaultSocialSecurityPercent = defaults.socialSecurityPercent;
+    this.draft.defaultMedicarePercent = defaults.medicarePercent;
+  }
+
+  confirmDataRetention() {
+    this.draft = {
+      ...this.draft,
+      dataRetention: {
+        ...this.draft.dataRetention,
+        confirmedBy: this.ctx.displayName() || this.ctx.email() || this.ctx.uid() || 'Unknown',
+        confirmedAt: new Date(),
+      },
+    };
+  }
+
+  experienceFlagEnabled(key: ExperienceFlagKey) {
+    return normalizeExperienceFlags(this.draft.experienceFlags)[key] === true;
+  }
+
+  setExperienceFlag(key: ExperienceFlagKey, enabled: boolean) {
+    this.draft = {
+      ...this.draft,
+      experienceFlags: {
+        ...normalizeExperienceFlags(this.draft.experienceFlags),
+        [key]: enabled,
+      },
+    };
+  }
+
+  formatConfirmedAt(): string {
+    const value = this.draft.dataRetention.confirmedAt;
+    const date = value?.toDate ? value.toDate() : value instanceof Date ? value : null;
+    return date ? date.toLocaleDateString() : '';
+  }
+
+  addBenefitPlan() {
+    this.draft = {
+      ...this.draft,
+      benefitPlans: [
+        ...this.draft.benefitPlans,
+        { id: this.createLocalId('benefit'), label: '', provider: '', employeeAmount: 0, employerAmount: 0 },
+      ],
+    };
+  }
+
+  removeBenefitPlan(index: number) {
+    this.draft = {
+      ...this.draft,
+      benefitPlans: this.draft.benefitPlans.filter((_, i) => i !== index),
+    };
+  }
+
+  addHoliday() {
+    this.draft = {
+      ...this.draft,
+      holidays: [
+        ...this.draft.holidays,
+        { id: this.createLocalId('holiday'), name: '', date: '', paidHours: 8 },
+      ],
+    };
+  }
+
+  removeHoliday(index: number) {
+    this.draft = {
+      ...this.draft,
+      holidays: this.draft.holidays.filter((_, i) => i !== index),
+    };
   }
 
   cadenceOptions = CADENCE_OPTIONS;
@@ -948,9 +1305,12 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     this.refreshMapFromSelectedSite(false);
   }
 
-  private ensureMapReady() {
+  private async ensureMapReady() {
+    if (!isPlatformBrowser(this.platformId)) return;
     if (!this.canManageSites()) return;
     if (this.map || !this.geofenceMap?.nativeElement) return;
+
+    const L = this.L ?? (this.L = await import('leaflet'));
 
     this.map = L.map(this.geofenceMap.nativeElement, {
       center: [33.749, -84.388],
@@ -963,7 +1323,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(this.map);
 
-    this.map.on('click', (event: L.LeafletMouseEvent) => {
+    this.map.on('click', (event: Leaflet.LeafletMouseEvent) => {
       const site = this.draft.sites[this.selectedSiteIndex];
       if (!site) return;
       site.latitude = Number(event.latlng.lat.toFixed(6));
@@ -974,11 +1334,14 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     this.refreshMapFromSelectedSite();
   }
 
-  private refreshMapFromSelectedSite(recenter = true) {
+  private async refreshMapFromSelectedSite(recenter = true) {
+    if (!isPlatformBrowser(this.platformId)) return;
     if (!this.map) {
-      this.ensureMapReady();
+      await this.ensureMapReady();
       if (!this.map) return;
     }
+    const L = this.L;
+    if (!L) return;
     const site = this.draft.sites[this.selectedSiteIndex];
     if (!site) {
       if (this.marker) { this.map.removeLayer(this.marker); this.marker = null; }
@@ -992,7 +1355,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
 
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-    const center: L.LatLngExpression = [lat, lng];
+    const center: Leaflet.LatLngExpression = [lat, lng];
     if (!this.marker) {
       this.marker = L.marker(center).addTo(this.map);
     } else {
@@ -1034,6 +1397,25 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         }))
         .filter((site) => site.name);
 
+      const normalizedHolidays: OrgHoliday[] = (this.draft.holidays || [])
+        .map((h) => ({
+          id: String(h.id || this.createLocalId('holiday')).trim(),
+          name: String(h.name || '').trim(),
+          date: String(h.date || '').trim(),
+          paidHours: Math.max(0, Number(h.paidHours || 0)),
+        }))
+        .filter((h) => h.name && h.date);
+
+      const normalizedBenefitPlans: BenefitLine[] = (this.draft.benefitPlans || [])
+        .map((p) => ({
+          id: String(p.id || this.createLocalId('benefit')).trim(),
+          label: String(p.label || '').trim(),
+          provider: String(p.provider || '').trim(),
+          employeeAmount: Math.max(0, Number(p.employeeAmount || 0)),
+          employerAmount: Math.max(0, Number(p.employerAmount || 0)),
+        }))
+        .filter((p) => p.label);
+
       const normalizedAccrualPolicy: AccrualPolicy = {
         enabled: !!this.draft.accrualPolicy?.enabled,
         cadence: this.draft.accrualPolicy?.cadence || 'monthly',
@@ -1047,8 +1429,22 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
           .sort((a, b) => a.minTenureMonths - b.minTenureMonths),
       };
 
-      const db = getFirestore();
+      const positiveYearsOrNull = (value: unknown): number | null => {
+        const n = Number(value);
+        return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+      };
+      const normalizedDataRetention: DataRetentionSettings = {
+        timeEntriesYears: positiveYearsOrNull(this.draft.dataRetention?.timeEntriesYears),
+        payrollRunsYears: positiveYearsOrNull(this.draft.dataRetention?.payrollRunsYears),
+        accrualLedgerYears: positiveYearsOrNull(this.draft.dataRetention?.accrualLedgerYears),
+        timeOffRequestsYears: positiveYearsOrNull(this.draft.dataRetention?.timeOffRequestsYears),
+        employeeDocumentsYearsAfterTermination: positiveYearsOrNull(this.draft.dataRetention?.employeeDocumentsYearsAfterTermination),
+        confirmedBy: this.draft.dataRetention?.confirmedBy || null,
+        confirmedAt: this.draft.dataRetention?.confirmedAt || null,
+      };
       const normalizedExperienceFlags = normalizeExperienceFlags(this.draft.experienceFlags);
+
+      const db = getFirestore();
       await setDoc(doc(db, 'orgs', this.orgId), {
         ...this.draft,
         countryCode: String(this.draft.countryCode || 'US').trim(),
@@ -1056,6 +1452,20 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         payFrequency: this.draft.payFrequency || 'biweekly',
         taxProfile: this.draft.taxProfile || 'manual',
         payrollTaxNotes: String(this.draft.payrollTaxNotes || '').trim(),
+        overtimeEnabled: this.draft.overtimeEnabled !== false,
+        overtimeMultiplier: Math.max(1, Number(this.draft.overtimeMultiplier || 1.5)),
+        overtimeWeeklyThresholdHours: Math.max(1, Number(this.draft.overtimeWeeklyThresholdHours || 40)),
+        holidayWorkMultiplier: Math.max(1, Number(this.draft.holidayWorkMultiplier || 1.5)),
+        holidays: normalizedHolidays,
+        defaultFederalTaxPercent: Math.max(0, Number(this.draft.defaultFederalTaxPercent || 0)),
+        defaultStateTaxPercent: Math.max(0, Number(this.draft.defaultStateTaxPercent || 0)),
+        defaultSocialSecurityPercent: Math.max(0, Number(this.draft.defaultSocialSecurityPercent || 0)),
+        defaultMedicarePercent: Math.max(0, Number(this.draft.defaultMedicarePercent || 0)),
+        default401kMatchPercent: Math.max(0, Number(this.draft.default401kMatchPercent || 0)),
+        default401kProvider: String(this.draft.default401kProvider || '').trim(),
+        benefitPlans: normalizedBenefitPlans,
+        experienceFlags: normalizedExperienceFlags,
+        dataRetention: normalizedDataRetention,
         gpsAttendanceEnabled: this.hasGpsAttendance() ? this.draft.gpsAttendanceEnabled : false,
         sites: this.canManageSites() ? normalizedSites : [],
         accrualPolicy: normalizedAccrualPolicy,
@@ -1068,22 +1478,11 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
               active: item.active !== false,
             })).filter((item) => item.label || item.endpoint)
           : [],
-        experienceFlags: normalizedExperienceFlags,
         orgId: this.orgId,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      this.settings.set({
-        ...this.draft,
-        sites: normalizedSites,
-        accrualPolicy: normalizedAccrualPolicy,
-        experienceFlags: normalizedExperienceFlags,
-      });
-      this.draft = {
-        ...this.draft,
-        sites: normalizedSites,
-        accrualPolicy: normalizedAccrualPolicy,
-        experienceFlags: normalizedExperienceFlags,
-      };
+      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans, experienceFlags: normalizedExperienceFlags, dataRetention: normalizedDataRetention });
+      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans, experienceFlags: normalizedExperienceFlags, dataRetention: normalizedDataRetention };
       this.ctx.setContext({
         orgId: this.ctx.orgId(),
         uid: this.ctx.uid(),
@@ -1109,6 +1508,20 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  private handleBillingReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const billing = params.get('billing');
+    if (!billing) return;
+    if (billing === 'success') {
+      this.toast.success('Subscription updated — it may take a moment to reflect below.');
+    } else if (billing === 'cancel') {
+      this.toast.info('Checkout was canceled. No changes were made.');
+    }
+    params.delete('billing');
+    const query = params.toString();
+    history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : ''));
+  }
+
   async manageBilling() {
     if (!this.orgId) return;
     if (!this.hasBillingCustomer()) {
@@ -1132,6 +1545,36 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         return;
       }
       this.toast.errorFrom(e, 'Failed to open Stripe Portal.');
+    } finally {
+      this.billingBusy.set(false);
+    }
+  }
+
+  async upgradeToPlan(planId: 'starter' | 'pro') {
+    if (!this.orgId || this.billingBusy()) return;
+    this.billingBusy.set(true);
+    try {
+      const fns = getFunctions(undefined, 'us-east1');
+      const createCheckout = httpsCallable(fns, 'stripeCreateCheckout');
+      const returnBase = `${window.location.origin}${window.location.pathname}`;
+      const res: any = await createCheckout({
+        orgId: this.orgId,
+        planId,
+        successUrl: `${returnBase}?billing=success`,
+        cancelUrl: `${returnBase}?billing=cancel`,
+      });
+
+      if (res.data?.url) {
+        window.location.href = res.data.url;
+      } else {
+        throw new Error('No checkout URL returned from Stripe');
+      }
+    } catch (e: any) {
+      if (String(e?.code || '').includes('failed-precondition')) {
+        this.toast.error('Billing isn\'t configured for this plan yet. Contact support.');
+        return;
+      }
+      this.toast.errorFrom(e, 'Failed to start checkout.');
     } finally {
       this.billingBusy.set(false);
     }

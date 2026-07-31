@@ -12,7 +12,9 @@ import { ToastService } from '../../core/ui/toast.service';
 import { AppLockService } from '../../core/app-lock/app-lock.service';
 import { ConnectivityService } from '../../core/connectivity/connectivity.service';
 import { TwoFactorService } from '../../core/auth/two-factor.service';
+import { DirectDepositRepo, DirectDepositInfo, BankAccountType, maskLast4 } from '../../core/repos/direct-deposit.repo';
 import type { TotpSecret } from 'firebase/auth';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 type DependentDraft = {
   name: string;
@@ -30,7 +32,7 @@ const EMPTY_DEPENDENT: DependentDraft = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MatIconModule],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, TranslocoModule],
   template: `
     <div class="vs-page-pad prof-page">
       <div class="prof-header">
@@ -41,53 +43,53 @@ const EMPTY_DEPENDENT: DependentDraft = {
               <span *ngIf="!draft.photoURL">{{ initials() }}</span>
             </div>
             <button class="prof-avatar-edit" type="button" (click)="avatarInput.click()"
-                    [disabled]="uploadingPhoto" aria-label="Change profile photo">
+                    [disabled]="uploadingPhoto" [attr.aria-label]="'profile.changePhotoAria' | transloco">
               <mat-icon>{{ uploadingPhoto ? 'hourglass_empty' : 'photo_camera' }}</mat-icon>
             </button>
             <input #avatarInput type="file" accept="image/*" hidden (change)="onAvatarSelected($event)">
           </div>
           <div class="prof-identity">
-            <span>My Profile</span>
-            <h1>{{ draft.displayName || draft.email || 'Staff member' }}</h1>
-            <p>{{ draft.title || draft.jobRole || 'Staff' }} · {{ draft.department || 'Department not set' }} · {{ draft.employeeNumber || 'Employee ID pending' }}</p>
+            <span>{{ 'profile.myProfile' | transloco }}</span>
+            <h1>{{ draft.displayName || draft.email || ('profile.staffMemberFallback' | transloco) }}</h1>
+            <p>{{ draft.title || draft.jobRole || ('profile.staffFallback' | transloco) }} · {{ draft.department || ('profile.departmentNotSet' | transloco) }} · {{ draft.employeeNumber || ('profile.employeeIdPending' | transloco) }}</p>
           </div>
         </div>
         <div class="prof-actions">
           <button class="vs-btn-ghost" type="button" (click)="resetDraft()" [disabled]="saving">
-            <mat-icon>restart_alt</mat-icon> Reset
+            <mat-icon>restart_alt</mat-icon> {{ 'profile.reset' | transloco }}
           </button>
           <button class="vs-btn-primary" type="button" (click)="saveProfile()" [disabled]="saving || !orgId || !uid">
-            <mat-icon>{{ saving ? 'hourglass_empty' : 'save' }}</mat-icon> {{ saving ? 'Saving...' : 'Save Profile' }}
+            <mat-icon>{{ saving ? 'hourglass_empty' : 'save' }}</mat-icon> {{ (saving ? 'profile.saving' : 'profile.saveProfile') | transloco }}
           </button>
         </div>
       </div>
 
       <div *ngIf="!orgId || !uid" class="vs-glass prof-empty">
         <mat-icon>warning_amber</mat-icon>
-        Missing organization or user context.
+        {{ 'profile.missingContext' | transloco }}
       </div>
 
       <ng-container *ngIf="orgId && uid">
         <section class="prof-launchpad">
           <button class="prof-app" type="button" routerLink="/app/payroll">
             <span class="prof-app-icon prof-app-icon--green"><mat-icon>payments</mat-icon></span>
-            <strong>Online Payslip</strong>
-            <small>Payroll</small>
+            <strong>{{ 'profile.onlinePayslip' | transloco }}</strong>
+            <small>{{ 'profile.payrollLabel' | transloco }}</small>
           </button>
           <button class="prof-app" type="button" routerLink="/app/payroll/payslip">
             <span class="prof-app-icon prof-app-icon--blue"><mat-icon>description</mat-icon></span>
-            <strong>Employee W-2</strong>
-            <small>Tax</small>
+            <strong>{{ 'profile.employeeW2' | transloco }}</strong>
+            <small>{{ 'profile.taxLabel' | transloco }}</small>
           </button>
           <button class="prof-app" type="button" (click)="scrollTo('tax')">
             <span class="prof-app-icon prof-app-icon--purple"><mat-icon>fact_check</mat-icon></span>
-            <strong>W-4 Details</strong>
-            <small>Withholding</small>
+            <strong>{{ 'profile.w4Details' | transloco }}</strong>
+            <small>{{ 'profile.withholdingLabel' | transloco }}</small>
           </button>
           <button class="prof-app" type="button" (click)="scrollTo('personal')">
             <span class="prof-app-icon prof-app-icon--teal"><mat-icon>badge</mat-icon></span>
-            <strong>Personal Information</strong>
-            <small>Profile</small>
+            <strong>{{ 'profile.personalInformation' | transloco }}</strong>
+            <small>{{ 'profile.profileLabel' | transloco }}</small>
           </button>
         </section>
 
@@ -95,35 +97,35 @@ const EMPTY_DEPENDENT: DependentDraft = {
           <section class="vs-glass-strong prof-card" id="personal">
             <div class="prof-card-head">
               <div>
-                <h2>Personal Information</h2>
-                <p>Contact information visible to your organization.</p>
+                <h2>{{ 'profile.personalInformation' | transloco }}</h2>
+                <p>{{ 'profile.personalInfoSub' | transloco }}</p>
               </div>
               <mat-icon>person</mat-icon>
             </div>
             <div class="prof-form-grid">
               <label>
-                <span>Full name</span>
-                <input class="vs-input" [(ngModel)]="draft.displayName" placeholder="Full name">
+                <span>{{ 'profile.fullName' | transloco }}</span>
+                <input class="vs-input" [(ngModel)]="draft.displayName" [placeholder]="'profile.fullName' | transloco">
               </label>
               <label>
-                <span>Email</span>
+                <span>{{ 'profile.email' | transloco }}</span>
                 <input class="vs-input" [(ngModel)]="draft.email" disabled>
               </label>
               <label>
-                <span>Phone</span>
-                <input class="vs-input" [(ngModel)]="draft.phone" placeholder="Mobile phone">
+                <span>{{ 'profile.phone' | transloco }}</span>
+                <input class="vs-input" [(ngModel)]="draft.phone" [placeholder]="'profile.phonePlaceholder' | transloco">
               </label>
               <label>
-                <span>Job title</span>
-                <input class="vs-input" [(ngModel)]="draft.title" placeholder="e.g. Registered Nurse">
+                <span>{{ 'profile.jobTitle' | transloco }}</span>
+                <input class="vs-input" [(ngModel)]="draft.title" [placeholder]="'profile.jobTitlePlaceholder' | transloco">
               </label>
               <label>
-                <span>Department</span>
-                <input class="vs-input" [(ngModel)]="draft.department" placeholder="Department">
+                <span>{{ 'profile.department' | transloco }}</span>
+                <input class="vs-input" [(ngModel)]="draft.department" [placeholder]="'profile.departmentPlaceholder' | transloco">
               </label>
               <label>
-                <span>Primary location</span>
-                <input class="vs-input" [(ngModel)]="draft.locationName" placeholder="Location or site">
+                <span>{{ 'profile.primaryLocation' | transloco }}</span>
+                <input class="vs-input" [(ngModel)]="draft.locationName" [placeholder]="'profile.locationPlaceholder' | transloco">
               </label>
             </div>
           </section>
@@ -131,24 +133,24 @@ const EMPTY_DEPENDENT: DependentDraft = {
           <section class="vs-glass-strong prof-card">
             <div class="prof-card-head">
               <div>
-                <h2>Team</h2>
-                <p>Manager, emergency contact, and organization identity.</p>
+                <h2>{{ 'profile.team' | transloco }}</h2>
+                <p>{{ 'profile.teamSub' | transloco }}</p>
               </div>
               <mat-icon>groups</mat-icon>
             </div>
             <div class="prof-team-list">
               <div class="prof-team-row">
-                <span class="prof-chip">Manager</span>
-                <strong>{{ draft.managerName || 'Not assigned' }}</strong>
-                <small>{{ draft.managerEmail || 'No manager email' }}</small>
+                <span class="prof-chip">{{ 'profile.manager' | transloco }}</span>
+                <strong>{{ draft.managerName || ('profile.notAssigned' | transloco) }}</strong>
+                <small>{{ draft.managerEmail || ('profile.noManagerEmail' | transloco) }}</small>
               </div>
               <label>
-                <span>Emergency contact</span>
-                <input class="vs-input" [(ngModel)]="draft.emergencyContactName" placeholder="Contact name">
+                <span>{{ 'profile.emergencyContact' | transloco }}</span>
+                <input class="vs-input" [(ngModel)]="draft.emergencyContactName" [placeholder]="'profile.contactNamePlaceholder' | transloco">
               </label>
               <label>
-                <span>Emergency phone</span>
-                <input class="vs-input" [(ngModel)]="draft.emergencyContactPhone" placeholder="Emergency phone">
+                <span>{{ 'profile.emergencyPhone' | transloco }}</span>
+                <input class="vs-input" [(ngModel)]="draft.emergencyContactPhone" [placeholder]="'profile.emergencyPhonePlaceholder' | transloco">
               </label>
             </div>
           </section>
@@ -157,35 +159,35 @@ const EMPTY_DEPENDENT: DependentDraft = {
         <section class="vs-glass-strong prof-card">
           <div class="prof-card-head">
             <div>
-              <h2>Address</h2>
-              <p>Used for payroll documents and employment records.</p>
+              <h2>{{ 'profile.address' | transloco }}</h2>
+              <p>{{ 'profile.addressSub' | transloco }}</p>
             </div>
             <mat-icon>home_pin</mat-icon>
           </div>
           <div class="prof-form-grid prof-form-grid--address">
             <label>
-              <span>Address line 1</span>
-              <input class="vs-input" [(ngModel)]="draft.addressLine1" placeholder="Street address">
+              <span>{{ 'profile.addressLine1' | transloco }}</span>
+              <input class="vs-input" [(ngModel)]="draft.addressLine1" [placeholder]="'profile.addressLine1Placeholder' | transloco">
             </label>
             <label>
-              <span>Address line 2</span>
-              <input class="vs-input" [(ngModel)]="draft.addressLine2" placeholder="Apartment, suite">
+              <span>{{ 'profile.addressLine2' | transloco }}</span>
+              <input class="vs-input" [(ngModel)]="draft.addressLine2" [placeholder]="'profile.addressLine2Placeholder' | transloco">
             </label>
             <label>
-              <span>City</span>
-              <input class="vs-input" [(ngModel)]="draft.city" placeholder="City">
+              <span>{{ 'profile.city' | transloco }}</span>
+              <input class="vs-input" [(ngModel)]="draft.city" [placeholder]="'profile.city' | transloco">
             </label>
             <label>
-              <span>State / Province</span>
-              <input class="vs-input" [(ngModel)]="draft.state" placeholder="State">
+              <span>{{ 'profile.state' | transloco }}</span>
+              <input class="vs-input" [(ngModel)]="draft.state" [placeholder]="'profile.statePlaceholder' | transloco">
             </label>
             <label>
-              <span>Postal code</span>
-              <input class="vs-input" [(ngModel)]="draft.postalCode" placeholder="ZIP / postal code">
+              <span>{{ 'profile.postalCode' | transloco }}</span>
+              <input class="vs-input" [(ngModel)]="draft.postalCode" [placeholder]="'profile.postalCodePlaceholder' | transloco">
             </label>
             <label>
-              <span>Country</span>
-              <input class="vs-input" [(ngModel)]="draft.country" placeholder="Country">
+              <span>{{ 'profile.country' | transloco }}</span>
+              <input class="vs-input" [(ngModel)]="draft.country" [placeholder]="'profile.country' | transloco">
             </label>
           </div>
         </section>
@@ -193,125 +195,185 @@ const EMPTY_DEPENDENT: DependentDraft = {
         <section class="vs-glass-strong prof-card" id="tax">
           <div class="prof-card-head">
             <div>
-              <h2>Tax Forms</h2>
-              <p>W-4 withholding preferences and W-2 delivery settings.</p>
+              <h2>{{ 'profile.taxForms' | transloco }}</h2>
+              <p>{{ 'profile.taxFormsSub' | transloco }}</p>
             </div>
             <mat-icon>receipt_long</mat-icon>
           </div>
           <div class="prof-tax-grid">
             <div class="prof-tax-box">
-              <h3>W-4 Withholding</h3>
+              <h3>{{ 'profile.w4Withholding' | transloco }}</h3>
               <div class="prof-form-grid">
                 <label>
-                  <span>Filing status</span>
+                  <span>{{ 'profile.filingStatus' | transloco }}</span>
                   <select class="vs-select" [(ngModel)]="draft.w4FilingStatus">
-                    <option value="single">Single or married filing separately</option>
-                    <option value="married">Married filing jointly</option>
-                    <option value="head_of_household">Head of household</option>
-                    <option value="non_us">Non-US / manual profile</option>
+                    <option value="single">{{ 'profile.filingSingle' | transloco }}</option>
+                    <option value="married">{{ 'profile.filingMarried' | transloco }}</option>
+                    <option value="head_of_household">{{ 'profile.filingHoh' | transloco }}</option>
+                    <option value="non_us">{{ 'profile.filingNonUs' | transloco }}</option>
                   </select>
                 </label>
                 <label>
-                  <span>Multiple jobs</span>
+                  <span>{{ 'profile.multipleJobs' | transloco }}</span>
                   <select class="vs-select" [(ngModel)]="draft.w4MultipleJobs">
-                    <option [ngValue]="false">No</option>
-                    <option [ngValue]="true">Yes</option>
+                    <option [ngValue]="false">{{ 'profile.no' | transloco }}</option>
+                    <option [ngValue]="true">{{ 'profile.yes' | transloco }}</option>
                   </select>
                 </label>
                 <label>
-                  <span>Dependent amount</span>
+                  <span>{{ 'profile.dependentAmount' | transloco }}</span>
                   <input class="vs-input" type="number" [(ngModel)]="draft.w4DependentAmount" min="0">
                 </label>
                 <label>
-                  <span>Other income</span>
+                  <span>{{ 'profile.otherIncome' | transloco }}</span>
                   <input class="vs-input" type="number" [(ngModel)]="draft.w4OtherIncome" min="0">
                 </label>
                 <label>
-                  <span>Deductions</span>
+                  <span>{{ 'profile.deductions' | transloco }}</span>
                   <input class="vs-input" type="number" [(ngModel)]="draft.w4Deductions" min="0">
                 </label>
                 <label>
-                  <span>Extra withholding</span>
+                  <span>{{ 'profile.extraWithholding' | transloco }}</span>
                   <input class="vs-input" type="number" [(ngModel)]="draft.w4ExtraWithholding" min="0">
                 </label>
               </div>
               <label class="prof-check">
                 <input type="checkbox" [(ngModel)]="draft.w4Certified">
-                <span>I certify this withholding information is accurate to the best of my knowledge.</span>
+                <span>{{ 'profile.w4CertifyText' | transloco }}</span>
               </label>
             </div>
 
             <div class="prof-tax-box">
-              <h3>W-2 Delivery</h3>
+              <h3>{{ 'profile.w2Delivery' | transloco }}</h3>
               <div class="prof-form-grid">
                 <label>
-                  <span>Delivery preference</span>
+                  <span>{{ 'profile.deliveryPreference' | transloco }}</span>
                   <select class="vs-select" [(ngModel)]="draft.w2Delivery">
-                    <option value="electronic">Electronic W-2</option>
-                    <option value="mail">Mail paper copy</option>
-                    <option value="both">Electronic and mail</option>
+                    <option value="electronic">{{ 'profile.deliveryElectronic' | transloco }}</option>
+                    <option value="mail">{{ 'profile.deliveryMail' | transloco }}</option>
+                    <option value="both">{{ 'profile.deliveryBoth' | transloco }}</option>
                   </select>
                 </label>
                 <label>
-                  <span>Document email</span>
-                  <input class="vs-input" [(ngModel)]="draft.w2Email" placeholder="Email for tax documents">
+                  <span>{{ 'profile.documentEmail' | transloco }}</span>
+                  <input class="vs-input" [(ngModel)]="draft.w2Email" [placeholder]="'profile.documentEmailPlaceholder' | transloco">
                 </label>
               </div>
               <label class="prof-check">
                 <input type="checkbox" [(ngModel)]="draft.w2ElectronicConsent">
-                <span>I consent to receive W-2 documents electronically where legally allowed.</span>
+                <span>{{ 'profile.w2ConsentText' | transloco }}</span>
               </label>
-              <p class="prof-note">Final tax forms should be generated by authorized payroll or tax systems. InnovaShift stores staff preferences for payroll preparation.</p>
+              <p class="prof-note">{{ 'profile.taxFormsNote' | transloco }}</p>
             </div>
+          </div>
+        </section>
+
+        <section class="vs-glass-strong prof-card" id="direct-deposit">
+          <div class="prof-card-head">
+            <div>
+              <h2>{{ 'profile.directDeposit' | transloco }}</h2>
+              <p>{{ 'profile.directDepositSub' | transloco }}</p>
+            </div>
+            <mat-icon>account_balance</mat-icon>
+          </div>
+
+          <div class="prof-dd-summary" *ngIf="directDeposit() && !editingDirectDeposit">
+            <div>
+              <strong>{{ directDeposit()!.bankName }}</strong>
+              <span>{{ (directDeposit()!.accountType === 'savings' ? 'profile.savings' : 'profile.checking') | transloco }} · {{ maskedAccountNumber() }}</span>
+            </div>
+            <button class="vs-btn-ghost" type="button" (click)="startEditDirectDeposit()">
+              <mat-icon>edit</mat-icon> {{ 'profile.update' | transloco }}
+            </button>
+          </div>
+
+          <div class="prof-dd-empty" *ngIf="!directDeposit() && !editingDirectDeposit">
+            <p>{{ 'profile.noDdOnFile' | transloco }}</p>
+            <button class="vs-btn-primary" type="button" (click)="startEditDirectDeposit()">
+              <mat-icon>add</mat-icon> {{ 'profile.addBankAccount' | transloco }}
+            </button>
+          </div>
+
+          <div class="prof-form-grid" *ngIf="editingDirectDeposit">
+            <label>
+              <span>{{ 'profile.bankName' | transloco }}</span>
+              <input class="vs-input" [(ngModel)]="ddDraft.bankName" [placeholder]="'profile.bankNamePlaceholder' | transloco">
+            </label>
+            <label>
+              <span>{{ 'profile.accountType' | transloco }}</span>
+              <select class="vs-select" [(ngModel)]="ddDraft.accountType">
+                <option value="checking">{{ 'profile.checking' | transloco }}</option>
+                <option value="savings">{{ 'profile.savings' | transloco }}</option>
+              </select>
+            </label>
+            <label>
+              <span>{{ 'profile.routingNumber' | transloco }}</span>
+              <input class="vs-input" [(ngModel)]="ddDraft.routingNumber" [placeholder]="'profile.routingNumberPlaceholder' | transloco" autocomplete="off">
+            </label>
+            <label>
+              <span>{{ 'profile.accountNumber' | transloco }}</span>
+              <input class="vs-input" type="password" [(ngModel)]="ddDraft.accountNumber" [placeholder]="'profile.accountNumberPlaceholder' | transloco" autocomplete="off">
+            </label>
+            <label>
+              <span>{{ 'profile.confirmAccountNumber' | transloco }}</span>
+              <input class="vs-input" type="password" [(ngModel)]="ddDraft.confirmAccountNumber" [placeholder]="'profile.confirmAccountNumberPlaceholder' | transloco" autocomplete="off">
+            </label>
+          </div>
+          <p class="prof-note" *ngIf="editingDirectDeposit">{{ 'profile.ddNote' | transloco }}</p>
+          <div class="prof-dd-actions" *ngIf="editingDirectDeposit">
+            <button class="vs-btn-ghost" type="button" (click)="cancelEditDirectDeposit()" [disabled]="ddSaving">{{ 'profile.cancel' | transloco }}</button>
+            <button class="vs-btn-primary" type="button" (click)="saveDirectDeposit()" [disabled]="ddSaving">
+              {{ (ddSaving ? 'profile.saving' : 'profile.saveBankAccount') | transloco }}
+            </button>
           </div>
         </section>
 
         <section class="vs-glass-strong prof-card">
           <div class="prof-card-head">
             <div>
-              <h2>Dependents</h2>
-              <p>Dependents used for benefits and tax withholding preparation.</p>
+              <h2>{{ 'profile.dependents' | transloco }}</h2>
+              <p>{{ 'profile.dependentsSub' | transloco }}</p>
             </div>
             <button class="vs-btn-ghost" type="button" (click)="addDependent()">
-              <mat-icon>add</mat-icon> Add
+              <mat-icon>add</mat-icon> {{ 'profile.add' | transloco }}
             </button>
           </div>
           <div class="prof-dependent-list">
             <div class="prof-dependent-row" *ngFor="let dep of dependents; let i = index">
-              <input class="vs-input" [(ngModel)]="dep.name" placeholder="Dependent name">
-              <input class="vs-input" [(ngModel)]="dep.relationship" placeholder="Relationship">
-              <input class="vs-input" type="number" [(ngModel)]="dep.birthYear" placeholder="Birth year">
+              <input class="vs-input" [(ngModel)]="dep.name" [placeholder]="'profile.dependentNamePlaceholder' | transloco">
+              <input class="vs-input" [(ngModel)]="dep.relationship" [placeholder]="'profile.relationshipPlaceholder' | transloco">
+              <input class="vs-input" type="number" [(ngModel)]="dep.birthYear" [placeholder]="'profile.birthYearPlaceholder' | transloco">
               <label class="prof-check prof-check--inline">
                 <input type="checkbox" [(ngModel)]="dep.taxEligible">
-                <span>Tax eligible</span>
+                <span>{{ 'profile.taxEligible' | transloco }}</span>
               </label>
               <button class="vs-btn-ghost prof-remove" type="button" (click)="removeDependent(i)">
                 <mat-icon>delete</mat-icon>
               </button>
             </div>
-            <div class="prof-empty-line" *ngIf="dependents.length === 0">No dependents listed.</div>
+            <div class="prof-empty-line" *ngIf="dependents.length === 0">{{ 'profile.noDependentsListed' | transloco }}</div>
           </div>
         </section>
 
         <section class="vs-glass-strong prof-card">
           <div class="prof-card-head">
             <div>
-              <h2>User Preferences</h2>
-              <p>Accessibility, analytics, and local time zone.</p>
+              <h2>{{ 'profile.userPreferences' | transloco }}</h2>
+              <p>{{ 'profile.userPreferencesSub' | transloco }}</p>
             </div>
             <mat-icon>tune</mat-icon>
           </div>
           <div class="prof-pref-grid">
             <label class="prof-switch">
               <input type="checkbox" [(ngModel)]="draft.accessibilityEnabled">
-              <span>Accessibility enabled</span>
+              <span>{{ 'profile.accessibilityEnabled' | transloco }}</span>
             </label>
             <label class="prof-switch">
               <input type="checkbox" [(ngModel)]="draft.analyticsEnabled">
-              <span>Enable analytics</span>
+              <span>{{ 'profile.enableAnalytics' | transloco }}</span>
             </label>
             <label>
-              <span>Time zone</span>
+              <span>{{ 'profile.timeZone' | transloco }}</span>
               <select class="vs-select" [(ngModel)]="draft.timezone">
                 <option *ngFor="let tz of timezones" [value]="tz">{{ tz }}</option>
               </select>
@@ -322,15 +384,15 @@ const EMPTY_DEPENDENT: DependentDraft = {
         <section class="vs-glass-strong prof-card" *ngIf="lockSupported">
           <div class="prof-card-head">
             <div>
-              <h2>Security</h2>
-              <p>Protect this app on this device with Face ID / Fingerprint.</p>
+              <h2>{{ 'profile.security' | transloco }}</h2>
+              <p>{{ 'profile.securitySub' | transloco }}</p>
             </div>
             <mat-icon>fingerprint</mat-icon>
           </div>
           <div class="prof-pref-grid">
             <label class="prof-switch">
               <input type="checkbox" [checked]="lockEnabled" (change)="onToggleAppLock($event)" [disabled]="lockBusy">
-              <span>{{ lockEnabled ? 'Face ID / Fingerprint unlock enabled' : 'Enable Face ID / Fingerprint unlock' }}</span>
+              <span>{{ (lockEnabled ? 'profile.lockEnabledText' : 'profile.enableLockText') | transloco }}</span>
             </label>
           </div>
         </section>
@@ -338,8 +400,8 @@ const EMPTY_DEPENDENT: DependentDraft = {
         <section class="vs-glass-strong prof-card">
           <div class="prof-card-head">
             <div>
-              <h2>Two-Factor Authentication</h2>
-              <p>Require a code from an authenticator app (Google Authenticator, Authy, etc.) when signing in.</p>
+              <h2>{{ 'profile.twoFactorAuth' | transloco }}</h2>
+              <p>{{ 'profile.twoFactorSub' | transloco }}</p>
             </div>
             <mat-icon>verified_user</mat-icon>
           </div>
@@ -348,57 +410,57 @@ const EMPTY_DEPENDENT: DependentDraft = {
             <div class="tfa-status" *ngIf="tfaEnrolled && tfaStep === 'idle'">
               <mat-icon class="tfa-status-icon tfa-status-icon--on">check_circle</mat-icon>
               <div>
-                <strong>Two-factor authentication is enabled</strong>
-                <span>An authenticator app code is required at sign-in.</span>
+                <strong>{{ 'profile.tfaEnabledTitle' | transloco }}</strong>
+                <span>{{ 'profile.tfaEnabledSub' | transloco }}</span>
               </div>
-              <button class="vs-btn-ghost" type="button" (click)="startTfaDisable()" [disabled]="tfaBusy">Disable</button>
+              <button class="vs-btn-ghost" type="button" (click)="startTfaDisable()" [disabled]="tfaBusy">{{ 'profile.disable' | transloco }}</button>
             </div>
 
             <div class="tfa-status" *ngIf="!tfaEnrolled && tfaStep === 'idle'">
               <mat-icon class="tfa-status-icon">gpp_maybe</mat-icon>
               <div>
-                <strong>Two-factor authentication is off</strong>
-                <span>Add an extra layer of security to your account.</span>
+                <strong>{{ 'profile.tfaOffTitle' | transloco }}</strong>
+                <span>{{ 'profile.tfaOffSub' | transloco }}</span>
               </div>
-              <button class="vs-btn-primary" type="button" (click)="startTfaEnroll()" [disabled]="tfaBusy">Enable</button>
+              <button class="vs-btn-primary" type="button" (click)="startTfaEnroll()" [disabled]="tfaBusy">{{ 'profile.enable' | transloco }}</button>
             </div>
 
             <div class="tfa-step" *ngIf="tfaStep === 'password'">
-              <label class="vs-field-label">Confirm your password to continue</label>
-              <input class="doc-input" type="password" [(ngModel)]="tfaPassword" placeholder="Current password" (keyup.enter)="confirmTfaPassword()">
+              <label class="vs-field-label">{{ 'profile.confirmPasswordToContinue' | transloco }}</label>
+              <input class="doc-input" type="password" [(ngModel)]="tfaPassword" [placeholder]="'profile.currentPasswordPlaceholder' | transloco" (keyup.enter)="confirmTfaPassword()">
               <div class="tfa-step-actions">
-                <button class="vs-btn-ghost" type="button" (click)="cancelTfa()" [disabled]="tfaBusy">Cancel</button>
+                <button class="vs-btn-ghost" type="button" (click)="cancelTfa()" [disabled]="tfaBusy">{{ 'profile.cancel' | transloco }}</button>
                 <button class="vs-btn-primary" type="button" (click)="confirmTfaPassword()" [disabled]="tfaBusy || !tfaPassword">
-                  {{ tfaBusy ? 'Verifying…' : 'Continue' }}
+                  {{ (tfaBusy ? 'profile.verifying' : 'profile.continueLabel') | transloco }}
                 </button>
               </div>
             </div>
 
             <div class="tfa-step" *ngIf="tfaStep === 'scan'">
-              <p class="tfa-hint">Scan this QR code with your authenticator app, or enter the key manually.</p>
+              <p class="tfa-hint">{{ 'profile.scanQrHint' | transloco }}</p>
               <div class="tfa-qr-row">
                 <img *ngIf="tfaQrDataUrl" [src]="tfaQrDataUrl" alt="Two-factor authentication QR code" class="tfa-qr">
                 <div class="tfa-secret">
-                  <span>Manual entry key</span>
+                  <span>{{ 'profile.manualEntryKey' | transloco }}</span>
                   <code>{{ tfaSecretKey }}</code>
                 </div>
               </div>
-              <label class="vs-field-label">Enter the 6-digit code from your app</label>
+              <label class="vs-field-label">{{ 'profile.enterCodeLabel' | transloco }}</label>
               <input class="doc-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" [(ngModel)]="tfaCode" placeholder="000000" (keyup.enter)="confirmTfaEnroll()">
               <div class="tfa-step-actions">
-                <button class="vs-btn-ghost" type="button" (click)="cancelTfa()" [disabled]="tfaBusy">Cancel</button>
+                <button class="vs-btn-ghost" type="button" (click)="cancelTfa()" [disabled]="tfaBusy">{{ 'profile.cancel' | transloco }}</button>
                 <button class="vs-btn-primary" type="button" (click)="confirmTfaEnroll()" [disabled]="tfaBusy || tfaCode.length !== 6">
-                  {{ tfaBusy ? 'Verifying…' : 'Verify & Enable' }}
+                  {{ (tfaBusy ? 'profile.verifying' : 'profile.verifyEnable') | transloco }}
                 </button>
               </div>
             </div>
 
             <div class="tfa-step" *ngIf="tfaStep === 'confirm-disable'">
-              <p class="tfa-hint">Two-factor authentication will no longer be required at sign-in.</p>
+              <p class="tfa-hint">{{ 'profile.tfaDisableHint' | transloco }}</p>
               <div class="tfa-step-actions">
-                <button class="vs-btn-ghost" type="button" (click)="cancelTfa()" [disabled]="tfaBusy">Cancel</button>
+                <button class="vs-btn-ghost" type="button" (click)="cancelTfa()" [disabled]="tfaBusy">{{ 'profile.cancel' | transloco }}</button>
                 <button class="vs-btn-primary tfa-danger" type="button" (click)="confirmTfaDisable()" [disabled]="tfaBusy">
-                  {{ tfaBusy ? 'Disabling…' : 'Disable Two-Factor' }}
+                  {{ (tfaBusy ? 'profile.disabling' : 'profile.disableTwoFactor') | transloco }}
                 </button>
               </div>
             </div>
@@ -470,6 +532,12 @@ const EMPTY_DEPENDENT: DependentDraft = {
     .prof-dependent-row { display:grid; grid-template-columns:1.1fr .85fr .55fr auto auto; gap:10px; align-items:center; }
     .prof-remove { min-width:42px; padding-inline:10px !important; }
     .prof-empty-line { padding:14px; border:1px dashed var(--border); border-radius:8px; color:var(--text-muted); }
+    .prof-dd-summary { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:18px 20px; }
+    .prof-dd-summary strong { display:block; color:var(--text); }
+    .prof-dd-summary span { display:block; margin-top:4px; color:var(--text-muted); font-size:13px; }
+    .prof-dd-empty { padding:18px 20px; display:flex; align-items:center; justify-content:space-between; gap:14px; color:var(--text-muted); }
+    .prof-dd-empty p { margin:0; }
+    .prof-dd-actions { display:flex; justify-content:flex-end; gap:10px; padding:0 20px 18px; }
     .prof-pref-grid { padding:18px 20px; display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; align-items:center; }
     .prof-switch { min-height:52px; border:1px solid var(--border); border-radius:8px; padding:12px 14px; display:flex; align-items:center; gap:10px; background:var(--panel); }
     .prof-switch span { margin:0; color:var(--text); }
@@ -514,7 +582,13 @@ export class StaffProfilePage implements OnDestroy {
   private tfaPendingSecret: TotpSecret | null = null;
   private tfaIntent: 'enroll' | 'disable' | null = null;
   private unsub: (() => void) | null = null;
+  private unsubDirectDeposit: (() => void) | null = null;
   private source: any = {};
+
+  private directDepositSig: DirectDepositInfo | null = null;
+  editingDirectDeposit = false;
+  ddSaving = false;
+  ddDraft: { bankName: string; accountType: BankAccountType; routingNumber: string; accountNumber: string; confirmAccountNumber: string } = this.emptyDdDraft();
 
   timezones = [
     'America/New_York',
@@ -539,12 +613,72 @@ export class StaffProfilePage implements OnDestroy {
     private appLock: AppLockService,
     private connectivity: ConnectivityService,
     private twoFactor: TwoFactorService,
+    private directDepositRepo: DirectDepositRepo,
+    private i18n: TranslocoService,
   ) {
     this.orgId = this.ctx.orgId();
     this.uid = this.ctx.uid();
     this.bind();
     void this.loadAppLockState();
     this.loadTfaState();
+    if (this.orgId && this.uid) {
+      this.unsubDirectDeposit = this.directDepositRepo.watch(this.orgId, this.uid, (info) => {
+        this.directDepositSig = info;
+      });
+    }
+  }
+
+  directDeposit(): DirectDepositInfo | null {
+    return this.directDepositSig;
+  }
+
+  maskedAccountNumber(): string {
+    return maskLast4(this.directDepositSig?.accountNumber || '');
+  }
+
+  private emptyDdDraft() {
+    return { bankName: '', accountType: 'checking' as BankAccountType, routingNumber: '', accountNumber: '', confirmAccountNumber: '' };
+  }
+
+  startEditDirectDeposit() {
+    this.ddDraft = this.emptyDdDraft();
+    this.editingDirectDeposit = true;
+  }
+
+  cancelEditDirectDeposit() {
+    this.editingDirectDeposit = false;
+    this.ddDraft = this.emptyDdDraft();
+  }
+
+  async saveDirectDeposit() {
+    if (!this.orgId || !this.uid || this.ddSaving) return;
+    const bankName = this.ddDraft.bankName.trim();
+    const routingNumber = this.ddDraft.routingNumber.trim();
+    const accountNumber = this.ddDraft.accountNumber.trim();
+    if (!bankName || !routingNumber || !accountNumber) {
+      this.toast.error(this.i18n.translate('profile.bankFieldsRequired'));
+      return;
+    }
+    if (accountNumber !== this.ddDraft.confirmAccountNumber.trim()) {
+      this.toast.error(this.i18n.translate('profile.accountNumbersMismatch'));
+      return;
+    }
+    this.ddSaving = true;
+    try {
+      await this.directDepositRepo.save(this.orgId, this.uid, {
+        bankName,
+        accountType: this.ddDraft.accountType,
+        routingNumber,
+        accountNumber,
+      });
+      this.toast.success(this.i18n.translate('profile.ddSaved'));
+      this.editingDirectDeposit = false;
+      this.ddDraft = this.emptyDdDraft();
+    } catch (e: any) {
+      this.toast.errorFrom(e, this.i18n.translate('profile.ddSaveFailed'));
+    } finally {
+      this.ddSaving = false;
+    }
   }
 
   private async loadAppLockState() {
@@ -599,7 +733,7 @@ export class StaffProfilePage implements OnDestroy {
         this.tfaStep = 'confirm-disable';
       }
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Incorrect password.');
+      this.toast.errorFrom(e, this.i18n.translate('profile.incorrectPassword'));
     } finally {
       this.tfaBusy = false;
     }
@@ -612,10 +746,10 @@ export class StaffProfilePage implements OnDestroy {
     try {
       await this.twoFactor.verifyAndEnroll(user, this.tfaPendingSecret, this.tfaCode, 'Authenticator app');
       this.tfaEnrolled = true;
-      this.toast.success('Two-factor authentication enabled.');
+      this.toast.success(this.i18n.translate('profile.tfaEnabled'));
       this.cancelTfa();
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Invalid code. Check your authenticator app and try again.');
+      this.toast.errorFrom(e, this.i18n.translate('profile.invalidCode'));
     } finally {
       this.tfaBusy = false;
     }
@@ -629,10 +763,10 @@ export class StaffProfilePage implements OnDestroy {
       const factorUid = this.twoFactor.getEnrolledFactorUid(user);
       if (factorUid) await this.twoFactor.unenroll(user, factorUid);
       this.tfaEnrolled = false;
-      this.toast.success('Two-factor authentication disabled.');
+      this.toast.success(this.i18n.translate('profile.tfaDisabled'));
       this.cancelTfa();
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Unable to disable two-factor authentication.');
+      this.toast.errorFrom(e, this.i18n.translate('profile.tfaDisableFailed'));
     } finally {
       this.tfaBusy = false;
     }
@@ -653,14 +787,14 @@ export class StaffProfilePage implements OnDestroy {
         this.lockEnabled = ok;
         input.checked = ok;
         if (ok) {
-          this.toast.success('Face ID / Fingerprint unlock enabled for this device.');
+          this.toast.success(this.i18n.translate('profile.lockEnabledToast'));
         } else {
-          this.toast.error('Could not enable biometric unlock. Check that biometrics are set up on this device.');
+          this.toast.error(this.i18n.translate('profile.lockEnableFailed'));
         }
       } else {
         await this.appLock.disable(this.uid);
         this.lockEnabled = false;
-        this.toast.success('Biometric unlock disabled for this device.');
+        this.toast.success(this.i18n.translate('profile.lockDisabled'));
       }
     } finally {
       this.lockBusy = false;
@@ -669,6 +803,7 @@ export class StaffProfilePage implements OnDestroy {
 
   ngOnDestroy() {
     this.unsub?.();
+    this.unsubDirectDeposit?.();
   }
 
   initials(): string {
@@ -719,9 +854,9 @@ export class StaffProfilePage implements OnDestroy {
         payFrequency: this.ctx.payFrequency(),
         taxProfile: this.ctx.taxProfile(),
       });
-      this.toast.success('Profile saved.');
+      this.toast.success(this.i18n.translate('profile.profileSaved'));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Failed to save profile.');
+      this.toast.errorFrom(e, this.i18n.translate('profile.profileSaveFailed'));
     } finally {
       this.saving = false;
     }
@@ -734,17 +869,17 @@ export class StaffProfilePage implements OnDestroy {
     if (!file || !this.orgId || !this.uid) return;
 
     if (!file.type.startsWith('image/')) {
-      this.toast.error('Please choose an image file.');
+      this.toast.error(this.i18n.translate('profile.chooseImageFile'));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      this.toast.error('Image must be 5MB or smaller.');
+      this.toast.error(this.i18n.translate('profile.imageTooLarge'));
       return;
     }
     try {
       this.connectivity.assertOnline();
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Unable to upload photo.');
+      this.toast.errorFrom(e, this.i18n.translate('profile.uploadPhotoFailed'));
       return;
     }
 
@@ -776,9 +911,9 @@ export class StaffProfilePage implements OnDestroy {
         payFrequency: this.ctx.payFrequency(),
         taxProfile: this.ctx.taxProfile(),
       });
-      this.toast.success('Profile photo updated.');
+      this.toast.success(this.i18n.translate('profile.photoUpdated'));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Failed to upload photo.');
+      this.toast.errorFrom(e, this.i18n.translate('profile.photoUploadFailed'));
     } finally {
       this.uploadingPhoto = false;
     }
@@ -794,7 +929,7 @@ export class StaffProfilePage implements OnDestroy {
       });
     }, (error) => {
       console.warn('[InnovaShift] Staff profile listener failed.', error);
-      this.zone.run(() => this.toast.errorFrom(error, 'Unable to load profile.'));
+      this.zone.run(() => this.toast.errorFrom(error, this.i18n.translate('profile.profileLoadFailed')));
     });
   }
 

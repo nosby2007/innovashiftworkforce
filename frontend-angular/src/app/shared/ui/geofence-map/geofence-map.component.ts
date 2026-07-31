@@ -1,6 +1,6 @@
-import { Component, ElementRef, Input, OnChanges, OnDestroy, SimpleChanges, ViewChild, signal, computed, AfterViewInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import * as L from 'leaflet';
+import { Component, ElementRef, Input, OnChanges, PLATFORM_ID, SimpleChanges, ViewChild, inject, signal, computed, AfterViewInit, OnDestroy } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import type * as Leaflet from 'leaflet';
 import { haversineMeters } from '../../utils/geo.util';
 
 export interface GeofenceSite {
@@ -10,19 +10,18 @@ export interface GeofenceSite {
   radiusM: number;
 }
 
-const USER_PING_ICON = L.divIcon({
-  className: 'geo-ping-icon',
-  html: '<div class="geo-ping"><div class="geo-ping-pulse"></div><div class="geo-ping-dot"></div></div>',
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
-});
-
 /**
  * Read-only geofence visualization: shows a site's allowed radius plus the
  * user's live GPS position ("ping"), so staff can see whether they're in
  * range before attempting a GPS clock-in/out. Purely informational — the
  * actual clock-in/out payload is captured separately and the geofence is
  * enforced server-side regardless of what this renders.
+ *
+ * Leaflet touches `window` at module-evaluation time, so it's loaded via a
+ * dynamic import gated on `isPlatformBrowser` rather than a static import —
+ * this component is reachable from the app-wide server bundle used for
+ * prerendering the public marketing pages, and a static import would crash
+ * that Node process even though this component never actually renders there.
  */
 @Component({
   selector: 'app-geofence-map',
@@ -55,6 +54,8 @@ const USER_PING_ICON = L.divIcon({
   `],
 })
 export class GeofenceMapComponent implements AfterViewInit, OnChanges, OnDestroy {
+  private platformId = inject(PLATFORM_ID);
+
   @Input() site: GeofenceSite | null = null;
 
   @ViewChild('mapEl') mapEl?: ElementRef<HTMLDivElement>;
@@ -78,15 +79,19 @@ export class GeofenceMapComponent implements AfterViewInit, OnChanges, OnDestroy
     return d <= this.site.radiusM + Math.max(0, accuracy);
   });
 
-  private map: L.Map | null = null;
-  private siteCircle: L.Circle | null = null;
-  private siteCenterDot: L.CircleMarker | null = null;
-  private userAccuracyCircle: L.Circle | null = null;
-  private userMarker: L.Marker | null = null;
+  private L: typeof Leaflet | null = null;
+  private map: Leaflet.Map | null = null;
+  private siteCircle: Leaflet.Circle | null = null;
+  private siteCenterDot: Leaflet.CircleMarker | null = null;
+  private userAccuracyCircle: Leaflet.Circle | null = null;
+  private userMarker: Leaflet.Marker | null = null;
+  private userPingIcon: Leaflet.DivIcon | null = null;
   private watchId: number | null = null;
   private hasFitBounds = false;
 
-  ngAfterViewInit() {
+  async ngAfterViewInit() {
+    if (!isPlatformBrowser(this.platformId)) return;
+    this.L = await import('leaflet');
     this.initMap();
     this.startWatch();
   }
@@ -106,7 +111,14 @@ export class GeofenceMapComponent implements AfterViewInit, OnChanges, OnDestroy
   }
 
   private initMap() {
-    if (!this.mapEl?.nativeElement || this.map) return;
+    const L = this.L;
+    if (!L || !this.mapEl?.nativeElement || this.map) return;
+    this.userPingIcon = L.divIcon({
+      className: 'geo-ping-icon',
+      html: '<div class="geo-ping"><div class="geo-ping-pulse"></div><div class="geo-ping-dot"></div></div>',
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    });
     this.map = L.map(this.mapEl.nativeElement, {
       center: [this.site?.latitude ?? 33.749, this.site?.longitude ?? -84.388],
       zoom: 16,
@@ -148,14 +160,15 @@ export class GeofenceMapComponent implements AfterViewInit, OnChanges, OnDestroy
   }
 
   private refreshSiteLayer() {
-    if (!this.map) return;
+    const L = this.L;
+    if (!L || !this.map) return;
     if (!this.site) {
       if (this.siteCircle) { this.map.removeLayer(this.siteCircle); this.siteCircle = null; }
       if (this.siteCenterDot) { this.map.removeLayer(this.siteCenterDot); this.siteCenterDot = null; }
       return;
     }
 
-    const center: L.LatLngExpression = [this.site.latitude, this.site.longitude];
+    const center: Leaflet.LatLngExpression = [this.site.latitude, this.site.longitude];
     if (!this.siteCircle) {
       this.siteCircle = L.circle(center, {
         radius: this.site.radiusM,
@@ -183,15 +196,16 @@ export class GeofenceMapComponent implements AfterViewInit, OnChanges, OnDestroy
   }
 
   private refreshUserLayer() {
-    if (!this.map) return;
+    const L = this.L;
+    if (!L || !this.map) return;
     const lat = this.userLat();
     const lng = this.userLng();
     if (lat == null || lng == null) return;
-    const center: L.LatLngExpression = [lat, lng];
+    const center: Leaflet.LatLngExpression = [lat, lng];
     const accuracyM = Math.max(5, this.userAccuracyM() ?? 15);
 
     if (!this.userMarker) {
-      this.userMarker = L.marker(center, { icon: USER_PING_ICON, zIndexOffset: 1000 }).addTo(this.map);
+      this.userMarker = L.marker(center, { icon: this.userPingIcon!, zIndexOffset: 1000 }).addTo(this.map);
     } else {
       this.userMarker.setLatLng(center);
     }
@@ -213,7 +227,8 @@ export class GeofenceMapComponent implements AfterViewInit, OnChanges, OnDestroy
   }
 
   private fitBoundsIfReady() {
-    if (!this.map || this.hasFitBounds) return;
+    const L = this.L;
+    if (!L || !this.map || this.hasFitBounds) return;
     const lat = this.userLat();
     const lng = this.userLng();
 

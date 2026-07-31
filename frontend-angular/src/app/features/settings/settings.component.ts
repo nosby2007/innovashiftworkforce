@@ -3,6 +3,7 @@ import { NgFor, CommonModule } from '@angular/common';
 
 
 import { MatIconModule } from '@angular/material/icon';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { ThemeId } from '../../core/theme/theme.model';
 import { ThemeService } from '../../core/theme/theme.service';
 import { ToastService } from '../../core/ui/toast.service';
@@ -10,30 +11,30 @@ import { ToastService } from '../../core/ui/toast.service';
 @Component({
   selector: 'vs-settings',
   standalone: true,
-  imports: [NgFor, CommonModule, MatIconModule],
+  imports: [NgFor, CommonModule, MatIconModule, TranslocoModule],
   template: `
     <div class="vs-page-pad">
       <!-- Header -->
       <div class="vs-page-header">
         <div class="vs-page-title">
-          <h1 class="vs-title">My Settings</h1>
-          <p class="vs-page-subtitle">Manage your personal profile, security, and preferences</p>
+          <h1 class="vs-title">{{ 'settings.title' | transloco }}</h1>
+          <p class="vs-page-subtitle">{{ 'settings.subtitle' | transloco }}</p>
         </div>
       </div>
 
       <div class="vs-grid-2">
-        
+
         <!-- Preferences Panel -->
         <div class="vs-glass-strong stg-panel">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Appearance</div>
-              <div class="vs-panel-subtitle">Customize the look and feel of your workspace</div>
+              <div class="vs-panel-title">{{ 'settings.appearance' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'settings.appearanceSub' | transloco }}</div>
             </div>
             <mat-icon style="color:var(--text-subtle);">palette</mat-icon>
           </div>
           <div class="vs-panel-body">
-            <label class="vs-field-label">Color Theme</label>
+            <label class="vs-field-label">{{ 'settings.colorTheme' | transloco }}</label>
             <div class="stg-theme-grid" role="list">
               <button
                 type="button"
@@ -44,18 +45,18 @@ import { ToastService } from '../../core/ui/toast.service';
                 (click)="setTheme(t.id)">
                 <div class="stg-theme-top">
                   <span class="stg-swatch" [class]="'stg-swatch stg-swatch--' + t.id"></span>
-                  <span class="stg-theme-name">{{ t.label }}</span>
-                  <span class="stg-rec" *ngIf="t.recommended">Recommended</span>
+                  <span class="stg-theme-name">{{ t.label | transloco }}</span>
+                  <span class="stg-rec" *ngIf="t.recommended">{{ 'settings.recommendedBadge' | transloco }}</span>
                 </div>
-                <div class="stg-theme-desc">{{ t.description }}</div>
+                <div class="stg-theme-desc">{{ t.description | transloco }}</div>
               </button>
             </div>
 
             <div class="stg-preview vs-glass">
-              <div style="font-size:12px; font-weight:700; color:var(--text-subtle); margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">Theme Preview</div>
+              <div style="font-size:12px; font-weight:700; color:var(--text-subtle); margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">{{ 'settings.themePreview' | transloco }}</div>
               <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                <button class="vs-btn-primary">Primary Action</button>
-                <button class="vs-btn-secondary">Secondary</button>
+                <button class="vs-btn-primary">{{ 'settings.primaryAction' | transloco }}</button>
+                <button class="vs-btn-secondary">{{ 'settings.secondaryAction' | transloco }}</button>
               </div>
             </div>
           </div>
@@ -65,26 +66,26 @@ import { ToastService } from '../../core/ui/toast.service';
         <div class="vs-glass-strong stg-panel">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Security & Password</div>
-              <div class="vs-panel-subtitle">Keep your account secure</div>
+              <div class="vs-panel-title">{{ 'settings.securityPassword' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'settings.securitySub' | transloco }}</div>
             </div>
             <mat-icon style="color:var(--text-subtle);">lock</mat-icon>
           </div>
           <div class="vs-panel-body">
             <div class="vs-form-row">
               <div>
-                <label class="vs-field-label">New Password</label>
-                <input class="vs-input" type="password" placeholder="Enter new password">
+                <label class="vs-field-label">{{ 'settings.newPassword' | transloco }}</label>
+                <input class="vs-input" type="password" [placeholder]="'settings.newPasswordPlaceholder' | transloco">
               </div>
             </div>
             <div class="vs-form-row">
               <div>
-                <label class="vs-field-label">Confirm Password</label>
-                <input class="vs-input" type="password" placeholder="Confirm new password">
+                <label class="vs-field-label">{{ 'settings.confirmPassword' | transloco }}</label>
+                <input class="vs-input" type="password" [placeholder]="'settings.confirmPasswordPlaceholder' | transloco">
               </div>
             </div>
             <div style="margin-top:16px; display:flex; justify-content:flex-end;">
-              <button class="vs-btn-primary" (click)="alertMock()">Update Password</button>
+              <button class="vs-btn-primary" (click)="alertMock()">{{ 'settings.updatePassword' | transloco }}</button>
             </div>
           </div>
         </div>
@@ -196,6 +197,7 @@ import { ToastService } from '../../core/ui/toast.service';
 export class SettingsComponent {
   private theme = inject(ThemeService);
   private toast = inject(ToastService);
+  private i18n = inject(TranslocoService);
 
   themeOptions = this.theme.getThemeOptions();
   selectedTheme: ThemeId = 'ocean';
@@ -217,6 +219,6 @@ export class SettingsComponent {
   }
 
   alertMock() {
-    this.toast.info('Password update flow would trigger here. (Requires Firebase Reauthentication in production)');
+    this.toast.info(this.i18n.translate('settings.passwordMockMsg'));
   }
 }

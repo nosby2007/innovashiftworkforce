@@ -3,6 +3,7 @@ import { CommonModule, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
+import { TranslocoModule } from '@jsverse/transloco';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { AccrualsRepo, TimeOffRequest, TimeOffStatus } from '../../core/repos/accruals.repo';
 import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
@@ -12,44 +13,44 @@ type RequestFilter = 'all' | TimeOffStatus;
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule],
+  imports: [CommonModule, FormsModule, CurrencyPipe, MatIconModule, TranslocoModule],
   template: `
     <div class="pto-admin">
       <header class="pto-hero">
         <div>
-          <div class="pto-kicker">Time-Off Control</div>
-          <h1>PTO Requests</h1>
-          <p>Approve PTO, sick, and unpaid leave, keep accrual balances current, and send approved paid leave into payroll.</p>
+          <div class="pto-kicker">{{ 'pto.kicker' | transloco }}</div>
+          <h1>{{ 'pto.title' | transloco }}</h1>
+          <p>{{ 'pto.heroSubtitle' | transloco }}</p>
         </div>
         <div class="pto-hero-stats">
-          <article><span>Pending</span><strong>{{ statusCount('pending') }}</strong></article>
-          <article><span>Approved</span><strong>{{ statusCount('approved') }}</strong></article>
-          <article><span>Payroll Hours</span><strong>{{ payrollLeaveHours().toFixed(2) }}</strong></article>
+          <article><span>{{ 'pto.pending' | transloco }}</span><strong>{{ statusCount('pending') }}</strong></article>
+          <article><span>{{ 'pto.approved' | transloco }}</span><strong>{{ statusCount('approved') }}</strong></article>
+          <article><span>{{ 'pto.payrollHours' | transloco }}</span><strong>{{ payrollLeaveHours().toFixed(2) }}</strong></article>
         </div>
       </header>
 
       <div *ngIf="!orgId" class="pto-alert">
         <mat-icon>warning_amber</mat-icon>
-        Missing organization context.
+        {{ 'pto.missingOrgContext' | transloco }}
       </div>
 
       <section class="pto-tools" *ngIf="orgId">
         <label>
-          <span>Status</span>
+          <span>{{ 'pto.status' | transloco }}</span>
           <select [(ngModel)]="filter">
-            <option value="all">All requests</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="all">{{ 'pto.statusAll' | transloco }}</option>
+            <option value="pending">{{ 'pto.statusPending' | transloco }}</option>
+            <option value="approved">{{ 'pto.statusApproved' | transloco }}</option>
+            <option value="rejected">{{ 'pto.statusRejected' | transloco }}</option>
+            <option value="cancelled">{{ 'pto.statusCancelled' | transloco }}</option>
           </select>
         </label>
         <label>
-          <span>Search</span>
-          <input [(ngModel)]="query" placeholder="Employee, type, date, note">
+          <span>{{ 'pto.search' | transloco }}</span>
+          <input [(ngModel)]="query" [placeholder]="'pto.searchPlaceholder' | transloco">
         </label>
         <label>
-          <span>Default paid rate ({{ moneyCurrency() }}/hr)</span>
+          <span>{{ 'pto.defaultPaidRate' | transloco: { currency: moneyCurrency() } }}</span>
           <input type="number" min="0" step="0.01" [(ngModel)]="defaultPayRate">
         </label>
       </section>
@@ -57,13 +58,13 @@ type RequestFilter = 'all' | TimeOffStatus;
       <section class="pto-grid" *ngIf="orgId">
         <article class="pto-card">
           <div class="pto-card-head">
-            <h2>Request Queue</h2>
-            <span>{{ filteredRequests().length }} request(s)</span>
+            <h2>{{ 'pto.requestQueue' | transloco }}</h2>
+            <span>{{ 'pto.requestCount' | transloco: { count: filteredRequests().length } }}</span>
           </div>
 
           <div class="pto-empty" *ngIf="filteredRequests().length === 0">
             <mat-icon>inbox</mat-icon>
-            No PTO requests match the selected filters.
+            {{ 'pto.noRequestsMatch' | transloco }}
           </div>
 
           <div class="pto-row" *ngFor="let r of filteredRequests()">
@@ -76,31 +77,31 @@ type RequestFilter = 'all' | TimeOffStatus;
             </div>
 
             <div class="pto-meta">
-              <div><span>Hours</span><strong>{{ r.hours }}</strong></div>
-              <div><span>Status</span><strong class="pto-status" [class.is-pending]="r.status === 'pending'" [class.is-approved]="r.status === 'approved'" [class.is-rejected]="r.status === 'rejected'">{{ r.status | titlecase }}</strong></div>
-              <div><span>Paid</span><strong>{{ isPaidRequest(r) ? 'Yes' : 'No' }}</strong></div>
+              <div><span>{{ 'pto.hours' | transloco }}</span><strong>{{ r.hours }}</strong></div>
+              <div><span>{{ 'pto.status' | transloco }}</span><strong class="pto-status" [class.is-pending]="r.status === 'pending'" [class.is-approved]="r.status === 'approved'" [class.is-rejected]="r.status === 'rejected'">{{ r.status | titlecase }}</strong></div>
+              <div><span>{{ 'pto.paid' | transloco }}</span><strong>{{ isPaidRequest(r) ? ('pto.yes' | transloco) : ('pto.no' | transloco) }}</strong></div>
             </div>
 
             <p class="pto-note" *ngIf="r.notes">{{ r.notes }}</p>
-            <p class="pto-note" *ngIf="r.managerNote">Manager note: {{ r.managerNote }}</p>
+            <p class="pto-note" *ngIf="r.managerNote">{{ 'pto.managerNoteColon' | transloco }} {{ r.managerNote }}</p>
 
             <div class="pto-decision" *ngIf="r.status === 'pending'">
               <label>
-                <span>Paid rate</span>
+                <span>{{ 'pto.paidRate' | transloco }}</span>
                 <input type="number" min="0" step="0.01" [ngModel]="rateFor(r)" (ngModelChange)="setRate(r, $event)">
               </label>
               <label>
-                <span>Manager note</span>
-                <input [ngModel]="noteFor(r)" (ngModelChange)="setNote(r, $event)" placeholder="Optional approval/rejection note">
+                <span>{{ 'pto.managerNoteLabel' | transloco }}</span>
+                <input [ngModel]="noteFor(r)" (ngModelChange)="setNote(r, $event)" [placeholder]="'pto.managerNotePlaceholder' | transloco">
               </label>
               <div class="pto-actions">
                 <button class="pto-btn" type="button" (click)="reject(r)" [disabled]="busyId === r.id">
                   <mat-icon>close</mat-icon>
-                  Reject
+                  {{ 'pto.reject' | transloco }}
                 </button>
                 <button class="pto-btn pto-btn-primary" type="button" (click)="approve(r)" [disabled]="busyId === r.id">
                   <mat-icon>check</mat-icon>
-                  Approve & Attach to Payroll
+                  {{ 'pto.approveAttach' | transloco }}
                 </button>
               </div>
             </div>
@@ -109,28 +110,28 @@ type RequestFilter = 'all' | TimeOffStatus;
 
         <aside class="pto-card pto-policy">
           <div class="pto-card-head">
-            <h2>Payroll Impact</h2>
+            <h2>{{ 'pto.payrollImpact' | transloco }}</h2>
             <mat-icon>payments</mat-icon>
           </div>
           <div class="pto-impact">
             <div>
-              <span>Approved paid PTO/Sick hours</span>
+              <span>{{ 'pto.approvedPaidHours' | transloco }}</span>
               <strong>{{ payrollLeaveHours().toFixed(2) }}</strong>
             </div>
             <div>
-              <span>Estimated leave gross</span>
+              <span>{{ 'pto.estimatedLeaveGross' | transloco }}</span>
               <strong>{{ payrollLeaveGross() | currency:moneyCurrency() }}</strong>
             </div>
             <div>
-              <span>Pending liability</span>
+              <span>{{ 'pto.pendingLiability' | transloco }}</span>
               <strong>{{ pendingHours().toFixed(2) }} h</strong>
             </div>
           </div>
           <div class="pto-runbook">
-            <strong>Approval rules</strong>
-            <span>PTO and Sick approvals reduce the matching accrual balance and create a ledger entry.</span>
-            <span>Approved paid PTO/Sick requests appear in payroll as leave earnings.</span>
-            <span>Unpaid leave remains visible for scheduling history but does not add gross pay.</span>
+            <strong>{{ 'pto.approvalRules' | transloco }}</strong>
+            <span>{{ 'pto.rule1' | transloco }}</span>
+            <span>{{ 'pto.rule2' | transloco }}</span>
+            <span>{{ 'pto.rule3' | transloco }}</span>
           </div>
         </aside>
       </section>

@@ -1,4 +1,4 @@
-import { Component, Inject, computed, inject, signal } from '@angular/core';
+import { Component, Inject, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule, CurrencyPipe, DatePipe, NgIf } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -6,12 +6,10 @@ import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDatepickerInputEvent, MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDialog, MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatNativeDateModule } from '@angular/material/core';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
@@ -20,7 +18,10 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 import { SchedulerCommands } from '../../core/commands/scheduler.commands';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { PayPeriodService } from '../../core/tenancy/pay-period.service';
+import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { ToastService } from '../../core/ui/toast.service';
+import { TranslocoModule } from '@jsverse/transloco';
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -49,7 +50,6 @@ export type ListShiftItem = {
   endAtMs?: number | null;
 };
 
-type DateRange = { start: Date; end: Date };
 type ShiftStatusFilter =
   | ''
   | 'open'
@@ -97,76 +97,51 @@ const STATUS_BADGE: Record<string, string> = {
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
-    MatDatepickerModule,
-    MatNativeDateModule,
     MatSelectModule,
     MatCheckboxModule,
     MatProgressSpinnerModule,
+    PayPeriodSelectorComponent,
+    TranslocoModule,
   ],
   template: `
     <div class="sched-page">
       <header class="sched-header">
-        <h1>My Schedule</h1>
+        <h1>{{ 'nav.mySchedule' | transloco }}</h1>
         <div class="sched-actions">
           <details class="sched-request-menu">
-            <summary>Request <mat-icon>expand_more</mat-icon></summary>
-            <button (click)="go('/app/accruals')">Time-off</button>
-            <button (click)="go('/app/dashboard')">Swap shifts</button>
-            <button (click)="go('/app/marketplace')">Open shift</button>
-            <button (click)="assignedToMeOnly = true; resetAndLoad()">Self-schedule</button>
-            <button (click)="clearFilters()">Change availability</button>
+            <summary>{{ 'schedule.request' | transloco }} <mat-icon>expand_more</mat-icon></summary>
+            <button (click)="go('/app/accruals')">{{ 'schedule.timeOff' | transloco }}</button>
+            <button (click)="go('/app/dashboard')">{{ 'schedule.swapShifts' | transloco }}</button>
+            <button (click)="go('/app/marketplace')">{{ 'schedule.openShift' | transloco }}</button>
+            <button (click)="go('/app/availability')">{{ 'nav.myAvailability' | transloco }}</button>
+            <button (click)="clearFilters()">{{ 'schedule.browseAllShifts' | transloco }}</button>
           </details>
-          <button class="sched-icon" (click)="picker.open()" aria-label="Pick date"><mat-icon>tune</mat-icon></button>
-          <button class="sched-icon" (click)="resetAndLoad()" aria-label="Refresh"><mat-icon>refresh</mat-icon></button>
-          <mat-form-field class="vs-hidden-date" appearance="outline">
-            <input matInput [matDatepicker]="picker" (dateChange)="onDatePicked($event)" aria-label="Pick date" />
-            <mat-datepicker #picker></mat-datepicker>
-          </mat-form-field>
+          <app-pay-period-selector></app-pay-period-selector>
+          <button class="sched-icon" (click)="resetAndLoad()" [attr.aria-label]="'schedule.refresh' | transloco"><mat-icon>refresh</mat-icon></button>
         </div>
       </header>
 
       <div class="sched-layout">
-        <aside class="sched-mini">
-          <div class="sched-mini-head">
-            <strong>{{ rangeStartMonth() }}</strong>
-            <button (click)="prevRange()" aria-label="Previous"><mat-icon>chevron_left</mat-icon></button>
-            <button (click)="nextRange()" aria-label="Next"><mat-icon>chevron_right</mat-icon></button>
-          </div>
-          <button class="sched-today" (click)="goToday()">Today</button>
-          <div class="sched-weekdays">
-            <span *ngFor="let d of ['Fri','Sat','Sun','Mon','Tue','Wed','Thu']">{{ d }}</span>
-          </div>
-          <div class="sched-days">
-            <button *ngFor="let d of calendarDays()"
-                    [class.is-today]="isToday(d)"
-                    [class.has-shift]="hasShiftOn(d)"
-                    (click)="range.set(makeRange(d)); resetAndLoad()">
-              <span>{{ d.getDate() }}</span>
-              <i *ngIf="hasShiftOn(d)"></i>
-            </button>
-          </div>
-        </aside>
-
         <main class="sched-list-card">
           <div class="sched-list-tools">
-            <input [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event); onSearch()" placeholder="Search schedule">
+            <input [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event); onSearch()" [placeholder]="'schedule.searchSchedule' | transloco">
             <select [(ngModel)]="statusFilter" (change)="resetAndLoad()">
-              <option value="">All statuses</option>
-              <option value="open">Open</option>
-              <option value="published">Published</option>
-              <option value="assigned">Assigned</option>
-              <option value="claimed">Claimed</option>
-              <option value="completed">Completed</option>
+              <option value="">{{ 'schedule.statusAll' | transloco }}</option>
+              <option value="open">{{ 'schedule.statusOpen' | transloco }}</option>
+              <option value="published">{{ 'schedule.statusPublished' | transloco }}</option>
+              <option value="assigned">{{ 'schedule.statusAssigned' | transloco }}</option>
+              <option value="claimed">{{ 'schedule.statusClaimed' | transloco }}</option>
+              <option value="completed">{{ 'schedule.statusCompleted' | transloco }}</option>
             </select>
           </div>
 
           <div class="sched-summary">
             <span>{{ rangeLabel() }}</span>
-            <strong>{{ totalHours() }} scheduled hours</strong>
+            <strong>{{ 'schedule.scheduledHours' | transloco: { hours: totalHours() } }}</strong>
           </div>
 
-          <div class="sched-empty" *ngIf="!loading() && displayRows().length === 0">No shifts found for this range.</div>
-          <div class="sched-empty" *ngIf="loading() && displayRows().length === 0">Loading schedule...</div>
+          <div class="sched-empty" *ngIf="!loading() && displayRows().length === 0">{{ 'schedule.noShiftsFound' | transloco }}</div>
+          <div class="sched-empty" *ngIf="loading() && displayRows().length === 0">{{ 'schedule.loadingSchedule' | transloco }}</div>
 
           <button *ngFor="let row of displayRows()"
                   class="sched-row"
@@ -178,7 +153,7 @@ const STATUS_BADGE: Record<string, string> = {
             </div>
             <div class="sched-shift">
               <div class="sched-open" *ngIf="row.assignment === 'OPEN'">
-                <i></i> Open shifts are available
+                <i></i> {{ 'schedule.openShiftsAvailable' | transloco }}
               </div>
               <div class="sched-shift-title">
                 <mat-icon>{{ row.assignment === 'OPEN' ? 'local_offer' : 'spa' }}</mat-icon>
@@ -194,14 +169,15 @@ const STATUS_BADGE: Record<string, string> = {
           <div class="vs-load-more" *ngIf="hasMore()">
             <button mat-stroked-button (click)="loadMore()" [disabled]="loading()">
               <mat-icon>expand_more</mat-icon>
-              Load more
+              {{ 'schedule.loadMore' | transloco }}
             </button>
           </div>
         </main>
 
+        <div class="sched-backdrop" *ngIf="selectedRow()" (click)="selectedId.set(null)"></div>
         <aside class="sched-detail" *ngIf="selectedRow() as row">
-          <button class="sched-detail-close" (click)="selectedId.set(null)" aria-label="Close"><mat-icon>close</mat-icon></button>
-          <h2>Your Shift</h2>
+          <button class="sched-detail-close" (click)="selectedId.set(null)" [attr.aria-label]="'schedule.close' | transloco"><mat-icon>close</mat-icon></button>
+          <h2>{{ 'schedule.yourShift' | transloco }}</h2>
           <div class="sched-detail-title">
             <mat-icon>spa</mat-icon>
             {{ row.position }} {{ row.shiftLabel }}
@@ -209,11 +185,11 @@ const STATUS_BADGE: Record<string, string> = {
           <div class="sched-detail-meta">{{ row.date | date:'EEE M/d' }}</div>
           <div class="sched-detail-meta">{{ row.location }}</div>
           <div class="sched-detail-section">
-            <strong>When</strong>
+            <strong>{{ 'schedule.when' | transloco }}</strong>
             <span>{{ row.date | date:'EEE M/d' }}</span>
           </div>
-          <button class="sched-outline" (click)="go('/app/dashboard')">Swap my shift</button>
-          <button class="sched-outline" (click)="go('/app/accruals')">Request time off</button>
+          <button class="sched-outline" (click)="go('/app/dashboard')">{{ 'schedule.swapMyShift' | transloco }}</button>
+          <button class="sched-outline" (click)="go('/app/accruals')">{{ 'schedule.requestTimeOff' | transloco }}</button>
         </aside>
       </div>
     </div>
@@ -221,18 +197,16 @@ const STATUS_BADGE: Record<string, string> = {
   styleUrl: './schedule.page.scss',
 })
 export class SchedulePage {
-  private dialog   = inject(MatDialog);
-  private commands = inject(SchedulerCommands);
-  private ctx      = inject(OrgContextService);
-  private router   = inject(Router);
+  private dialog     = inject(MatDialog);
+  private commands   = inject(SchedulerCommands);
+  private ctx        = inject(OrgContextService);
+  private payPeriod  = inject(PayPeriodService);
+  private router     = inject(Router);
 
   displayedColumns = ['date', 'shift', 'status', 'hours', 'projected', 'position', 'assignment', 'location', 'action'];
 
-  // ── Range ───────────────────────────────────────────────────────────────────
-  range = signal<DateRange>(this.makeRange(new Date()));
-
   rangeLabel = computed(() => {
-    const { start, end } = this.range();
+    const { start, end } = this.payPeriod.selectedPeriod();
     const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
     return `${fmt(start)} — ${fmt(end)}`;
   });
@@ -302,7 +276,12 @@ export class SchedulePage {
 
   private toast = inject(ToastService);
 
-  constructor() { this.resetAndLoad(); }
+  constructor() {
+    effect(() => {
+      this.payPeriod.selectedPeriod();
+      this.resetAndLoad();
+    });
+  }
 
   // ── Data loading ─────────────────────────────────────────────────────────────
   async resetAndLoad() {
@@ -323,7 +302,7 @@ export class SchedulePage {
     this.errorMessage.set(null);
 
     try {
-      const { start, end } = this.range();
+      const { start, end } = this.payPeriod.selectedPeriod();
       const res = await this.commands.listShifts({
         startAtMs:       start.getTime(),
         endAtMs:         end.getTime(),
@@ -365,27 +344,6 @@ export class SchedulePage {
   }
 
   onSearch() { this.selectedId.set(null); }
-
-  async prevRange() {
-    const { start, end } = this.range();
-    const days = this.diffDays(start, end) + 1;
-    this.range.set({ start: this.addDays(start, -days), end: this.addDays(end, -days) });
-    await this.resetAndLoad();
-  }
-
-  async nextRange() {
-    const { start, end } = this.range();
-    const days = this.diffDays(start, end) + 1;
-    this.range.set({ start: this.addDays(start, days), end: this.addDays(end, days) });
-    await this.resetAndLoad();
-  }
-
-  async onDatePicked(ev: MatDatepickerInputEvent<Date>) {
-    const d = ev.value;
-    if (!d) return;
-    this.range.set(this.makeRange(d));
-    await this.resetAndLoad();
-  }
 
   openPostDialog(row: ScheduleRow) {
     const ref = this.dialog.open(PostShiftDialogComponent, {
@@ -455,15 +413,6 @@ export class SchedulePage {
     return `${fmt(s)} – ${fmt(e)}`;
   }
 
-  // ── Date utils ────────────────────────────────────────────────────────────────
-  makeRange(anchor: Date): DateRange {
-    const start = this.startOfWeek(anchor);
-    const end   = this.addDays(start, 13);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  }
-
   private sortRows(rows: ScheduleRow[], active: string, dir: 'asc' | 'desc' | '') {
     if (!dir) return rows;
     const m  = dir === 'desc' ? -1 : 1;
@@ -476,53 +425,6 @@ export class SchedulePage {
         default:          return m * by(String((a as any)[active] ?? ''), String((b as any)[active] ?? ''));
       }
     });
-  }
-
-  private startOfWeek(d: Date): Date {
-    const date = new Date(d);
-    const day  = date.getDay();
-    date.setDate(date.getDate() + (day === 0 ? -6 : 1 - day));
-    return date;
-  }
-
-  private addDays(d: Date, n: number): Date {
-    const x = new Date(d); x.setDate(x.getDate() + n); return x;
-  }
-
-  private diffDays(a: Date, b: Date): number {
-    const aa = new Date(a); aa.setHours(0, 0, 0, 0);
-    const bb = new Date(b); bb.setHours(0, 0, 0, 0);
-    return Math.round((bb.getTime() - aa.getTime()) / 86_400_000);
-  }
-
-  async goToday() {
-    this.range.set(this.makeRange(new Date()));
-    await this.resetAndLoad();
-  }
-
-  rangeStartMonth(): string {
-    return this.range().start.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  }
-
-  calendarDays(): Date[] {
-    const start = new Date(this.range().start);
-    start.setDate(start.getDate() - 3);
-    return Array.from({ length: 42 }, (_, i) => this.addDays(start, i));
-  }
-
-  isToday(d: Date): boolean {
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear()
-      && d.getMonth() === now.getMonth()
-      && d.getDate() === now.getDate();
-  }
-
-  hasShiftOn(d: Date): boolean {
-    return this.allRows().some((row) =>
-      row.date.getFullYear() === d.getFullYear()
-      && row.date.getMonth() === d.getMonth()
-      && row.date.getDate() === d.getDate()
-    );
   }
 }
 
@@ -540,15 +442,16 @@ export class SchedulePage {
     MatFormFieldModule,
     MatInputModule,
     MatDividerModule,
+    TranslocoModule,
   ],
   template: `
     <div class="vs-dialog">
       <div class="vs-dialog-header">
         <div>
-          <div class="vs-dialog-title">Share Shift to Marketplace</div>
-          <div class="vs-dialog-subtitle">Once published, staff can see and claim this shift.</div>
+          <div class="vs-dialog-title">{{ 'scheduleDialog.title' | transloco }}</div>
+          <div class="vs-dialog-subtitle">{{ 'scheduleDialog.subtitle' | transloco }}</div>
         </div>
-        <button mat-icon-button class="vs-icon-btn" (click)="close(false)" aria-label="Close">
+        <button mat-icon-button class="vs-icon-btn" (click)="close(false)" [attr.aria-label]="'common.close' | transloco">
           <mat-icon>close</mat-icon>
         </button>
       </div>
@@ -556,45 +459,45 @@ export class SchedulePage {
       <div class="vs-dialog-alert">
         <mat-icon class="vs-alert-icon">warning_amber</mat-icon>
         <div class="vs-alert-text">
-          <div class="vs-alert-head">Confirm before publishing</div>
-          <div class="vs-alert-body">Staff will be notified and can claim this shift.</div>
+          <div class="vs-alert-head">{{ 'scheduleDialog.confirmHead' | transloco }}</div>
+          <div class="vs-alert-body">{{ 'scheduleDialog.confirmBody' | transloco }}</div>
         </div>
       </div>
 
       <div class="vs-shift-summary">
         <div class="vs-summary-row">
-          <span class="vs-label">Date</span>
+          <span class="vs-label">{{ 'scheduleDialog.date' | transloco }}</span>
           <span class="vs-value">{{ data.date | date:'EEE, MMM d, y' }}</span>
         </div>
         <div class="vs-summary-row">
-          <span class="vs-label">Shift</span>
+          <span class="vs-label">{{ 'scheduleDialog.shift' | transloco }}</span>
           <span class="vs-value">{{ data.shiftLabel }} ({{ data.hours }}h)</span>
         </div>
         <div class="vs-summary-row">
-          <span class="vs-label">Projected</span>
+          <span class="vs-label">{{ 'scheduleDialog.projected' | transloco }}</span>
           <span class="vs-value vs-strong">{{ data.projected | currency:moneyCurrency() }}</span>
         </div>
         <mat-divider></mat-divider>
         <div class="vs-summary-row">
-          <span class="vs-label">Position</span>
+          <span class="vs-label">{{ 'scheduleDialog.position' | transloco }}</span>
           <span class="vs-value">{{ data.position }}</span>
         </div>
         <div class="vs-summary-row">
-          <span class="vs-label">Location</span>
+          <span class="vs-label">{{ 'scheduleDialog.location' | transloco }}</span>
           <span class="vs-value">{{ data.location }}</span>
         </div>
       </div>
 
       <mat-form-field appearance="outline" class="vs-note">
-        <mat-label>Optional note</mat-label>
-        <input matInput [(ngModel)]="note" placeholder="e.g. Please arrive 10 min early" />
+        <mat-label>{{ 'scheduleDialog.optionalNote' | transloco }}</mat-label>
+        <input matInput [(ngModel)]="note" [placeholder]="'scheduleDialog.notePlaceholder' | transloco" />
       </mat-form-field>
 
       <div class="vs-dialog-actions">
-        <button mat-button (click)="close(false)">Cancel</button>
+        <button mat-button (click)="close(false)">{{ 'common.cancel' | transloco }}</button>
         <button mat-flat-button class="vs-btn-primary" (click)="close(true)">
           <mat-icon>send</mat-icon>
-          Publish Shift
+          {{ 'scheduleDialog.publishShift' | transloco }}
         </button>
       </div>
     </div>

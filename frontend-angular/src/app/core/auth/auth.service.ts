@@ -20,6 +20,7 @@ export interface ResolvedOrgContext {
   currencyCode?: string;
   payFrequency?: string;
   taxProfile?: string;
+  formerOrgId?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -139,6 +140,7 @@ export class AuthService {
         currencyCode: org?.currencyCode || undefined,
         payFrequency: org?.payFrequency || undefined,
         taxProfile: org?.taxProfile || undefined,
+        formerOrgId: root?.formerOrgId || undefined,
       };
     } catch {
       return {};

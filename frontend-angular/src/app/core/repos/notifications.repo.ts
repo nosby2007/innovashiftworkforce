@@ -2,6 +2,9 @@ import { Injectable } from '@angular/core';
 import { collection, doc, query, orderBy, limit, onSnapshot, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { FirestoreClient } from '../firestore/firestore.client';
 
+/** Archived notifications are hard-deleted this many days after archiving — see cleanupArchivedNotifications. */
+export const NOTIFICATION_ARCHIVE_RETENTION_DAYS = 10;
+
 export interface UserNotification {
   id: string;
   orgId: string;
@@ -11,6 +14,8 @@ export interface UserNotification {
   body?: string;
   read: boolean;
   createdAt: any;
+  archived?: boolean;
+  archivedAt?: any;
   meta?: any;
 }
 
@@ -22,7 +27,8 @@ export class NotificationsRepo {
     const col = collection(this.fs.db, `orgs/${orgId}/userNotifications/${uid}/items`);
     const q = query(col, orderBy('createdAt','desc'), limit(max));
     return onSnapshot(q, (snap) => {
-      this.fs.run(() => cb(snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as UserNotification[]));
+      const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as UserNotification[];
+      this.fs.run(() => cb(items.filter((n) => !n.archived)));
     }, (error: unknown) => {
       console.warn('[InnovaShift] Notifications listener failed.', error);
       this.fs.run(() => cb([]));
@@ -43,5 +49,21 @@ export class NotificationsRepo {
       batch.update(ref, { read: true, readAt: serverTimestamp(), updatedAt: serverTimestamp() });
     }
     await batch.commit();
+  }
+
+  /**
+   * "Delete" moves the notification out of the list immediately, but the
+   * document itself is kept for NOTIFICATION_ARCHIVE_RETENTION_DAYS so it
+   * isn't unrecoverable — cleanupArchivedNotifications hard-deletes it after
+   * that grace period.
+   */
+  async archive(orgId: string, uid: string, notificationId: string): Promise<void> {
+    if (!orgId || !uid || !notificationId) return;
+    const ref = doc(this.fs.db, `orgs/${orgId}/userNotifications/${uid}/items/${notificationId}`);
+    await updateDoc(ref, {
+      archived: true,
+      archivedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   }
 }

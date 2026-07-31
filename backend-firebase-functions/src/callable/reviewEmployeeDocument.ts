@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { Timestamp } from 'firebase-admin/firestore';
 import { initFirebase } from '../infra/firebase';
-import { getClaims, requireOrgAdminLike, requireSuperAdmin } from '../infra/auth';
+import { getClaims, requireOrgAdminOrHr, requireSuperAdmin } from '../infra/auth';
 import { writeAudit } from '../infra/audit';
 
 export const reviewEmployeeDocument = onCall(async (req) => {
@@ -29,7 +29,7 @@ export const reviewEmployeeDocument = onCall(async (req) => {
   }
 
   if (!callerIsSuper) {
-    requireOrgAdminLike(caller);
+    requireOrgAdminOrHr(caller);
     if (String(caller.orgId || '').trim() !== orgId) {
       throw new HttpsError('permission-denied', 'Cross-organization document review is not allowed.');
     }

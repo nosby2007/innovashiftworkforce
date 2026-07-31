@@ -24,6 +24,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>InnovaShift uses your camera to scan documents you upload to your Document Center.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>InnovaShift uses your location to confirm you're at your worksite when you clock in or out.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>InnovaShift uses Face ID to quickly and securely unlock the app.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

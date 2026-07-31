@@ -3,11 +3,12 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
+import { isSelfServePlan, planForPriceId, stripePriceStarter, stripePricePro } from '../infra/stripe-plans';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
 
-export const stripeWebhook = onRequest({ secrets: [stripeSecretKey, stripeWebhookSecret] }, async (req, res) => {
+export const stripeWebhook = onRequest({ secrets: [stripeSecretKey, stripeWebhookSecret, stripePriceStarter, stripePricePro] }, async (req, res) => {
   const stripe = new Stripe(stripeSecretKey.value() || 'sk_test_mock_secret_key', { apiVersion: '2026-04-22.dahlia' as any });
   const sig = req.headers['stripe-signature'];
 
@@ -30,28 +31,31 @@ export const stripeWebhook = onRequest({ secrets: [stripeSecretKey, stripeWebhoo
       case 'checkout.session.completed': {
         const session = event.data.object as any;
         const orgId = session.metadata?.orgId;
+        const planId = session.metadata?.planId;
         if (orgId) {
-          // Assume checkout is for a new subscription
-          await db.collection('orgs').doc(orgId).update({
-            planStatus: 'active',
-            // Typically you'd map the price ID to your internal plan name here
-            // plan: 'pro',
-          });
+          const update: Record<string, unknown> = { planStatus: 'active' };
+          if (isSelfServePlan(planId)) update['plan'] = planId;
+          await db.collection('orgs').doc(orgId).update(update);
         }
         break;
       }
-      
+
       case 'customer.subscription.updated': {
         const subscription = event.data.object as any;
         const customerId = subscription.customer as string;
-        
+
         // Find org by stripeCustomerId
         const orgsSnap = await db.collection('orgs').where('stripeCustomerId', '==', customerId).limit(1).get();
         if (!orgsSnap.empty) {
           const orgRef = orgsSnap.docs[0].ref;
-          await orgRef.update({
-            planStatus: subscription.status, // e.g. 'active', 'past_due', 'canceled'
-          });
+          const update: Record<string, unknown> = { planStatus: subscription.status }; // e.g. 'active', 'past_due', 'canceled'
+          // A plan switch made through Stripe's own customer portal (rather
+          // than our checkout flow) doesn't carry our metadata, so reverse
+          // the subscription's current price back to one of our plan names.
+          const currentPriceId = subscription.items?.data?.[0]?.price?.id as string | undefined;
+          const mappedPlan = planForPriceId(currentPriceId);
+          if (mappedPlan) update['plan'] = mappedPlan;
+          await orgRef.update(update);
         }
         break;
       }

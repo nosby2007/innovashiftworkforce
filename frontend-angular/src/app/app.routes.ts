@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { AppLayoutComponent } from './layout/app-shell/app-shell.component';
 import { adminGuard } from './core/auth/admin.guard';
+import { adminOrHrGuard } from './core/auth/admin-or-hr.guard';
 import { superAdminGuard } from './core/auth/super-admin.guard';
 import { authGuard } from './core/auth/auth.guard';
 import { planFeatureGuard } from './core/auth/plan-feature.guard';
@@ -15,11 +16,12 @@ import { NotificationsPage }from './features/notifications/notifications.page';
 import { AccrualsPage }     from './features/accruals/accruals.page';
 import { StaffPayrollPage } from './features/payroll/staff-payroll.page';
 import { PayslipPrintPage } from './features/payroll/payslip-print.page';
+import { PayStubListPage } from './features/payroll/paystub-list.page';
+import { PayStubDetailPage } from './features/payroll/paystub-detail.page';
+import { PayHistoryLayoutComponent } from './features/payroll/pay-history-layout.component';
 import { StaffProfilePage } from './features/profile/staff-profile.page';
 import { StaffDocumentsPage } from './features/documents/staff-documents.page';
 import { StaffOnboardingPage } from './features/onboarding/staff-onboarding.page';
-
-import { SuperAdminDashboardPage } from './features/super-admin/super-admin-dashboard.page';
 
 import { AdminAuditPage }          from './features/admin/admin-audit.page';
 import { AiCopilotPage }           from './features/admin/ai-copilot.page';
@@ -67,13 +69,29 @@ export const APP_ROUTES: Routes = [
   {
     path: 'print/payroll-batch',
     component: AdminPayrollBatchPrintPage,
-    canActivate: [authGuard, adminGuard, planFeatureGuard('timesheetsExport', '/admin')],
+    canActivate: [authGuard, adminOrHrGuard, planFeatureGuard('timesheetsExport', '/admin')],
   },
 
   // ── Public (no auth required) ──────────────────────────────────────────────
+  // French mirrors the same components under a /fr prefix, purely for
+  // per-locale prerendering/SEO (see docs/SSR.md). PublicLayoutComponent
+  // reads `data.locale` off its own route to activate the right Transloco
+  // language — there's no equivalent /fr tree for the authenticated app.
   {
     path: '',
     component: PublicLayoutComponent,
+    data: { locale: 'en' },
+    children: [
+      { path: '',         component: LandingPage,  pathMatch: 'full' },
+      { path: 'features', component: FeaturesPage },
+      { path: 'pricing',  component: PricingPage },
+      { path: 'contact',  component: ContactPage },
+    ],
+  },
+  {
+    path: 'fr',
+    component: PublicLayoutComponent,
+    data: { locale: 'fr' },
     children: [
       { path: '',         component: LandingPage,  pathMatch: 'full' },
       { path: 'features', component: FeaturesPage },
@@ -94,6 +112,20 @@ export const APP_ROUTES: Routes = [
   {
     path: 'register',
     loadComponent: () => import('./features/auth/register.component').then(m => m.RegisterComponent),
+  },
+
+  // ── Standalone pay history (/pay-history) ────────────────────────────────
+  // No AppLayoutComponent chrome — this is the one place a revoked employee
+  // (no live org membership) can still land after signing in, to view/print
+  // their own historical pay stubs for tax purposes.
+  {
+    path: 'pay-history',
+    component: PayHistoryLayoutComponent,
+    canActivate: [authGuard],
+    children: [
+      { path: '', component: PayStubListPage },
+      { path: ':payslipId', component: PayStubDetailPage },
+    ],
   },
 
   // ── Authenticated app shell (/app/…) ────────────────────────────────────────
@@ -117,12 +149,15 @@ export const APP_ROUTES: Routes = [
           import('./features/settings/settings.component').then(m => m.SettingsComponent),
       },
       { path: 'schedule',      component: SchedulePage },
+      { path: 'availability',  loadComponent: () => import('./features/availability/staff-availability.page').then(m => m.StaffAvailabilityPage) },
       { path: 'onboarding',    component: StaffOnboardingPage },
       { path: 'marketplace',   component: MarketplacePage },
       { path: 'attendance',    component: AttendancePage },
       { path: 'accruals',      component: AccrualsPage },
       { path: 'payroll',       component: StaffPayrollPage },
       { path: 'payroll/payslip', component: PayslipPrintPage },
+      { path: 'payroll/history', component: PayStubListPage },
+      { path: 'payroll/history/:payslipId', component: PayStubDetailPage },
       { path: 'profile',       component: StaffProfilePage },
       { path: 'documents',     component: StaffDocumentsPage },
       { path: 'messages',      component: MessagesPage },
@@ -156,16 +191,17 @@ export const APP_ROUTES: Routes = [
       { path: 'shifts/new',           component: AdminShiftCreatePage },
       { path: 'scheduler',            component: AdminSchedulerPage,      canActivate: [planFeatureGuard('smartScheduler', '/admin')] },
       { path: 'timesheets',           component: AdminTimesheetsPage,     canActivate: [planFeatureGuard('timesheetsExport', '/admin')] },
-      { path: 'payroll',              component: AdminPayrollPage,        canActivate: [planFeatureGuard('timesheetsExport', '/admin')] },
-      { path: 'pto',                  component: AdminPtoPage },
-      { path: 'documents',            component: AdminDocumentsPage },
+      { path: 'payroll',              component: AdminPayrollPage,        canActivate: [adminOrHrGuard, planFeatureGuard('timesheetsExport', '/admin')] },
+      { path: 'pto',                  component: AdminPtoPage,            canActivate: [adminOrHrGuard] },
+      { path: 'documents',            component: AdminDocumentsPage,      canActivate: [adminOrHrGuard] },
       { path: 'readiness',            component: AdminReadinessPage },
-      { path: 'payroll/payslip',      component: PayslipPrintPage,        canActivate: [planFeatureGuard('timesheetsExport', '/admin')] },
+      { path: 'payroll/payslip',      component: PayslipPrintPage,        canActivate: [adminOrHrGuard, planFeatureGuard('timesheetsExport', '/admin')] },
       { path: 'timesheets/print',     component: AdminTimesheetsPrintPage,canActivate: [planFeatureGuard('timesheetsExport', '/admin')] },
       { path: 'audit',                component: AdminAuditPage,          canActivate: [planFeatureGuard('auditLog', '/admin')] },
       { path: 'ai-copilot',           component: AiCopilotPage,           canActivate: [planFeatureGuard('aiCopilot', '/admin')] },
       { path: 'employees',            component: AdminEmployeesPage },
       { path: 'employees/:uid',       component: AdminEmployeeDetailsPage },
+      { path: 'availability',         loadComponent: () => import('./features/availability/admin-availability.page').then(m => m.AdminAvailabilityPage) },
       { path: 'schedule-details',     component: AdminScheduleDetailsPage },
       { path: 'org-settings',         component: AdminOrgSettingsPage },
       { path: 'settings',             loadComponent: () => import('./features/settings/settings.component').then(m => m.SettingsComponent) },
@@ -179,7 +215,7 @@ export const APP_ROUTES: Routes = [
     canActivate: [authGuard, superAdminGuard],
     data: { shellMode: 'platform' },
     children: [
-      { path: '',         component: SuperAdminDashboardPage },
+      { path: '',         loadComponent: () => import('./features/super-admin/super-admin-dashboard.page').then(m => m.SuperAdminDashboardPage) },
       { path: 'settings', loadComponent: () => import('./features/settings/settings.component').then(m => m.SettingsComponent) },
     ],
   },

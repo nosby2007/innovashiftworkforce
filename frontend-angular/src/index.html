@@ -2,8 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>InnovaShift Workforce (ISW) — Smart Workforce Management</title>
-  <meta name="description" content="InnovaShift Workforce (ISW) is the modern SaaS platform for healthcare shift scheduling, time tracking, and workforce management.">
+  <!--
+    This is a client-rendered SPA (no SSR/prerendering) — everything below
+    is the static fallback that any crawler or link-unfurler gets BEFORE
+    JavaScript runs. SeoService (core/seo/seo.service.ts) overrides title,
+    description, canonical, and OG/Twitter tags per public route once
+    Angular bootstraps, but that only reaches crawlers that execute JS.
+    Bots/unfurlers that don't (most social link previews, some search
+    engines) only ever see what's written here — keep these reasonably
+    accurate for the homepage even as SeoService's copy evolves per route.
+  -->
+  <title>InnovaShift Workforce — Healthcare Scheduling, Shift Marketplace & Payroll</title>
+  <meta name="description" content="InnovaShift Workforce unifies shift scheduling, a staff shift marketplace, GPS time & attendance tracking, and payroll in one platform built for healthcare teams.">
+  <link rel="canonical" href="https://innovashiftworkforce.com/">
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#07533f">
@@ -11,6 +22,18 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="InnovaShift">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="InnovaShift Workforce">
+  <meta property="og:url" content="https://innovashiftworkforce.com/">
+  <meta property="og:title" content="InnovaShift Workforce — Healthcare Scheduling, Shift Marketplace & Payroll">
+  <meta property="og:description" content="Unify shift scheduling, a staff shift marketplace, GPS time & attendance tracking, and payroll in one platform built for healthcare teams.">
+  <meta property="og:image" content="https://res.cloudinary.com/dtdpx59sc/image/upload/v1778890633/innovashift/ChatGPT_Image_15_mai_2026_20_13_13_10_pkzgj0.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="InnovaShift Workforce — Healthcare Scheduling, Shift Marketplace & Payroll">
+  <meta name="twitter:description" content="Unify shift scheduling, a staff shift marketplace, GPS time & attendance tracking, and payroll in one platform built for healthcare teams.">
+  <meta name="twitter:image" content="https://res.cloudinary.com/dtdpx59sc/image/upload/v1778890633/innovashift/ChatGPT_Image_15_mai_2026_20_13_13_10_pkzgj0.png">
+
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
@@ -18,6 +41,29 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "InnovaShift Workforce",
+    "url": "https://innovashiftworkforce.com/",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web, iOS, Android",
+    "description": "Shift scheduling, staff shift marketplace, GPS time & attendance tracking, and payroll for healthcare organizations.",
+    "offers": {
+      "@type": "AggregateOffer",
+      "priceCurrency": "USD",
+      "lowPrice": "0",
+      "offerCount": "3"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "InnovaShift Workforce",
+      "url": "https://innovashiftworkforce.com/"
+    }
+  }
+  </script>
 </head>
 <body>
   <app-root></app-root>

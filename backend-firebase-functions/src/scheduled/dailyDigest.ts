@@ -1,16 +1,17 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { Timestamp } from 'firebase-admin/firestore';
 import { initFirebase } from '../infra/firebase';
 import { Proposal, buildProposal } from '../domain/ai-proposals';
 import { sendPushToUids } from '../infra/push';
 import { deriveUnderstaffingTrend, UnderstaffingTrend } from '../domain/understaffing-trend';
 
-const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
+const openaiApiKey = defineSecret('OPENAI_API_KEY');
 
-const MODEL = 'claude-sonnet-5';
+// Keep in sync with the MODEL constant in callable/aiAssistantChat.ts.
+const MODEL = 'gpt-5.6';
 const LOOKAHEAD_MS = 3 * 24 * 60 * 60 * 1000; // shifts starting in the next 3 days
 const OPEN_STATUSES = new Set(['draft', 'open', 'published']);
 const ADMIN_LIKE_ROLES = ['admin', 'manager', 'scheduler', 'hr'];
@@ -184,26 +185,28 @@ async function findComplianceAlerts(db: FirebaseFirestore.Firestore, orgId: stri
   return alerts;
 }
 
-async function summarize(client: Anthropic, orgName: string, gaps: GapItem[], alerts: ComplianceAlert[]): Promise<string> {
+async function summarize(client: OpenAI, orgName: string, gaps: GapItem[], alerts: ComplianceAlert[]): Promise<string> {
   const lines = gaps.map((g) => {
     const when = new Date(g.startAtMs).toISOString();
     return `- "${g.title}" at ${g.locationName || 'unspecified location'} (${g.requiredJobRole || 'any role'}), starts ${when}, status=${g.status}`;
   });
   const alertLines = alerts.map((a) => `- [${a.severity}] ${a.detail}`);
   try {
-    const resp = await client.messages.create({
+    const resp = await client.chat.completions.create({
       model: MODEL,
-      max_tokens: 250,
-      system: 'You write short, plain-English morning briefings for a healthcare scheduling admin. 2-3 sentences max. No greeting, no sign-off, just the facts and what needs attention.',
-      messages: [{
-        role: 'user',
-        content: `Organization: ${orgName}. Unfilled shifts in the next 3 days:\n${lines.join('\n') || '(none)'}\n\nStaffing compliance alerts (rest periods, consecutive days, weekly hours):\n${alertLines.join('\n') || '(none)'}\n\nWrite the briefing.`,
-      }],
+      max_completion_tokens: 250,
+      messages: [
+        { role: 'system', content: 'You write short, plain-English morning briefings for a healthcare scheduling admin. 2-3 sentences max. No greeting, no sign-off, just the facts and what needs attention.' },
+        {
+          role: 'user',
+          content: `Organization: ${orgName}. Unfilled shifts in the next 3 days:\n${lines.join('\n') || '(none)'}\n\nStaffing compliance alerts (rest periods, consecutive days, weekly hours):\n${alertLines.join('\n') || '(none)'}\n\nWrite the briefing.`,
+        },
+      ],
     });
-    const text = resp.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join(' ').trim();
+    const text = (resp.choices[0]?.message?.content || '').trim();
     return text || fallbackSummary(gaps.length, alerts.length);
   } catch (e) {
-    logger.warn('[dailyDigest] Anthropic summary failed, falling back to a templated one', e);
+    logger.warn('[dailyDigest] OpenAI summary failed, falling back to a templated one', e);
     return fallbackSummary(gaps.length, alerts.length);
   }
 }
@@ -251,18 +254,20 @@ async function computeUnderstaffingTrend(db: FirebaseFirestore.Firestore, orgId:
   return deriveUnderstaffingTrend(recent, prior);
 }
 
-async function forecastCommentary(client: Anthropic, orgName: string, trend: UnderstaffingTrend): Promise<string | null> {
+async function forecastCommentary(client: OpenAI, orgName: string, trend: UnderstaffingTrend): Promise<string | null> {
   try {
-    const resp = await client.messages.create({
+    const resp = await client.chat.completions.create({
       model: MODEL,
-      max_tokens: 120,
-      system: 'You write a single forward-looking sentence (max 30 words) about a healthcare org\'s longer-term staffing risk trend, based on problem-day counts over the last 4 weeks vs the prior 4 weeks. No greeting, no hedging filler — one direct sentence.',
-      messages: [{
-        role: 'user',
-        content: `Organization: ${orgName}. Last 4 weeks: ${trend.recentProblemDays} day(s) with coverage/compliance issues (avg ${trend.recentAvgGaps.toFixed(1)} unfilled shifts on those days). Prior 4 weeks: ${trend.priorProblemDays} day(s) (avg ${trend.priorAvgGaps.toFixed(1)}). Overall trend: ${trend.direction}. Write the one-sentence outlook.`,
-      }],
+      max_completion_tokens: 120,
+      messages: [
+        { role: 'system', content: 'You write a single forward-looking sentence (max 30 words) about a healthcare org\'s longer-term staffing risk trend, based on problem-day counts over the last 4 weeks vs the prior 4 weeks. No greeting, no hedging filler — one direct sentence.' },
+        {
+          role: 'user',
+          content: `Organization: ${orgName}. Last 4 weeks: ${trend.recentProblemDays} day(s) with coverage/compliance issues (avg ${trend.recentAvgGaps.toFixed(1)} unfilled shifts on those days). Prior 4 weeks: ${trend.priorProblemDays} day(s) (avg ${trend.priorAvgGaps.toFixed(1)}). Overall trend: ${trend.direction}. Write the one-sentence outlook.`,
+        },
+      ],
     });
-    const text = resp.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join(' ').trim();
+    const text = (resp.choices[0]?.message?.content || '').trim();
     return text || null;
   } catch (e) {
     logger.warn('[dailyDigest] forecast commentary failed, digest will show the trend without commentary', e);
@@ -325,7 +330,7 @@ async function notifyAdminsOfDigest(db: FirebaseFirestore.Firestore, orgId: stri
   });
 }
 
-async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: string, orgName: string, client: Anthropic | null, nowMs: number) {
+async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: string, orgName: string, client: OpenAI | null, nowMs: number) {
   const [gaps, alerts] = await Promise.all([
     findCoverageGaps(db, orgId, nowMs),
     findComplianceAlerts(db, orgId, nowMs),
@@ -367,16 +372,16 @@ async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: stri
 }
 
 export const dailyDigest = onSchedule(
-  { schedule: 'every day 08:00', timeZone: 'America/New_York', secrets: [anthropicApiKey], timeoutSeconds: 300 },
+  { schedule: 'every day 08:00', timeZone: 'America/New_York', secrets: [openaiApiKey], timeoutSeconds: 300 },
   async () => {
     const admin = initFirebase();
     const db = admin.firestore();
     const nowMs = Date.now();
 
-    const apiKey = anthropicApiKey.value();
-    const client = apiKey ? new Anthropic({ apiKey }) : null;
+    const apiKey = openaiApiKey.value();
+    const client = apiKey ? new OpenAI({ apiKey }) : null;
     if (!client) {
-      logger.warn('[dailyDigest] ANTHROPIC_API_KEY not set — digests will use a templated summary instead of an AI-written one.');
+      logger.warn('[dailyDigest] OPENAI_API_KEY not set — digests will use a templated summary instead of an AI-written one.');
     }
 
     const orgsSnap = await db.collection('orgs').where('planStatus', 'in', ['active', 'trialing']).get();

@@ -26,6 +26,13 @@ service cloud.firestore {
     function isSuperAdmin()  { return signedIn() && (platformRole() == 'superAdmin' || isBootstrapSuperAdmin()); }
     function isOrgMember(o)  { return signedIn() && (tokenOrgId() == o || rootOrgId() == o); }
 
+    // A revoked (former-employee) user keeps a signed-in Auth account but
+    // no live org membership — orgId()/isOrgMember() correctly deny them
+    // everywhere. formerOrgId() is the one narrow exception: it's the org
+    // they used to belong to, set at revoke time, used only to let them
+    // keep reading their own historical payslips for tax purposes.
+    function formerOrgId()   { return rootUserExists() ? get(/databases/$(database)/documents/users/$(uid())).data.get('formerOrgId', '') : ''; }
+
     function isAdmin()       { return signedIn() && accessRole() == 'admin'; }
     function isManager()     { return signedIn() && accessRole() == 'manager'; }
     function isScheduler()   { return signedIn() && accessRole() == 'scheduler'; }
@@ -36,8 +43,37 @@ service cloud.firestore {
       return isAdmin() || isManager() || isScheduler() || isHR();
     }
 
-    // Caller belongs to this org AND is an admin-like role
-    function isOrgAdmin(o)   { return isOrgMember(o) && isOrgAdminLike(); }
+    // Discretionary/sensitive data (payroll, PTO decisions, employee
+    // documents) — admin and hr only, narrower than isOrgAdminLike().
+    function isAdminOrHR() {
+      return isAdmin() || isHR();
+    }
+
+    // Manager/scheduler may edit non-payroll org settings (locations, general
+    // preferences, etc.) but must not touch payroll-sensitive fields — those
+    // are admin/hr territory, same tier as payroll runs and employee
+    // documents elsewhere in this file. diff().affectedKeys() only reports
+    // keys whose value actually changed, so resubmitting the full settings
+    // object with these fields untouched is still allowed.
+    function isSafeOrgSettingsUpdate() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'defaultFederalTaxPercent',
+        'defaultStateTaxPercent',
+        'defaultSocialSecurityPercent',
+        'defaultMedicarePercent',
+        'default401kMatchPercent',
+        'default401kProvider',
+        'benefitPlans',
+        'defaultPayRate',
+        'payFrequency',
+        'overtimeEnabled',
+        'overtimeMultiplier',
+        'overtimeWeeklyThresholdHours',
+        'holidayWorkMultiplier',
+        'holidays',
+        'dataRetention'
+      ]);
+    }
 
     function isSafeSelfUserProfileUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -53,6 +89,7 @@ service cloud.firestore {
         'w2',
         'dependents',
         'preferences',
+        'photoURL',
         'profileUpdatedAt',
         'updatedAt'
       ]) &&
@@ -111,8 +148,14 @@ service cloud.firestore {
     match /orgs/{orgId} {
       // Org metadata (name, plan, planStatus, etc.)
       allow read:  if signedIn() && (isSuperAdmin() || isOrgMember(orgId));
-      // Only admins within that org or super-admin may update org settings
-      allow update: if signedIn() && (isSuperAdmin() || isOrgAdmin(orgId));
+      // Admin/hr may update any org setting; manager/scheduler may update
+      // non-payroll settings only (isSafeOrgSettingsUpdate gates the
+      // payroll-sensitive field list above).
+      allow update: if signedIn() && (
+        isSuperAdmin() ||
+        (isOrgMember(orgId) && isAdminOrHR()) ||
+        (isOrgMember(orgId) && isOrgAdminLike() && isSafeOrgSettingsUpdate())
+      );
       allow create: if isSuperAdmin();
       allow delete: if isSuperAdmin();
 
@@ -137,6 +180,21 @@ service cloud.firestore {
           isSuperAdmin() ||
           (isOrgMember(orgId) && isAdmin())
         );
+
+        // Bank/direct-deposit details — narrower than the parent user doc
+        // (which isOrgAdminLike() can read): only the employee themselves
+        // can read or write their own bank info, and only admin/hr (not
+        // manager/scheduler) can additionally read it for payroll setup.
+        match /private/{docId} {
+          allow read: if signedIn() && (
+            isSuperAdmin() ||
+            (isOrgMember(orgId) && (uid() == targetUid || isAdminOrHR()))
+          );
+          allow write: if signedIn() && (
+            isSuperAdmin() ||
+            (isOrgMember(orgId) && uid() == targetUid)
+          );
+        }
       }
 
       // ── Shifts ───────────────────────────────────
@@ -184,18 +242,47 @@ service cloud.firestore {
           isSuperAdmin() ||
           (isOrgMember(orgId) && hasPlan(orgId) && uid() == request.resource.data.userId)
         );
-        allow update: if signedIn() && (
-          isSuperAdmin() ||
-          (isOrgMember(orgId) && isOrgAdminLike())
-        );
-        allow delete: if signedIn() && (
-          isSuperAdmin() ||
-          (isOrgMember(orgId) && isAdmin())
-        );
+        // Corrections, deletions/voids, and payroll-period locking must go
+        // through checkIn/checkOut/approveTimeCorrection/deleteTimeEntry so
+        // audit logging and finalized-period locks stay consistent — no
+        // legitimate client path writes here directly.
+        allow update: if false;
+        allow delete: if false;
       }
 
       // ── Leave / Time-off Requests ────────────────
       match /requests/{requestId} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (isAdminOrHR() || uid() == resource.data.userId))
+        );
+        // A self-submitted request must start pending and unpriced — approval
+        // (status, paid, payRate, decidedAt/By) is only ever set server-side
+        // by decideTimeOffRequest, never by the client that created the doc.
+        allow create: if signedIn() && (
+          isSuperAdmin() ||
+          (
+            isOrgMember(orgId) &&
+            request.resource.data.orgId == orgId &&
+            request.resource.data.userId == uid() &&
+            request.resource.data.status == 'pending' &&
+            !('paid' in request.resource.data) &&
+            !('payRate' in request.resource.data) &&
+            !('decidedAt' in request.resource.data) &&
+            !('decidedBy' in request.resource.data)
+          )
+        );
+        // Approve/reject go through decideTimeOffRequest so shift unassignment,
+        // balance/ledger updates, and notifications stay consistent.
+        allow update: if false;
+        allow delete: if false;
+      }
+
+      // ── Staff Availability (PRN/flexible scheduling) ────
+      // Staff submit and fully own their own entries; admin-like roles and
+      // the AI Copilot (via Admin SDK, bypasses rules) read across the org
+      // to see who's available when filling shifts.
+      match /availability/{entryId} {
         allow read: if signedIn() && (
           isSuperAdmin() ||
           (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
@@ -204,17 +291,17 @@ service cloud.firestore {
           isSuperAdmin() ||
           (isOrgMember(orgId) && uid() == request.resource.data.userId)
         );
-        // Approve/reject go through decideTimeOffRequest so shift unassignment,
-        // balance/ledger updates, and notifications stay consistent.
-        allow update: if false;
-        allow delete: if false;
+        allow update, delete: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && uid() == resource.data.userId)
+        );
       }
 
       // ── Accrual Balances (Cloud Function writes only, staff readable) ────
       match /accrualBalances/{targetUid} {
         allow read: if signedIn() && (
           isSuperAdmin() ||
-          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == targetUid))
+          (isOrgMember(orgId) && (isAdminOrHR() || uid() == targetUid))
         );
         // Written only by decideTimeOffRequest (approval) and accrueTimeOff (grants).
         allow create, update, delete: if false;
@@ -224,7 +311,7 @@ service cloud.firestore {
       match /accrualLedger/{entryId} {
         allow read: if signedIn() && (
           isSuperAdmin() ||
-          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
+          (isOrgMember(orgId) && (isAdminOrHR() || uid() == resource.data.userId))
         );
         allow create, update, delete: if false;
       }
@@ -233,7 +320,7 @@ service cloud.firestore {
       match /employeeDocuments/{documentId} {
         allow read: if signedIn() && (
           isSuperAdmin() ||
-          (isOrgMember(orgId) && (isOrgAdminLike() || uid() == resource.data.userId))
+          (isOrgMember(orgId) && (isAdminOrHR() || uid() == resource.data.userId))
         );
         allow create: if signedIn() && (
           isSuperAdmin() ||
@@ -246,7 +333,7 @@ service cloud.firestore {
         );
         allow update: if signedIn() && (
           isSuperAdmin() ||
-          (isOrgMember(orgId) && isOrgAdminLike())
+          (isOrgMember(orgId) && isAdminOrHR())
         );
         allow delete: if signedIn() && (
           isSuperAdmin() ||
@@ -339,12 +426,27 @@ service cloud.firestore {
       match /payrollRuns/{runId} {
         allow read, create, update: if signedIn() && (
           isSuperAdmin() ||
-          (isOrgMember(orgId) && isOrgAdminLike())
+          (isOrgMember(orgId) && isAdminOrHR())
         );
         allow delete: if signedIn() && (
           isSuperAdmin() ||
           (isOrgMember(orgId) && isAdmin())
         );
+      }
+
+      // ── Payslips (immutable per-employee snapshot, one per finalized
+      // payroll run) ──────
+      // Written only by the finalizePayrollRun Cloud Function — a payslip
+      // is a tax/legal record, never editable once issued, not even by
+      // admin/hr. A revoked employee (formerOrgId() == orgId) can still
+      // read their own, same as an active employee reading their own.
+      match /payslips/{payslipId} {
+        allow read: if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && (isAdminOrHR() || uid() == resource.data.userId)) ||
+          (uid() == resource.data.userId && formerOrgId() == orgId)
+        );
+        allow create, update, delete: if false;
       }
 
       // ── User Notifications (per-user inbox) ──────

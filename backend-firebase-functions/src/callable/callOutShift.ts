@@ -14,7 +14,7 @@ const BLOCKED_STATUSES = new Set(['in_progress', 'completed', 'cancelled', 'expi
  * role-compatible staff + admins are notified. Unlike unassignShift.ts,
  * this is not admin-gated — the caller may only act on their own shift.
  */
-export const callOutShift = onCall({ secrets: [actionTokenSecret] }, async (req) => {
+export const callOutShift = onCall({ secrets: [actionTokenSecret], invoker: 'public' }, async (req) => {
   const ctx = await resolveTenantWithFallback(req);
   const admin = initFirebase();
   const db = admin.firestore();

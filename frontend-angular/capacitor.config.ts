@@ -3,7 +3,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.innovashift.workforce',
   appName: 'InnovaShift Workforce',
-  webDir: 'dist/innovacare-shift-frontend',
+  webDir: 'dist/innovacare-shift-frontend/browser',
   bundledWebRuntime: false,
   server: {
     androidScheme: 'https'

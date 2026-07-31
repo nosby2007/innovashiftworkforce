@@ -13,29 +13,30 @@ import { Shift } from '../../shared/models/shift.model';
 import { ShiftChatMessage } from '../../shared/models/shift-chat.model';
 import { ToastService } from '../../core/ui/toast.service';
 import { formatDateTime } from '../../shared/utils/date.util';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, TranslocoModule],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
         <div class="vs-page-title">
-          <h1 class="vs-title">Shift Live Chat</h1>
-          <p class="vs-page-subtitle">Direct conversation between staff and management for each shift</p>
+          <h1 class="vs-title">{{ 'shiftChat.title' | transloco }}</h1>
+          <p class="vs-page-subtitle">{{ 'shiftChat.subtitle' | transloco }}</p>
         </div>
       </div>
 
       <div *ngIf="!orgId" class="sc-no-org vs-glass">
         <mat-icon>warning_amber</mat-icon>
-        Missing organization context.
+        {{ 'shiftChat.missingOrgContext' | transloco }}
       </div>
 
       <div *ngIf="orgId" class="sc-layout">
         <aside class="sc-shifts vs-glass">
           <div class="sc-side-head">
-            <div class="sc-side-title">Shift Threads</div>
-            <input class="vs-input" [(ngModel)]="shiftQuery" placeholder="Search shift title or location" (ngModelChange)="refreshShiftList()">
+            <div class="sc-side-title">{{ 'shiftChat.shiftThreads' | transloco }}</div>
+            <input class="vs-input" [(ngModel)]="shiftQuery" [placeholder]="'shiftChat.searchPlaceholder' | transloco" (ngModelChange)="refreshShiftList()">
           </div>
 
           <div class="sc-shift-list" *ngIf="filteredShifts.length > 0">
@@ -51,14 +52,14 @@ import { formatDateTime } from '../../shared/utils/date.util';
           </div>
 
           <div *ngIf="filteredShifts.length===0" class="sc-empty-side">
-            No assigned or managed shifts found.
+            {{ 'shiftChat.noShiftsFound' | transloco }}
           </div>
         </aside>
 
         <section class="sc-chat vs-glass-strong" *ngIf="selectedShiftId; else noShiftSelected">
           <div class="sc-chat-head">
             <div>
-              <div class="sc-chat-title">{{ selectedShift?.title || 'Shift Chat' }}</div>
+              <div class="sc-chat-title">{{ selectedShift?.title || ('shiftChat.shiftChatFallback' | transloco) }}</div>
               <div class="sc-chat-sub">{{ selectedShift?.locationName }} · {{ fmt(selectedShift?.startAt) }}</div>
             </div>
           </div>
@@ -76,7 +77,7 @@ import { formatDateTime } from '../../shared/utils/date.util';
             </div>
 
             <div *ngIf="messages().length===0" class="sc-empty-chat">
-              Start the shift conversation with your team.
+              {{ 'shiftChat.startConversation' | transloco }}
             </div>
           </div>
 
@@ -86,10 +87,10 @@ import { formatDateTime } from '../../shared/utils/date.util';
               rows="2"
               [(ngModel)]="draft"
               (keydown.enter)="onEnter($event)"
-              placeholder="Type a message for this shift..."></textarea>
+              [placeholder]="'shiftChat.messagePlaceholder' | transloco"></textarea>
             <button class="vs-btn-primary" (click)="send()" [disabled]="sending || !draft.trim()">
               <mat-icon>send</mat-icon>
-              {{ sending ? 'Sending...' : 'Send' }}
+              {{ (sending ? 'shiftChat.sending' : 'shiftChat.send') | transloco }}
             </button>
           </div>
         </section>
@@ -97,7 +98,7 @@ import { formatDateTime } from '../../shared/utils/date.util';
         <ng-template #noShiftSelected>
           <section class="sc-chat vs-glass-strong sc-empty-chat-panel">
             <mat-icon>forum</mat-icon>
-            <div>Select a shift on the left to open live chat.</div>
+            <div>{{ 'shiftChat.selectShiftPrompt' | transloco }}</div>
           </section>
         </ng-template>
       </div>
@@ -174,7 +175,8 @@ export class ShiftChatPage implements OnDestroy {
     private route: ActivatedRoute,
     private shiftsRepo: ShiftsRepo,
     private chatRepo: ShiftChatRepo,
-    private toast: ToastService
+    private toast: ToastService,
+    private i18n: TranslocoService,
   ) {
     this.routeSub = this.route.queryParamMap.subscribe((params) => {
       const shiftId = (params.get('shiftId') || '').trim();
@@ -281,7 +283,7 @@ export class ShiftChatPage implements OnDestroy {
 
   async send() {
     if (!this.orgId || !this.uid || !this.selectedShiftId) {
-      this.toast.error('Select a shift before sending a message. [E_CHAT_SHIFT_REQUIRED]');
+      this.toast.error(`${this.i18n.translate('shiftChat.selectShiftRequired')} [E_CHAT_SHIFT_REQUIRED]`);
       return;
     }
     const text = this.draft.trim();
@@ -299,7 +301,7 @@ export class ShiftChatPage implements OnDestroy {
       });
       this.draft = '';
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Failed to send chat message.');
+      this.toast.errorFrom(e, this.i18n.translate('shiftChat.sendFailed'));
     } finally {
       this.sending = false;
     }

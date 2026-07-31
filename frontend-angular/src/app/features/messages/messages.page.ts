@@ -1,6 +1,7 @@
 import { Component, OnDestroy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { MessagesRepo } from '../../core/repos/messages.repo';
 import { MessagesCommands } from '../../core/commands/messages.commands';
@@ -10,26 +11,26 @@ import { ToastService } from '../../core/ui/toast.service';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, MatIconModule],
+  imports: [CommonModule, MatIconModule, TranslocoModule],
   template: `
     <div class="vs-page-pad">
       <!-- Header -->
       <div class="vs-page-header">
         <div class="vs-page-title">
-          <h1 class="vs-title">Message Center</h1>
-          <p class="vs-page-subtitle">Announcements and direct messages</p>
+          <h1 class="vs-title">{{ 'messages.title' | transloco }}</h1>
+          <p class="vs-page-subtitle">{{ 'messages.subtitle' | transloco }}</p>
         </div>
       </div>
 
       <div *ngIf="!orgId" class="msg-no-org vs-glass">
-        <mat-icon>warning_amber</mat-icon> Missing org context.
+        <mat-icon>warning_amber</mat-icon> {{ 'messages.missingOrgContext' | transloco }}
       </div>
 
       <div *ngIf="orgId">
         <div *ngIf="items().length===0" class="msg-empty vs-glass">
           <mat-icon style="font-size:32px;color:var(--text-subtle);margin-bottom:12px;">mark_email_read</mat-icon>
-          <div style="font-size:16px;font-weight:700;">You're all caught up!</div>
-          <div style="font-size:13px;color:var(--text-muted);">No messages found.</div>
+          <div style="font-size:16px;font-weight:700;">{{ 'messages.allCaughtUp' | transloco }}</div>
+          <div style="font-size:13px;color:var(--text-muted);">{{ 'messages.noMessagesFound' | transloco }}</div>
         </div>
 
         <div class="msg-list" *ngIf="items().length > 0">
@@ -39,7 +40,7 @@ import { ToastService } from '../../core/ui/toast.service';
               <div style="display:flex;align-items:center;gap:12px;">
                 <mat-icon class="msg-icon">{{ unreadIds().has(m.id) ? 'mail' : 'drafts' }}</mat-icon>
                 <div class="msg-title">{{ m.title }}</div>
-                <span *ngIf="unreadIds().has(m.id)" class="vs-badge vs-badge--warning" style="font-size:10px;">NEW</span>
+                <span *ngIf="unreadIds().has(m.id)" class="vs-badge vs-badge--warning" style="font-size:10px;">{{ 'messages.new' | transloco }}</span>
               </div>
               <div class="msg-date">{{ fmt(m.createdAt) }}</div>
             </div>
@@ -49,7 +50,7 @@ import { ToastService } from '../../core/ui/toast.service';
             <div class="msg-card-actions">
               <button class="vs-btn-secondary msg-btn" (click)="open(m)" [disabled]="busyId===m.id || !unreadIds().has(m.id)">
                 <mat-icon>done_all</mat-icon>
-                {{ busyId===m.id ? 'Marking...' : (unreadIds().has(m.id) ? 'Mark as Read' : 'Read') }}
+                {{ (busyId===m.id ? 'messages.marking' : (unreadIds().has(m.id) ? 'messages.markAsRead' : 'messages.read')) | transloco }}
               </button>
             </div>
           </div>
@@ -94,7 +95,8 @@ export class MessagesPage implements OnDestroy {
     private ctx: OrgContextService,
     private repo: MessagesRepo,
     private cmd: MessagesCommands,
-    private toast: ToastService
+    private toast: ToastService,
+    private i18n: TranslocoService,
   ) {
     const bind = () => {
       const orgId = this.ctx.orgId();
@@ -132,9 +134,9 @@ export class MessagesPage implements OnDestroy {
         next.delete(m.id);
         return next;
       });
-      this.toast.success(`Marked as read: ${m.title}`);
+      this.toast.success(this.i18n.translate('messages.markedAsRead', { title: m.title }));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Failed to mark read.');
+      this.toast.errorFrom(e, this.i18n.translate('messages.markReadFailed'));
     } finally {
       this.busyId = null;
     }
