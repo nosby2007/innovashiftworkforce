@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { AttendanceCommands } from '../../core/commands/attendance.commands';
 import { ShiftsCommands } from '../../core/commands/shifts.commands';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { ExperienceFlagsService } from '../../core/experience/experience-flags.service';
 import { PayPeriodService } from '../../core/tenancy/pay-period.service';
 import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { TimeEntriesRepo } from '../../core/repos/time-entries.repo';
@@ -186,22 +187,27 @@ import { TranslocoModule } from '@jsverse/transloco';
           </div>
         </section>
 
-        <section class="vs-glass-strong at-panel" *ngIf="todaysSchedule().length > 0 && !currentShift()">
+        <section class="vs-glass-strong at-panel at-daily-panel" *ngIf="dailyLogShifts().length > 0 && !currentShift()">
           <div class="vs-panel-head">
             <div>
               <div class="vs-panel-title">{{ 'attendance.myUpcomingShifts' | transloco }}</div>
-              <div class="vs-panel-subtitle">{{ 'attendance.todaysShiftClockIn' | transloco }}</div>
+              <div class="vs-panel-subtitle">Only today's eligible shift is shown for clock-in.</div>
             </div>
             <mat-icon style="color:var(--primary);">event</mat-icon>
           </div>
           <div class="at-schedule-cards">
-            <div *ngFor="let s of todaysSchedule()" class="at-schedule-card vs-glass">
+            <div *ngFor="let s of dailyLogShifts()" class="at-schedule-card vs-glass">
               <div class="at-schedule-card-head">
                 <strong>{{ s.title }}</strong>
-                <span class="at-schedule-card-date">{{ fmtDate(s.startAt) }}</span>
+                <span class="vs-badge vs-badge--primary">{{ s.status || 'assigned' }}</span>
               </div>
+              <span class="at-schedule-card-date">{{ fmtDate(s.startAt) }}</span>
               <div class="at-schedule-card-time">{{ fmtTime(s.startAt) }} &ndash; {{ fmtTime(s.endAt) }}</div>
-              <div class="at-loc"><mat-icon>location_on</mat-icon>{{ s.locationName }}</div>
+              <div class="at-loc"><mat-icon>location_on</mat-icon>{{ s.locationName || 'No location' }}</div>
+              <div class="at-daily-meta">
+                <span><mat-icon>schedule</mat-icon>{{ shiftHours(s).toFixed(2) }} hrs</span>
+                <span *ngIf="shiftRequiresAutoBreak(s)"><mat-icon>free_breakfast</mat-icon>Auto 30 min break if no break is taken</span>
+              </div>
               <div class="at-schedule-card-actions">
                 <button class="vs-btn-primary at-btn-in" (click)="clockInToShift(s)" [disabled]="busy">
                   <mat-icon>login</mat-icon> {{ 'attendance.clockIn' | transloco }}
@@ -273,7 +279,7 @@ import { TranslocoModule } from '@jsverse/transloco';
                   [placeholder]="'attendance.shiftPlaceholder' | transloco"
                   [disabled]="!!entryId()">
                 <datalist id="attendance-shift-options">
-                  <option *ngFor="let s of mySchedule()" [value]="toShiftOptionLabel(s)"></option>
+                  <option *ngFor="let s of clockInEligibleShifts()" [value]="toShiftOptionLabel(s)"></option>
                 </datalist>
               </div>
             </div>
@@ -642,6 +648,13 @@ import { TranslocoModule } from '@jsverse/transloco';
     .at-schedule-card-head strong { font-size:15px; color:var(--text); }
     .at-schedule-card-date { font-size:12px; color:var(--text-subtle); white-space:nowrap; }
     .at-schedule-card-time { font-size:13px; font-weight:700; color:var(--text-muted); }
+    .at-daily-panel .at-schedule-card {
+      border-color: rgba(37, 99, 235, 0.24);
+      background: linear-gradient(135deg, rgba(255,255,255,0.94), rgba(239,246,255,0.92));
+    }
+    .at-daily-meta { display:grid; gap:6px; margin:4px 0 6px; }
+    .at-daily-meta span { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted); }
+    .at-daily-meta mat-icon { font-size:15px; width:15px; height:15px; color:var(--primary); }
     .at-loc { display:flex; align-items:center; gap:4px; font-size:13px; color:var(--text-muted); }
     .at-loc mat-icon { font-size:14px !important; width:14px; height:14px; }
     .at-schedule-card-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
@@ -800,6 +813,7 @@ export class AttendancePage implements OnDestroy {
       return d ? this.isSameDay(d, today) : false;
     });
   });
+  dailyLogShifts = computed(() => this.clockInEligibleShifts().slice(0, 1));
   private shiftOptionToId: Record<string, string> = {};
   private shiftIdToOption: Record<string, string> = {};
 
@@ -838,7 +852,8 @@ export class AttendancePage implements OnDestroy {
     private shiftsCmd: ShiftsCommands,
     private toast: ToastService,
     private entitlements: PlanEntitlementsService,
-    private router: Router
+    private router: Router,
+    private experience: ExperienceFlagsService,
   ) {
     this.ctxEffect = effect(() => {
       const orgId = this.ctx.orgId();
@@ -1097,7 +1112,7 @@ export class AttendancePage implements OnDestroy {
   private rebuildShiftOptions() {
     const nextOptionToId: Record<string, string> = {};
     const nextIdToOption: Record<string, string> = {};
-    for (const s of this.mySchedule()) {
+    for (const s of this.clockInEligibleShifts()) {
       const option = this.toShiftOptionLabel(s);
       nextOptionToId[option] = s.id;
       nextIdToOption[s.id] = option;
@@ -1107,6 +1122,28 @@ export class AttendancePage implements OnDestroy {
     if (this.shiftId && this.shiftIdToOption[this.shiftId]) {
       this.shiftSelection = this.shiftIdToOption[this.shiftId];
     }
+  }
+
+  nextStaffAttendanceCard() {
+    return this.experience.enabled('nextStaffAttendanceCard');
+  }
+
+  clockInEligibleShifts(): Shift[] {
+    const today = new Date();
+    return this.mySchedule()
+      .filter((s) => {
+        const d = tsToDate(s.startAt);
+        return d ? this.isSameDay(d, today) : false;
+      })
+      .filter((s) => !this.isClockBlockedStatus(s));
+  }
+
+  private isClockBlockedStatus(s: Shift): boolean {
+    return ['completed', 'cancelled', 'expired', 'no_show'].includes(String(s.status || '').toLowerCase());
+  }
+
+  shiftRequiresAutoBreak(s: Shift): boolean {
+    return shiftHours(s) > 6;
   }
 
   workedHours(e: TimeEntry): number {
@@ -1284,6 +1321,11 @@ export class AttendancePage implements OnDestroy {
   }
 
   async checkIn() {
+    const dailyShifts = this.clockInEligibleShifts();
+    if (!this.shiftId && dailyShifts.length === 1) {
+      this.shiftId = dailyShifts[0].id;
+      this.shiftSelection = this.toShiftOptionLabel(dailyShifts[0]);
+    }
     if (!this.shiftId && this.shiftSelection) {
       this.shiftId = this.shiftOptionToId[this.shiftSelection] || '';
     }
@@ -1306,14 +1348,21 @@ export class AttendancePage implements OnDestroy {
     this.busy = true;
     try {
       const geo = this.punchMethod === 'gps' ? await this.getGpsPayload() : undefined;
-      await this.cmd.checkOut(this.entryId()!, this.punchMethod, { shiftId: this.shiftId, ...geo });
-      this.toast.success(this.punchMethod === 'gps' ? 'GPS check-out verified.' : 'Checked out successfully.');
+      const targetShiftId = this.resolveCheckoutShiftId();
+      await this.cmd.checkOut(this.entryId()!, this.punchMethod, { shiftId: targetShiftId, ...geo });
+      this.toast.success(this.punchMethod === 'gps' ? 'GPS check-out verified. Break policy applied.' : 'Checked out successfully. Break policy applied.');
       this.onBreak.set(false);
+      this.entryId.set(null);
     } catch (e: any) {
       this.toast.errorFrom(e, mapAttendancePolicyError(e, 'Check-out failed.'));
     } finally {
       this.busy = false;
     }
+  }
+
+  private resolveCheckoutShiftId(): string {
+    const active = this.entries().find((e) => e.id === this.entryId());
+    return String(active?.shiftId || this.shiftId || this.currentShift()?.id || '');
   }
 
   async breakOut() {

@@ -23,6 +23,13 @@ import {
   CADENCE_OPTIONS,
   DEFAULT_ACCRUAL_POLICY,
 } from '../../core/tenancy/org-accrual.model';
+import {
+  DEFAULT_EXPERIENCE_FLAGS,
+  EXPERIENCE_FLAG_OPTIONS,
+  ExperienceFlagKey,
+  ExperienceFlags,
+  normalizeExperienceFlags,
+} from '../../core/experience/experience-flags.model';
 import { OrgHoliday, BenefitLine, defaultDeductionElectionsForCountry } from '../../shared/utils/payroll.util';
 // Leaflet touches `window` at module-evaluation time, so it's type-only here
 // and loaded dynamically (gated on isPlatformBrowser) in ensureMapReady() —
@@ -79,6 +86,7 @@ interface OrgSettings {
   ssoEnabled: boolean;
   ssoProvider: string;
   integrationConfigs: OrgIntegrationConfig[];
+  experienceFlags: ExperienceFlags;
   dataRetention: DataRetentionSettings;
   stripeCustomerId?: string;
   createdAt?: any;
@@ -141,6 +149,7 @@ const DEFAULT_SETTINGS: OrgSettings = {
   ssoEnabled: false,
   ssoProvider: '',
   integrationConfigs: [],
+  experienceFlags: { ...DEFAULT_EXPERIENCE_FLAGS },
   dataRetention: { ...DEFAULT_DATA_RETENTION },
 };
 
@@ -482,6 +491,40 @@ const PLAN_BADGE: Record<string, string> = {
                   <mat-icon>delete</mat-icon> Remove
                 </button>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Next Experience Rollout</div>
+              <div class="vs-panel-subtitle">Safe feature flags for the futuristic roster upgrade. Keep them off until each workflow is validated.</div>
+            </div>
+            <mat-icon class="ors-section-icon">rocket_launch</mat-icon>
+          </div>
+          <div class="vs-panel-body">
+            <div class="ors-rollout-warning">
+              <mat-icon>published_with_changes</mat-icon>
+              <div>
+                <strong>Rollback protected</strong>
+                <span>These switches do not delete legacy screens. Turning a switch off returns users to the current stable experience.</span>
+              </div>
+            </div>
+            <div class="ors-flag-grid">
+              <label class="ors-flag-card" *ngFor="let option of experienceFlagOptions">
+                <input
+                  type="checkbox"
+                  [checked]="experienceFlagEnabled(option.key)"
+                  (change)="setExperienceFlag(option.key, $any($event.target).checked)">
+                <span class="ors-flag-copy">
+                  <strong>{{ option.label }}</strong>
+                  <small>{{ option.description }}</small>
+                </span>
+                <span class="vs-badge" [class.vs-badge--success]="experienceFlagEnabled(option.key)" [class.vs-badge--neutral]="!experienceFlagEnabled(option.key)">
+                  {{ experienceFlagEnabled(option.key) ? 'On' : 'Off' }}
+                </span>
+              </label>
             </div>
           </div>
         </section>
@@ -937,6 +980,40 @@ const PLAN_BADGE: Record<string, string> = {
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
     }
     .ors-subhead { font-weight:900; text-transform:uppercase; letter-spacing:0.08em; font-size:12px; color:var(--text-subtle); }
+    .ors-rollout-warning {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(37, 99, 235, 0.22);
+      background: rgba(37, 99, 235, 0.08);
+      color: var(--text);
+    }
+    .ors-rollout-warning mat-icon { color: var(--primary); flex: 0 0 auto; }
+    .ors-rollout-warning strong { display: block; font-weight: 900; margin-bottom: 2px; }
+    .ors-rollout-warning span { color: var(--text-muted); font-size: 13px; line-height: 1.45; }
+    .ors-flag-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .ors-flag-card {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--panel);
+      cursor: pointer;
+    }
+    .ors-flag-card input { width: 18px; height: 18px; accent-color: var(--primary); }
+    .ors-flag-copy { display: grid; gap: 3px; min-width: 0; }
+    .ors-flag-copy strong { color: var(--text); font-weight: 900; }
+    .ors-flag-copy small { color: var(--text-muted); line-height: 1.35; }
     .ors-msg {
       display: flex; align-items: center; gap: 8px;
       padding: 8px 14px;
@@ -975,6 +1052,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   currencies = CURRENCY_OPTIONS;
   payFrequencies = PAY_FREQUENCY_OPTIONS;
   taxProfiles = TAX_PROFILE_OPTIONS;
+  experienceFlagOptions = EXPERIENCE_FLAG_OPTIONS;
   selectedSiteIndex = 0;
 
   @ViewChild('geofenceMap') geofenceMap?: ElementRef<HTMLDivElement>;
@@ -996,7 +1074,12 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
       const snap = await getDoc(doc(db, 'orgs', this.orgId));
       if (snap.exists()) {
         const data = snap.data() as Partial<OrgSettings>;
-        const loaded: OrgSettings = { ...DEFAULT_SETTINGS, ...data };
+        const loaded: OrgSettings = {
+          ...DEFAULT_SETTINGS,
+          ...data,
+          experienceFlags: normalizeExperienceFlags((data as any).experienceFlags),
+          dataRetention: { ...DEFAULT_DATA_RETENTION, ...(data as any).dataRetention },
+        };
         // Real federal/state/FICA figures only make sense for a US org —
         // only apply them the first time (nothing saved yet for these fields).
         if (data.defaultFederalTaxPercent == null && data.defaultStateTaxPercent == null
@@ -1114,6 +1197,20 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         ...this.draft.dataRetention,
         confirmedBy: this.ctx.displayName() || this.ctx.email() || this.ctx.uid() || 'Unknown',
         confirmedAt: new Date(),
+      },
+    };
+  }
+
+  experienceFlagEnabled(key: ExperienceFlagKey) {
+    return normalizeExperienceFlags(this.draft.experienceFlags)[key] === true;
+  }
+
+  setExperienceFlag(key: ExperienceFlagKey, enabled: boolean) {
+    this.draft = {
+      ...this.draft,
+      experienceFlags: {
+        ...normalizeExperienceFlags(this.draft.experienceFlags),
+        [key]: enabled,
       },
     };
   }
@@ -1345,6 +1442,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         confirmedBy: this.draft.dataRetention?.confirmedBy || null,
         confirmedAt: this.draft.dataRetention?.confirmedAt || null,
       };
+      const normalizedExperienceFlags = normalizeExperienceFlags(this.draft.experienceFlags);
 
       const db = getFirestore();
       await setDoc(doc(db, 'orgs', this.orgId), {
@@ -1366,6 +1464,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         default401kMatchPercent: Math.max(0, Number(this.draft.default401kMatchPercent || 0)),
         default401kProvider: String(this.draft.default401kProvider || '').trim(),
         benefitPlans: normalizedBenefitPlans,
+        experienceFlags: normalizedExperienceFlags,
         dataRetention: normalizedDataRetention,
         gpsAttendanceEnabled: this.hasGpsAttendance() ? this.draft.gpsAttendanceEnabled : false,
         sites: this.canManageSites() ? normalizedSites : [],
@@ -1382,8 +1481,8 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         orgId: this.orgId,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans, dataRetention: normalizedDataRetention });
-      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans, dataRetention: normalizedDataRetention };
+      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans, experienceFlags: normalizedExperienceFlags, dataRetention: normalizedDataRetention });
+      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans, experienceFlags: normalizedExperienceFlags, dataRetention: normalizedDataRetention };
       this.ctx.setContext({
         orgId: this.ctx.orgId(),
         uid: this.ctx.uid(),

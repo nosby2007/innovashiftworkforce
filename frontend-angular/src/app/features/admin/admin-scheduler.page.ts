@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { Timestamp } from 'firebase/firestore';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { ExperienceFlagsService } from '../../core/experience/experience-flags.service';
 import { PayPeriodService } from '../../core/tenancy/pay-period.service';
 import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
@@ -166,13 +167,50 @@ interface OrgSite {
         <!-- Shift Actions Modal -->
         <ng-template #shiftActionsTpl let-s="shift">
           <div *ngIf="s" class="sch-modal-content">
-            <div class="vs-form-row vs-form-row--2">
-              <button class="vs-btn-primary" (click)="openEditDrawer(s)" [disabled]="s.status === 'completed' || s.status === 'cancelled'"><mat-icon>edit</mat-icon> {{ 'scheduler.edit' | transloco }}</button>
-              <button class="vs-btn-primary" (click)="publish(s,true)" *ngIf="s.status === 'draft' || s.status === 'open'">{{ 'scheduler.publishToMarketplace' | transloco }}</button>
-              <button class="vs-btn-ghost" (click)="publish(s,false)" *ngIf="s.status === 'published'">{{ 'scheduler.unpublish' | transloco }}</button>
-              <button class="vs-btn-primary" (click)="openStaffPicker(s)">{{ 'scheduler.assign' | transloco }}</button>
-              <button class="vs-btn-ghost" (click)="unassign(s)" *ngIf="s.assignedUserId">{{ 'scheduler.unassignAction' | transloco }}</button>
-              <button class="vs-btn-ghost" (click)="openShiftChat(s.id)"><mat-icon>chat</mat-icon> {{ 'scheduler.openChat' | transloco }}</button>
+            <div class="sch-action-hero">
+              <div>
+                <span class="vs-badge vs-badge--primary" *ngIf="nextSchedulerActions()">Next roster actions</span>
+                <h3>{{ s.title || 'Shift' }}</h3>
+                <p>{{ fmtShiftWindow(s) }} · {{ s.locationName || 'No location' }} · {{ coverageSignal(s) }}</p>
+              </div>
+              <span class="vs-badge"
+                    [class.vs-badge--success]="s.assignedUserId"
+                    [class.vs-badge--warning]="!s.assignedUserId">
+                {{ s.assignedUserId ? 'Covered' : 'Needs coverage' }}
+              </span>
+            </div>
+
+            <div class="sch-action-grid">
+              <button class="sch-command-card" type="button" (click)="openEditDrawer(s)" [disabled]="isLockedShift(s)">
+                <mat-icon>edit_calendar</mat-icon>
+                <strong>{{ 'scheduler.edit' | transloco }}</strong>
+                <span>Update time, site, role, pay, or notes.</span>
+              </button>
+              <button class="sch-command-card" type="button" (click)="openStaffPicker(s)" [disabled]="isLockedShift(s)">
+                <mat-icon>person_add</mat-icon>
+                <strong>{{ 'scheduler.assign' | transloco }}</strong>
+                <span>Pick a qualified employee for this shift.</span>
+              </button>
+              <button class="sch-command-card" type="button" (click)="publish(s,true)" *ngIf="canPublishToMarket(s)">
+                <mat-icon>campaign</mat-icon>
+                <strong>{{ 'scheduler.publishToMarketplace' | transloco }}</strong>
+                <span>Alert available staff and open claiming.</span>
+              </button>
+              <button class="sch-command-card" type="button" (click)="publish(s,false)" *ngIf="normalizeStatus(s.status) === 'published'">
+                <mat-icon>visibility_off</mat-icon>
+                <strong>{{ 'scheduler.unpublish' | transloco }}</strong>
+                <span>Remove this shift from marketplace visibility.</span>
+              </button>
+              <button class="sch-command-card" type="button" (click)="unassign(s)" *ngIf="s.assignedUserId" [disabled]="isLockedShift(s)">
+                <mat-icon>person_remove</mat-icon>
+                <strong>{{ 'scheduler.unassignAction' | transloco }}</strong>
+                <span>Make the shift vacant for reassignment.</span>
+              </button>
+              <button class="sch-command-card" type="button" (click)="openShiftChat(s.id)">
+                <mat-icon>chat</mat-icon>
+                <strong>{{ 'scheduler.openChat' | transloco }}</strong>
+                <span>Coordinate directly with the assigned team.</span>
+              </button>
             </div>
 
             <div class="sch-shift-details">
@@ -899,12 +937,53 @@ interface OrgSite {
         align-items:flex-start;
         flex-direction:column;
       }
-      .sch-page .vs-btn-ghost,
+    .sch-page .vs-btn-ghost,
       .sch-create-btn {
         width: 100%;
         justify-content: center;
       }
     }
+    .sch-action-hero {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(37, 99, 235, 0.18);
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.10), rgba(20, 184, 166, 0.08));
+      margin-bottom: 14px;
+    }
+    .sch-action-hero h3 { margin: 8px 0 4px; font-size: 20px; color: var(--text); }
+    .sch-action-hero p { margin: 0; color: var(--text-muted); line-height: 1.45; }
+    .sch-action-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+    }
+    .sch-command-card {
+      appearance: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--panel);
+      color: var(--text);
+      padding: 14px;
+      text-align: left;
+      display: grid;
+      gap: 6px;
+      cursor: pointer;
+      min-height: 132px;
+      transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+    }
+    .sch-command-card:hover:not(:disabled) {
+      transform: translateY(-1px);
+      border-color: rgba(37, 99, 235, 0.35);
+      box-shadow: var(--shadow-sm);
+    }
+    .sch-command-card:disabled { opacity: .48; cursor: not-allowed; }
+    .sch-command-card mat-icon { color: var(--primary); }
+    .sch-command-card strong { font-weight: 900; }
+    .sch-command-card span { color: var(--text-muted); font-size: 12px; line-height: 1.35; }
   `]
 })
 export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
@@ -1006,6 +1085,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     private zone: NgZone,
     private toast: ToastService,
     private i18n: TranslocoService,
+    private experience: ExperienceFlagsService,
   ) {
     // Sites/users are org-readiness concerns, unrelated to pay period —
     // keep the existing bind-once-per-org-id retry pattern for those.
@@ -1400,6 +1480,31 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
 
   private normalizeStatus(status: string | undefined): string {
     return String(status || '').trim().toLowerCase();
+  }
+
+  nextSchedulerActions() {
+    return this.experience.enabled('nextSchedulerActions');
+  }
+
+  isLockedShift(s: Shift): boolean {
+    return ['completed', 'cancelled', 'expired', 'no_show'].includes(this.normalizeStatus(s.status));
+  }
+
+  canPublishToMarket(s: Shift): boolean {
+    return !s.assignedUserId && ['draft', 'open'].includes(this.normalizeStatus(s.status));
+  }
+
+  coverageSignal(s: Shift): string {
+    if (s.assignedUserId) return `Assigned to ${this.userLabel(s.assignedUserId)}`;
+    if (this.normalizeStatus(s.status) === 'published') return 'Visible in marketplace';
+    return 'Unassigned';
+  }
+
+  fmtShiftWindow(s: Shift): string {
+    const start = tsToDate(s.startAt);
+    const end = tsToDate(s.endAt);
+    if (!start || !end) return 'Time not set';
+    return `${start.toLocaleDateString()} ${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
   }
 
   eventClassNames(arg: any): string[] {
