@@ -132,6 +132,19 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Industry Configuration Engine — global profile catalog (platform-owned).
+    // No tenant-sensitive data here, so any authenticated user may read it;
+    // only super-admins may author profiles/versions.
+    match /industryProfiles/{profileId} {
+      allow read:  if signedIn();
+      allow write: if isSuperAdmin();
+
+      match /versions/{versionId} {
+        allow read:  if signedIn();
+        allow write: if isSuperAdmin();
+      }
+    }
+
     // Client-side error reports (best-effort diagnostics from GlobalErrorHandler).
     // Any signed-in user may create one about their own session; nobody may
     // read, edit, or delete except platform super-admins reviewing them.
@@ -419,6 +432,15 @@ service cloud.firestore {
           isSuperAdmin() ||
           (isOrgMember(orgId) && isOrgAdminLike())
         );
+        allow write: if false; // Cloud Functions only
+      }
+
+      // ── Industry Configuration Engine — resolved org snapshot ──────
+      // Readable by every org member (terminology affects staff-facing
+      // screens too, not just admins). Only activateIndustryProfile
+      // (superAdmin-only Cloud Function) may write this.
+      match /experience/{docId} {
+        allow read:  if signedIn() && (isSuperAdmin() || isOrgMember(orgId));
         allow write: if false; // Cloud Functions only
       }
 
