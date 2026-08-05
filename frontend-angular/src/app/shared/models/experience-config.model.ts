@@ -25,10 +25,16 @@ export interface TerminologyConfig {
   scheduleLabel: string;             // "Schedule" → "Class Schedule"
 }
 
-/** Phase 2: FK into a future org-configurable job-role catalog. Unread in Phase 1 — job-roles.ts / job-role-catalog.util.ts remain the sole source of truth. */
+export interface JobRoleOption {
+  value: string;
+  label: string;
+}
+
+/** jobRoleCatalogId: FK into a future org-configurable job-role catalog, still unread. recommendedJobRoles (Phase 3b): dropdown options for an activated profile — optional, so absent/empty falls back to job-role-catalog.util.ts's getJobRoleOptions(orgIndustry). */
 export interface WorkforceModelConfig {
   jobRoleCatalogId: string | null;
   supportsMultiRoleShifts: boolean;
+  recommendedJobRoles?: JobRoleOption[];
 }
 
 /** Phase 4: configurable scheduling-rule engine. Unread in Phase 1. */

@@ -5,7 +5,8 @@ import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { AdminShiftsService } from '../../core/services/admin-shifts.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
-import { getJobRoleOptions } from '../../shared/utils/job-role-catalog.util';
+import { resolveJobRoleOptions } from '../../shared/utils/job-role-catalog.util';
+import { OrgExperienceService } from '../../core/experience/org-experience.service';
 
 import { MatIconModule } from '@angular/material/icon';
 
@@ -140,7 +141,7 @@ export class AdminShiftCreatePage {
   busy = false;
   msg = '';
 
-  constructor(private ctx: OrgContextService, private api: AdminShiftsService, private toast: ToastService) {
+  constructor(private ctx: OrgContextService, private orgExperience: OrgExperienceService, private api: AdminShiftsService, private toast: ToastService) {
     this.orgId = this.ctx.orgId();
 
     // Si ton OrgContext met du temps à hydrater (claims), on retente
@@ -153,7 +154,7 @@ export class AdminShiftCreatePage {
   }
 
   jobRoleOptions() {
-    return getJobRoleOptions(this.orgIndustry);
+    return resolveJobRoleOptions(this.orgIndustry, this.orgExperience.config());
   }
 
   canSubmit() {

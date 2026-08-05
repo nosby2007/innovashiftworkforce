@@ -10,9 +10,10 @@ import { TranslocoModule } from '@jsverse/transloco';
 import { DrawerComponent } from '../../shared/ui/drawer/drawer.component';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { TerminologyService } from '../../core/experience/terminology.service';
+import { OrgExperienceService } from '../../core/experience/org-experience.service';
 import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
 import { ToastService } from '../../core/ui/toast.service';
-import { getJobRoleOptions } from '../../shared/utils/job-role-catalog.util';
+import { resolveJobRoleOptions } from '../../shared/utils/job-role-catalog.util';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'employees.roleLabelAdmin',
@@ -500,7 +501,7 @@ export class AdminEmployeesPage implements OnDestroy {
     return list;
   });
 
-  constructor(private ctx: OrgContextService, public terminology: TerminologyService, private usersRepo: UsersRepo, private toast: ToastService, private router: Router) {
+  constructor(private ctx: OrgContextService, public terminology: TerminologyService, private orgExperience: OrgExperienceService, private usersRepo: UsersRepo, private toast: ToastService, private router: Router) {
     const orgId = this.ctx.orgId();
     this.currentUid = this.ctx.uid();
     this.orgId = orgId;
@@ -518,7 +519,7 @@ export class AdminEmployeesPage implements OnDestroy {
   }
 
   jobRoleOptions() {
-    return getJobRoleOptions(this.orgIndustry);
+    return resolveJobRoleOptions(this.orgIndustry, this.orgExperience.config());
   }
 
   openInviteDrawer() {
