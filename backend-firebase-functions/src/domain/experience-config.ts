@@ -22,9 +22,15 @@ export interface TerminologyConfig {
   scheduleLabel: string;
 }
 
+export interface JobRoleOption {
+  value: string;
+  label: string;
+}
+
 export interface WorkforceModelConfig {
   jobRoleCatalogId: string | null;
   supportsMultiRoleShifts: boolean;
+  recommendedJobRoles?: JobRoleOption[];
 }
 
 export interface SchedulingConfig {
