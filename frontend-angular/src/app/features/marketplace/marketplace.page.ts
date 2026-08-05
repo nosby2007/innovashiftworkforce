@@ -7,6 +7,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { Timestamp } from 'firebase/firestore';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { PayPeriodService } from '../../core/tenancy/pay-period.service';
+import { TerminologyService } from '../../core/experience/terminology.service';
 import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
 import { ShiftsCommands } from '../../core/commands/shifts.commands';
@@ -27,8 +28,8 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
     <div class="vs-page-pad mk-page">
       <header class="mk-header">
         <div>
-          <div class="mk-eyebrow">{{ 'marketplace.eyebrow' | transloco }}</div>
-          <h1>{{ 'marketplace.title' | transloco }}</h1>
+          <div class="mk-eyebrow">{{ terminology.marketplaceLabel() }}</div>
+          <h1>{{ 'marketplace.title' | transloco: { term: terminology.workUnitPlural() } }}</h1>
           <p>{{ 'marketplace.subtitle' | transloco }}</p>
         </div>
         <div class="mk-header-actions">
@@ -1184,6 +1185,7 @@ export class MarketplacePage implements OnDestroy {
   constructor(
     private ctx: OrgContextService,
     private payPeriod: PayPeriodService,
+    public terminology: TerminologyService,
     private repo: ShiftsRepo,
     private cmd: ShiftsCommands,
     private notifications: NotificationsRepo,

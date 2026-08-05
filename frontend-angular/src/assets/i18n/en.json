@@ -11,6 +11,18 @@
     "yes": "Yes",
     "no": "No"
   },
+  "terminology": {
+    "workUnitSingular": "Shift",
+    "workUnitPlural": "Shifts",
+    "workforceMemberSingular": "Employee",
+    "workforceMemberPlural": "Employees",
+    "departmentSingular": "Department",
+    "departmentPlural": "Departments",
+    "locationSingular": "Location",
+    "locationPlural": "Locations",
+    "marketplaceLabel": "Staff Marketplace",
+    "scheduleLabel": "Schedule"
+  },
   "shell": {
     "staffWorkspace": "Staff Workspace",
     "administration": "Administration",
@@ -144,11 +156,11 @@
     "statusClaimed": "Claimed",
     "statusCompleted": "Completed",
     "scheduledHours": "{{hours}} scheduled hours",
-    "noShiftsFound": "No shifts found for this range.",
+    "noShiftsFound": "No {{term}} found for this range.",
     "loadingSchedule": "Loading schedule…",
     "openShiftsAvailable": "Open shifts are available",
     "loadMore": "Load more",
-    "yourShift": "Your Shift",
+    "yourShift": "Your {{term}}",
     "when": "When",
     "swapMyShift": "Swap my shift",
     "requestTimeOff": "Request time off",
@@ -311,10 +323,10 @@
     "ytdNetPay": "Net Pay YTD"
   },
   "employees": {
-    "title": "Employees",
+    "title": "{{term}}",
     "memberCount": "{{shown}} of {{total}} members",
     "organizationStaff": "Organization staff",
-    "inviteEmployee": "Invite Employee",
+    "inviteEmployee": "Invite {{term}}",
     "searchPlaceholder": "Search by name, email, or role…",
     "roleAll": "All",
     "roleAdmin": "Admin",
@@ -924,7 +936,7 @@
   },
   "marketplace": {
     "eyebrow": "Staff Marketplace",
-    "title": "Open Shifts",
+    "title": "Open {{term}}",
     "subtitle": "Find available shifts, claim extra hours, and manage switch requests.",
     "previous": "Previous",
     "thisWeek": "This week",

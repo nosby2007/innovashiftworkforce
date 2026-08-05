@@ -20,6 +20,7 @@ import { SchedulerCommands } from '../../core/commands/scheduler.commands';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { PayPeriodService } from '../../core/tenancy/pay-period.service';
 import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
+import { TerminologyService } from '../../core/experience/terminology.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { TranslocoModule } from '@jsverse/transloco';
 
@@ -140,7 +141,7 @@ const STATUS_BADGE: Record<string, string> = {
             <strong>{{ 'schedule.scheduledHours' | transloco: { hours: totalHours() } }}</strong>
           </div>
 
-          <div class="sched-empty" *ngIf="!loading() && displayRows().length === 0">{{ 'schedule.noShiftsFound' | transloco }}</div>
+          <div class="sched-empty" *ngIf="!loading() && displayRows().length === 0">{{ 'schedule.noShiftsFound' | transloco: { term: terminology.workUnitPlural() | lowercase } }}</div>
           <div class="sched-empty" *ngIf="loading() && displayRows().length === 0">{{ 'schedule.loadingSchedule' | transloco }}</div>
 
           <button *ngFor="let row of displayRows()"
@@ -177,7 +178,7 @@ const STATUS_BADGE: Record<string, string> = {
         <div class="sched-backdrop" *ngIf="selectedRow()" (click)="selectedId.set(null)"></div>
         <aside class="sched-detail" *ngIf="selectedRow() as row">
           <button class="sched-detail-close" (click)="selectedId.set(null)" [attr.aria-label]="'schedule.close' | transloco"><mat-icon>close</mat-icon></button>
-          <h2>{{ 'schedule.yourShift' | transloco }}</h2>
+          <h2>{{ 'schedule.yourShift' | transloco: { term: terminology.workUnitSingular() | lowercase } }}</h2>
           <div class="sched-detail-title">
             <mat-icon>spa</mat-icon>
             {{ row.position }} {{ row.shiftLabel }}
@@ -201,6 +202,7 @@ export class SchedulePage {
   private commands   = inject(SchedulerCommands);
   private ctx        = inject(OrgContextService);
   private payPeriod  = inject(PayPeriodService);
+  terminology        = inject(TerminologyService);
   private router     = inject(Router);
 
   displayedColumns = ['date', 'shift', 'status', 'hours', 'projected', 'position', 'assignment', 'location', 'action'];

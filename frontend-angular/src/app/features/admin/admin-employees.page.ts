@@ -9,6 +9,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { TranslocoModule } from '@jsverse/transloco';
 import { DrawerComponent } from '../../shared/ui/drawer/drawer.component';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { TerminologyService } from '../../core/experience/terminology.service';
 import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
 import { ToastService } from '../../core/ui/toast.service';
 import { getJobRoleOptions } from '../../shared/utils/job-role-catalog.util';
@@ -36,7 +37,7 @@ const ROLE_BADGE: Record<string, string> = {
     <div class="vs-page-pad">
       <div class="vs-page-header">
         <div class="vs-page-title">
-          <h1 class="vs-title">{{ 'employees.title' | transloco }}</h1>
+          <h1 class="vs-title">{{ 'employees.title' | transloco: { term: terminology.workforceMemberPlural() } }}</h1>
           <p class="vs-page-subtitle">
             {{ 'employees.memberCount' | transloco: { shown: filteredUsers().length, total: users().length } }}
             <ng-container *ngIf="orgId"> &mdash; <strong>{{ 'employees.organizationStaff' | transloco }}</strong></ng-container>
@@ -44,7 +45,7 @@ const ROLE_BADGE: Record<string, string> = {
         </div>
         <div class="vs-page-actions">
           <button class="vs-btn-primary emp-btn" (click)="openInviteDrawer()">
-            <mat-icon>person_add</mat-icon> {{ 'employees.inviteEmployee' | transloco }}
+            <mat-icon>person_add</mat-icon> {{ 'employees.inviteEmployee' | transloco: { term: terminology.workforceMemberSingular() | lowercase } }}
           </button>
         </div>
       </div>
@@ -499,7 +500,7 @@ export class AdminEmployeesPage implements OnDestroy {
     return list;
   });
 
-  constructor(private ctx: OrgContextService, private usersRepo: UsersRepo, private toast: ToastService, private router: Router) {
+  constructor(private ctx: OrgContextService, public terminology: TerminologyService, private usersRepo: UsersRepo, private toast: ToastService, private router: Router) {
     const orgId = this.ctx.orgId();
     this.currentUid = this.ctx.uid();
     this.orgId = orgId;

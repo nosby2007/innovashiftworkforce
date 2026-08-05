@@ -54,6 +54,7 @@ import { enforceDataRetention } from './scheduled/enforceDataRetention';
 import { superAdminCreateUsers } from './callable/superAdminCreateUsers';
 import { listContactRequests } from './callable/listContactRequests';
 import { updateContactRequestStatus } from './callable/updateContactRequestStatus';
+import { activateIndustryProfile } from './callable/activateIndustryProfile';
 
 // ----------------------------------------------------------------------
 // Stripe Billing
@@ -123,4 +124,5 @@ export {
   superAdminCreateUsers,
   listContactRequests,
   updateContactRequestStatus,
+  activateIndustryProfile,
 };

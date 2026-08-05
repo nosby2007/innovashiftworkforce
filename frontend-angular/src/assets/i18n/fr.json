@@ -11,6 +11,18 @@
     "yes": "Oui",
     "no": "Non"
   },
+  "terminology": {
+    "workUnitSingular": "Quart",
+    "workUnitPlural": "Quarts",
+    "workforceMemberSingular": "Employé",
+    "workforceMemberPlural": "Employés",
+    "departmentSingular": "Département",
+    "departmentPlural": "Départements",
+    "locationSingular": "Emplacement",
+    "locationPlural": "Emplacements",
+    "marketplaceLabel": "Bourse aux quarts du personnel",
+    "scheduleLabel": "Horaire"
+  },
   "shell": {
     "staffWorkspace": "Espace employé",
     "administration": "Administration",
@@ -144,11 +156,11 @@
     "statusClaimed": "Réclamé",
     "statusCompleted": "Terminé",
     "scheduledHours": "{{hours}} heures planifiées",
-    "noShiftsFound": "Aucun quart trouvé pour cette période.",
+    "noShiftsFound": "Pas de {{term}} trouvés pour cette période.",
     "loadingSchedule": "Chargement du planning…",
     "openShiftsAvailable": "Des quarts ouverts sont disponibles",
     "loadMore": "Charger plus",
-    "yourShift": "Votre quart",
+    "yourShift": "Votre {{term}}",
     "when": "Quand",
     "swapMyShift": "Échanger mon quart",
     "requestTimeOff": "Demander un congé",
@@ -311,10 +323,10 @@
     "ytdNetPay": "Salaire net cumulatif"
   },
   "employees": {
-    "title": "Employés",
+    "title": "{{term}}",
     "memberCount": "{{shown}} sur {{total}} membres",
     "organizationStaff": "Personnel de l'organisation",
-    "inviteEmployee": "Inviter un employé",
+    "inviteEmployee": "Inviter un {{term}}",
     "searchPlaceholder": "Rechercher par nom, courriel ou rôle…",
     "roleAll": "Tous",
     "roleAdmin": "Admin",
@@ -924,7 +936,7 @@
   },
   "marketplace": {
     "eyebrow": "Bourse aux quarts du personnel",
-    "title": "Quarts ouverts",
+    "title": "{{term}} ouverts",
     "subtitle": "Trouvez des quarts disponibles, réclamez des heures supplémentaires et gérez les demandes d'échange.",
     "previous": "Précédent",
     "thisWeek": "Cette semaine",
