@@ -6,6 +6,8 @@ import { Timestamp } from 'firebase/firestore';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { ExperienceFlagsService } from '../../core/experience/experience-flags.service';
+import { OrgExperienceService } from '../../core/experience/org-experience.service';
+import { resolveJobRoleOptions } from '../../shared/utils/job-role-catalog.util';
 import { PayPeriodService } from '../../core/tenancy/pay-period.service';
 import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
@@ -285,8 +287,7 @@ interface OrgSite {
               <label class="vs-field-label">{{ 'scheduler.requiredRole' | transloco }}</label>
               <select class="vs-select" [(ngModel)]="draft.requiredJobRole">
                 <option value="">{{ 'scheduler.any' | transloco }}</option>
-                <option>RN</option><option>CNA</option><option>LPN</option><option>Caregiver</option>
-                <option>NP</option><option>MD</option><option>Manager</option><option>Admin</option><option>HR</option>
+                <option *ngFor="let r of jobRoleOptions()" [value]="r.value">{{ r.label }}</option>
               </select>
             </div>
             <div>
@@ -1061,6 +1062,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   };
   staffSearch = '';
   staffPickForShiftId: string | null = null;
+  orgIndustry = 'Healthcare';
 
   // Not { static: true }: these <ng-template>s live inside the *ngIf="orgId"
   // container, which is still false on the first change-detection pass
@@ -1086,6 +1088,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     private toast: ToastService,
     private i18n: TranslocoService,
     private experience: ExperienceFlagsService,
+    private orgExperience: OrgExperienceService,
   ) {
     // Sites/users are org-readiness concerns, unrelated to pay period —
     // keep the existing bind-once-per-org-id retry pattern for those.
@@ -1094,6 +1097,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       this.orgId = orgId;
       if (!orgId) return;
       void this.loadSites(orgId);
+      void this.loadOrgIndustry(orgId);
       if (!this.unsubUsers) {
         this.unsubUsers = this.usersRepo.watchOrgUsers(orgId, (u) => this.users.set(u));
       }
@@ -1423,7 +1427,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     this.draft.repeatWeekdays = true;
     this.draft.repeatWeeks = 1;
     if (!this.draft.title) this.draft.title = 'Standard Shift';
-    if (!this.draft.requiredJobRole) this.draft.requiredJobRole = 'Caregiver';
+    if (!this.draft.requiredJobRole) this.draft.requiredJobRole = this.jobRoleOptions()[0]?.value ?? '';
   }
 
   private buildShiftSlots(startAtMs: number, endAtMs: number, repeatWeekdays: boolean, repeatWeeks: number) {
@@ -1476,6 +1480,20 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
     } catch {
       this.sites = [];
     }
+  }
+
+  private async loadOrgIndustry(orgId: string) {
+    try {
+      const snap = await getDoc(doc(getFirestore(), 'orgs', orgId));
+      const industry = String((snap.data() as any)?.industry || '').trim();
+      if (industry) this.orgIndustry = industry;
+    } catch {
+      // Keep default catalog if the org doc is unavailable.
+    }
+  }
+
+  jobRoleOptions() {
+    return resolveJobRoleOptions(this.orgIndustry, this.orgExperience.config());
   }
 
   private normalizeStatus(status: string | undefined): string {
