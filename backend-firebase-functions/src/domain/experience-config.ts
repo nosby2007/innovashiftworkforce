@@ -127,3 +127,18 @@ export function buildSnapshotFromVersion(version: IndustryProfileVersion): Organ
     features: JSON.parse(JSON.stringify(version.features)),
   };
 }
+
+/**
+ * SuperAdmin may activate a profile for any org. A regular caller may only
+ * activate for their own org, and only with the admin role specifically —
+ * this changes terminology/workforce-model shape org-wide, structurally
+ * significant enough to restrict the same way this codebase already
+ * restricts payroll/tax settings (not manager/scheduler/hr).
+ */
+export function canActivateIndustryProfile(
+  caller: { uid: string; orgId?: string; accessRole?: string; platformRole?: string },
+  targetOrgId: string
+): boolean {
+  if (caller.platformRole === 'superAdmin') return true;
+  return caller.accessRole === 'admin' && caller.orgId === targetOrgId;
+}

@@ -1,16 +1,16 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { Timestamp } from 'firebase-admin/firestore';
 import { initFirebase } from '../infra/firebase';
-import { getClaims, requireSuperAdmin } from '../infra/auth';
+import { getClaims } from '../infra/auth';
 import { writeAudit } from '../infra/audit';
-import { buildSnapshotFromVersion, IndustryProfileVersion } from '../domain/experience-config';
+import { buildSnapshotFromVersion, canActivateIndustryProfile, IndustryProfileVersion } from '../domain/experience-config';
 
 /**
- * SuperAdmin-only: activates a published industry profile version for an
- * org by deep-copying its config sections onto orgs/{orgId}/experience/config.
- * This is the one write path Phase 1 ships — no UI calls it yet (invoked
- * manually/via the seed-QA script against a pilot org). It is not
- * throwaway: Phase 2's setup wizard will call this exact callable.
+ * Activates a published industry profile version for an org by deep-copying
+ * its config sections onto orgs/{orgId}/experience/config. This is the
+ * setup wizard's write path (frontend-angular/src/app/features/admin/industry-setup.page.ts)
+ * — a superAdmin may activate for any org; an org's own `admin` may only
+ * activate for their own org (see canActivateIndustryProfile).
  *
  * The snapshot is a real deep copy, not a live reference — editing a
  * profile version later (not supported client-side yet) must never
@@ -20,13 +20,16 @@ export const activateIndustryProfile = onCall(async (req) => {
   const admin = initFirebase();
   const db = admin.firestore();
   const caller = getClaims(req);
-  await requireSuperAdmin(caller);
 
   const orgId = String(req.data?.orgId || '').trim();
   const industryProfileId = String(req.data?.industryProfileId || '').trim();
   const industryProfileVersionId = String(req.data?.industryProfileVersionId || 'v1').trim();
   if (!orgId) throw new HttpsError('invalid-argument', 'orgId is required.');
   if (!industryProfileId) throw new HttpsError('invalid-argument', 'industryProfileId is required.');
+
+  if (!canActivateIndustryProfile(caller, orgId)) {
+    throw new HttpsError('permission-denied', 'Admin privileges for this organization are required.');
+  }
 
   const orgSnap = await db.collection('orgs').doc(orgId).get();
   if (!orgSnap.exists) throw new HttpsError('not-found', 'Organization not found.');
