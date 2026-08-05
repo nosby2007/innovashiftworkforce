@@ -97,4 +97,30 @@ describe('OrgExperienceService', () => {
     expect(svc.config().industryProfileId).toBe('generic_workforce');
     expect(svc.config().configurationStatus).toBe('legacy');
   });
+
+  it('refresh() re-fetches immediately, bypassing the once-per-orgId guard', async () => {
+    let call = 0;
+    const { svc } = buildService('org-3', async () => {
+      call += 1;
+      return call === 1
+        ? null
+        : {
+            orgId: 'org-3',
+            configurationStatus: 'configured',
+            selection: null,
+            industryProfileId: 'restaurant_food_service',
+            industryProfileVersionId: 'v1',
+            snapshot: GENERIC_WORKFORCE_SNAPSHOT,
+            activatedAt: null,
+            activatedBy: null,
+          };
+    });
+    await flush();
+    expect(svc.config().configurationStatus).toBe('legacy');
+
+    await svc.refresh();
+    expect(call).toBe(2);
+    expect(svc.config().configurationStatus).toBe('configured');
+    expect(svc.config().industryProfileId).toBe('restaurant_food_service');
+  });
 });

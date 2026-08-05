@@ -44,5 +44,13 @@ export class OrgExperienceService {
     return this.resolved() ?? legacyFallbackConfig(this.ctx.orgId() ?? '');
   });
 
+  /** Re-fetches the current org's config immediately, bypassing the once-per-orgId guard — call after activateIndustryProfile succeeds. */
+  async refresh(): Promise<void> {
+    const orgId = this.ctx.orgId();
+    if (!orgId) return;
+    const cfg = await this.repo.getConfig(orgId);
+    this.fs.run(() => this.resolved.set(cfg));
+  }
+
   readonly configurationStatus = computed(() => this.config().configurationStatus);
 }

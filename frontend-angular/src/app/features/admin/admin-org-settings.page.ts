@@ -1,10 +1,12 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, PLATFORM_ID, ViewChild, inject, signal } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
+import { OrgExperienceService } from '../../core/experience/org-experience.service';
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ToastService } from '../../core/ui/toast.service';
@@ -186,7 +188,7 @@ const PLAN_BADGE: Record<string, string> = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule],
   template: `
     <div class="vs-page-pad">
 
@@ -269,6 +271,29 @@ const PLAN_BADGE: Record<string, string> = {
                 <input id="ors-break-min" type="number" class="vs-input" min="1" [(ngModel)]="draft.minRequiredBreakMinutes" placeholder="30">
               </div>
             </div>
+          </div>
+        </section>
+
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Industry Profile</div>
+              <div class="vs-panel-subtitle">Tailor terminology and workflows to your industry</div>
+            </div>
+            <mat-icon class="ors-section-icon">tune</mat-icon>
+          </div>
+          <div class="vs-panel-body ors-industry-profile-body">
+            <ng-container *ngIf="experienceConfig().configurationStatus === 'configured'; else notConfigured">
+              <span class="vs-badge vs-badge--success">Active</span>
+              <span>{{ experienceConfig().industryProfileId }}</span>
+            </ng-container>
+            <ng-template #notConfigured>
+              <span class="vs-badge vs-badge--neutral">Not set up</span>
+              <span>Using generic workforce defaults</span>
+            </ng-template>
+            <a class="vs-btn-ghost" routerLink="/admin/industry-setup">
+              <mat-icon>arrow_forward</mat-icon> Set up industry profile
+            </a>
           </div>
         </section>
 
@@ -994,6 +1019,7 @@ const PLAN_BADGE: Record<string, string> = {
     .ors-rollout-warning mat-icon { color: var(--primary); flex: 0 0 auto; }
     .ors-rollout-warning strong { display: block; font-weight: 900; margin-bottom: 2px; }
     .ors-rollout-warning span { color: var(--text-muted); font-size: 13px; line-height: 1.45; }
+    .ors-industry-profile-body { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .ors-flag-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -1062,8 +1088,12 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   private marker: Leaflet.Marker | null = null;
   private circle: Leaflet.Circle | null = null;
 
-  constructor(private ctx: OrgContextService, private toast: ToastService, private plans: PlanEntitlementsService) {
+  constructor(private ctx: OrgContextService, private toast: ToastService, private plans: PlanEntitlementsService, private experience: OrgExperienceService) {
     this.orgId = this.ctx.orgId();
+  }
+
+  experienceConfig() {
+    return this.experience.config();
   }
 
   async ngOnInit() {

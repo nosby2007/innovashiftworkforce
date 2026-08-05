@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSnapshotFromVersion, IndustryProfileVersion } from './experience-config';
+import { buildSnapshotFromVersion, canActivateIndustryProfile, IndustryProfileVersion } from './experience-config';
 
 function makeVersion(): IndustryProfileVersion {
   return {
@@ -42,5 +42,32 @@ describe('buildSnapshotFromVersion', () => {
     version.onboarding.requiredDocumentTypeIds.push('mutated');
     expect(snapshot.terminology.workUnit.singular).toBe('Class Session');
     expect(snapshot.onboarding.requiredDocumentTypeIds).toEqual([]);
+  });
+});
+
+describe('canActivateIndustryProfile', () => {
+  it('allows a superAdmin to activate for any org', () => {
+    expect(canActivateIndustryProfile({ uid: 'u1', platformRole: 'superAdmin' }, 'org-other')).toBe(true);
+  });
+
+  it('allows an org admin to activate for their own org', () => {
+    expect(canActivateIndustryProfile({ uid: 'u1', orgId: 'org-1', accessRole: 'admin' }, 'org-1')).toBe(true);
+  });
+
+  it('denies an org admin activating for a different org', () => {
+    expect(canActivateIndustryProfile({ uid: 'u1', orgId: 'org-1', accessRole: 'admin' }, 'org-2')).toBe(false);
+  });
+
+  it('denies a manager, even for their own org', () => {
+    expect(canActivateIndustryProfile({ uid: 'u1', orgId: 'org-1', accessRole: 'manager' }, 'org-1')).toBe(false);
+  });
+
+  it('denies a scheduler/hr, even for their own org', () => {
+    expect(canActivateIndustryProfile({ uid: 'u1', orgId: 'org-1', accessRole: 'scheduler' }, 'org-1')).toBe(false);
+    expect(canActivateIndustryProfile({ uid: 'u1', orgId: 'org-1', accessRole: 'hr' }, 'org-1')).toBe(false);
+  });
+
+  it('denies a caller with no role/org context', () => {
+    expect(canActivateIndustryProfile({ uid: 'u1' }, 'org-1')).toBe(false);
   });
 });
