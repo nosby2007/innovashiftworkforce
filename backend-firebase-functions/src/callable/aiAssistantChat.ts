@@ -7,6 +7,7 @@ import { initFirebase } from '../infra/firebase';
 import { resolveTenantWithFallback } from '../infra/tenancy';
 import { Proposal, buildProposal } from '../domain/ai-proposals';
 import { entryHours, grossPay, estimatedDeductions, estimatedNet } from '../domain/payroll-math';
+import { getAiIndustryContext } from '../infra/ai-industry-context';
 
 export const openaiApiKey = defineSecret('OPENAI_API_KEY');
 
@@ -361,8 +362,10 @@ export const aiAssistantChat = onCall({ secrets: [openaiApiKey] }, async (req) =
   const orgId = ctx.orgId;
 
   const todayIso = new Date().toISOString().slice(0, 10);
+  const industryContext = await getAiIndustryContext(db, orgId);
   const systemPrompt = [
-    'You are the InnovaShift AI Copilot, an assistant embedded in a healthcare workforce scheduling app.',
+    industryContext.contextLine,
+    ...(industryContext.terminologyHint ? [industryContext.terminologyHint] : []),
     `You are helping an admin/manager (role: ${ctx.role ?? 'admin'}) manage organization ${orgId}.`,
     `Today's date is ${todayIso}.`,
     'Use the get_shifts, get_org_users, get_timesheet_summary, and get_staff_availability tools to look up real data before answering — never guess or invent shift IDs, names, counts, hours, or dollar amounts.',

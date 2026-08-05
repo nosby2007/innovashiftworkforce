@@ -42,6 +42,7 @@ const PROFILES = [
       },
       features: { recommendedPlanFeatures: [] },
       compliance: { regulatoryNotes: null },
+      ai: { industryContextPrompt: 'You are the InnovaShift AI Copilot, an assistant embedded in a workforce scheduling app.' },
     },
   },
   {
@@ -60,6 +61,7 @@ const PROFILES = [
       },
       features: { recommendedPlanFeatures: ['gpsAttendance'] },
       compliance: { regulatoryNotes: 'Recommended only — confirm licensure and credentialing requirements with your compliance team.' },
+      ai: { industryContextPrompt: 'You are the InnovaShift AI Copilot, an assistant embedded in a healthcare workforce scheduling app. Shifts may require clinical licenses or certifications, and coverage/staffing-ratio language matters — use clinical and facility-appropriate framing.' },
     },
   },
   {
@@ -78,6 +80,7 @@ const PROFILES = [
       },
       features: { recommendedPlanFeatures: [] },
       compliance: { regulatoryNotes: 'Recommended only — confirm background-check and safeguarding requirements with your compliance team.' },
+      ai: { industryContextPrompt: 'You are the InnovaShift AI Copilot, an assistant embedded in a school/campus staffing app. Staff are instructors, work units are class sessions, and locations are campuses — use education-appropriate framing.' },
     },
   },
   {
@@ -96,6 +99,7 @@ const PROFILES = [
       },
       features: { recommendedPlanFeatures: [] },
       compliance: { regulatoryNotes: 'Recommended only — confirm food-handler and alcohol-service certification requirements with your compliance team.' },
+      ai: { industryContextPrompt: 'You are the InnovaShift AI Copilot, an assistant embedded in a restaurant staffing app. Staff are team members, and coverage often means opening/closing readiness and station coverage — use restaurant-appropriate framing.' },
     },
   },
 ];

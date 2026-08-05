@@ -7,6 +7,7 @@ import { initFirebase } from '../infra/firebase';
 import { Proposal, buildProposal } from '../domain/ai-proposals';
 import { sendPushToUids } from '../infra/push';
 import { deriveUnderstaffingTrend, UnderstaffingTrend } from '../domain/understaffing-trend';
+import { getAiIndustryContext } from '../infra/ai-industry-context';
 
 const openaiApiKey = defineSecret('OPENAI_API_KEY');
 
@@ -185,7 +186,7 @@ async function findComplianceAlerts(db: FirebaseFirestore.Firestore, orgId: stri
   return alerts;
 }
 
-async function summarize(client: OpenAI, orgName: string, gaps: GapItem[], alerts: ComplianceAlert[]): Promise<string> {
+async function summarize(client: OpenAI, orgName: string, gaps: GapItem[], alerts: ComplianceAlert[], industryContextLine: string): Promise<string> {
   const lines = gaps.map((g) => {
     const when = new Date(g.startAtMs).toISOString();
     return `- "${g.title}" at ${g.locationName || 'unspecified location'} (${g.requiredJobRole || 'any role'}), starts ${when}, status=${g.status}`;
@@ -196,7 +197,7 @@ async function summarize(client: OpenAI, orgName: string, gaps: GapItem[], alert
       model: MODEL,
       max_completion_tokens: 250,
       messages: [
-        { role: 'system', content: 'You write short, plain-English morning briefings for a healthcare scheduling admin. 2-3 sentences max. No greeting, no sign-off, just the facts and what needs attention.' },
+        { role: 'system', content: `${industryContextLine} You write short, plain-English morning briefings for the scheduling admin. 2-3 sentences max. No greeting, no sign-off, just the facts and what needs attention.` },
         {
           role: 'user',
           content: `Organization: ${orgName}. Unfilled shifts in the next 3 days:\n${lines.join('\n') || '(none)'}\n\nStaffing compliance alerts (rest periods, consecutive days, weekly hours):\n${alertLines.join('\n') || '(none)'}\n\nWrite the briefing.`,
@@ -254,13 +255,13 @@ async function computeUnderstaffingTrend(db: FirebaseFirestore.Firestore, orgId:
   return deriveUnderstaffingTrend(recent, prior);
 }
 
-async function forecastCommentary(client: OpenAI, orgName: string, trend: UnderstaffingTrend): Promise<string | null> {
+async function forecastCommentary(client: OpenAI, orgName: string, trend: UnderstaffingTrend, industryContextLine: string): Promise<string | null> {
   try {
     const resp = await client.chat.completions.create({
       model: MODEL,
       max_completion_tokens: 120,
       messages: [
-        { role: 'system', content: 'You write a single forward-looking sentence (max 30 words) about a healthcare org\'s longer-term staffing risk trend, based on problem-day counts over the last 4 weeks vs the prior 4 weeks. No greeting, no hedging filler — one direct sentence.' },
+        { role: 'system', content: `${industryContextLine} You write a single forward-looking sentence (max 30 words) about this org's longer-term staffing risk trend, based on problem-day counts over the last 4 weeks vs the prior 4 weeks. No greeting, no hedging filler — one direct sentence.` },
         {
           role: 'user',
           content: `Organization: ${orgName}. Last 4 weeks: ${trend.recentProblemDays} day(s) with coverage/compliance issues (avg ${trend.recentAvgGaps.toFixed(1)} unfilled shifts on those days). Prior 4 weeks: ${trend.priorProblemDays} day(s) (avg ${trend.priorAvgGaps.toFixed(1)}). Overall trend: ${trend.direction}. Write the one-sentence outlook.`,
@@ -341,15 +342,17 @@ async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: stri
     .filter((g) => g.needsPublish)
     .map((g) => buildProposal('propose_publish_shift', { shiftId: g.shiftId, shiftLabel: `${g.title} — ${g.locationName}` }));
 
-  const summary = client
-    ? await summarize(client, orgName, gaps, alerts)
+  const industryContext = client ? await getAiIndustryContext(db, orgId) : null;
+
+  const summary = client && industryContext
+    ? await summarize(client, orgName, gaps, alerts, industryContext.contextLine)
     : fallbackSummary(gaps.length, alerts.length);
 
   let forecast: UnderstaffingForecast | null = null;
   if (isForecastDay(nowMs)) {
     const trend = await computeUnderstaffingTrend(db, orgId, nowMs);
     if (trend) {
-      const commentary = client ? await forecastCommentary(client, orgName, trend) : null;
+      const commentary = client && industryContext ? await forecastCommentary(client, orgName, trend, industryContext.contextLine) : null;
       forecast = { ...trend, commentary };
     }
   }
