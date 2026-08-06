@@ -9,7 +9,13 @@ import { ShiftAdminCommands } from '../../core/commands/shift-admin.commands';
 import { ToastService } from '../../core/ui/toast.service';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { AiDigestRepo, AiDigest } from '../../core/repos/ai-digest.repo';
+import { MetricsRepo, OrgMetricsSummary } from '../../core/repos/metrics.repo';
+import { StaffingSnapshotsRepo, StaffingSnapshot } from '../../core/repos/staffing-snapshots.repo';
 import { TipCardComponent } from '../../shared/ui/tip-card/tip-card.component';
+import { StatCardComponent, StatCardVariant } from '../../shared/ui/stat-card/stat-card.component';
+import { TrendSparklineComponent } from '../../shared/ui/trend-sparkline/trend-sparkline.component';
+import { RadialGaugeComponent, RadialGaugeVariant } from '../../shared/ui/radial-gauge/radial-gauge.component';
+import { computeRiskScore } from '../../shared/utils/ai-risk.util';
 
 type ProposalStatus = 'pending' | 'confirmed' | 'dismissed' | 'error';
 
@@ -30,15 +36,17 @@ const SUGGESTIONS = [
   'Find someone to cover an open RN shift',
 ];
 
+const TREND_DAYS = 30;
+
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, DatePipe, TipCardComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, DatePipe, TipCardComponent, StatCardComponent, TrendSparklineComponent, RadialGaugeComponent],
   template: `
-    <div class="vs-page-pad ac-page">
+    <div class="vs-page-pad acc-page">
       <div class="vs-page-header">
         <div class="vs-page-title">
-          <h1 class="vs-title">AI Copilot</h1>
-          <p class="vs-page-subtitle">Ask about coverage, staffing, and shifts — every action needs your confirmation before it happens.</p>
+          <h1 class="vs-title">AI Command Center</h1>
+          <p class="vs-page-subtitle">Live staffing analysis, recommendations, and trends — every action still needs your confirmation.</p>
         </div>
       </div>
 
@@ -46,121 +54,205 @@ const SUGGESTIONS = [
         Ask it anything about your schedule — it can also draft actions like creating or publishing a shift, but it never touches anything without you clicking Confirm first.
       </app-tip-card>
 
-      <div class="vs-glass-strong ac-digest" *ngIf="digest() as d">
-        <div class="ac-digest-head">
-          <mat-icon class="ac-digest-icon">wb_sunny</mat-icon>
-          <div>
-            <div class="ac-digest-title">Today's Digest</div>
-            <div class="ac-digest-date">{{ d.generatedAt?.toDate ? (d.generatedAt.toDate() | date:'EEE MMM d, h:mm a') : d.dateKey }}</div>
-          </div>
-        </div>
-        <div class="ac-digest-summary">{{ d.summary }}</div>
+      <div class="acc-shell">
+        <div class="acc-main">
 
-        <div class="ac-alerts" *ngIf="d.alerts?.length">
-          <div class="ac-alert" *ngFor="let a of d.alerts" [class.ac-alert--critical]="a.severity === 'critical'">
-            <mat-icon class="ac-alert-icon">{{ a.severity === 'critical' ? 'error' : 'warning' }}</mat-icon>
-            <span>{{ a.detail }}</span>
+          <!-- KPI / gauge strip -->
+          <div class="acc-kpis">
+            <div class="acc-kpi-card vs-glass" animate.enter="vs-fade-in">
+              <app-radial-gauge [value]="coveragePct()" [variant]="coverageVariant()" label="Coverage"></app-radial-gauge>
+            </div>
+            <div class="acc-kpi-card vs-glass" animate.enter="vs-fade-in">
+              <app-radial-gauge [value]="riskScore().score" [max]="6" [variant]="riskVariant()" [displayValue]="riskLabel()" label="Risk Level"></app-radial-gauge>
+            </div>
+            <app-stat-card variant="warning" icon="event_busy" label="Open Next 7 Days" [value]="metrics()?.upcoming7dOpenCount ?? 0"></app-stat-card>
+            <app-stat-card [variant]="trendVariant()" [icon]="trendIcon()" label="Trend" [value]="trendLabel()"></app-stat-card>
           </div>
-        </div>
 
-        <div class="ac-forecast" *ngIf="d.forecast as f" [class.ac-forecast--worsening]="f.direction === 'worsening'" [class.ac-forecast--improving]="f.direction === 'improving'">
-          <mat-icon class="ac-forecast-icon">{{ f.direction === 'worsening' ? 'trending_up' : f.direction === 'improving' ? 'trending_down' : 'trending_flat' }}</mat-icon>
-          <div>
-            <div class="ac-forecast-title">
-              Long-term outlook: {{ f.direction === 'worsening' ? 'Trending worse' : f.direction === 'improving' ? 'Trending better' : 'Stable' }}
+          <!-- Trend graphs -->
+          <div class="acc-trends">
+            <div class="acc-trend-card vs-glass" animate.enter="vs-fade-in">
+              <div class="acc-trend-head"><span>Coverage Gaps</span><small>last {{ trendDays }} days</small></div>
+              <app-trend-sparkline [data]="coverageGapsTrend()" color="var(--warning)"></app-trend-sparkline>
             </div>
-            <div class="ac-forecast-detail" *ngIf="f.commentary">{{ f.commentary }}</div>
-            <div class="ac-forecast-detail" *ngIf="!f.commentary">
-              {{ f.recentProblemDays }} problem day(s) in the last 4 weeks (avg {{ f.recentAvgGaps | number:'1.0-1' }} unfilled shifts) vs {{ f.priorProblemDays }} in the prior 4 weeks (avg {{ f.priorAvgGaps | number:'1.0-1' }}).
+            <div class="acc-trend-card vs-glass" animate.enter="vs-fade-in">
+              <div class="acc-trend-head"><span>Risk Alerts</span><small>last {{ trendDays }} days</small></div>
+              <app-trend-sparkline [data]="riskTrend()" color="var(--danger)"></app-trend-sparkline>
             </div>
-          </div>
-        </div>
-
-        <div class="ac-proposals" *ngIf="digestProposals().length">
-          <div class="ac-proposal" *ngFor="let p of digestProposals()" [class.ac-proposal--done]="p.status !== 'pending'">
-            <div class="ac-proposal-summary">
-              <mat-icon class="ac-proposal-icon">{{ iconFor(p.kind) }}</mat-icon>
-              <span>{{ p.summary }}</span>
-            </div>
-            <div class="ac-proposal-actions" *ngIf="p.status === 'pending'">
-              <button class="vs-btn-primary ac-btn-sm" type="button" [disabled]="p.busy" (click)="confirmProposal(p)">
-                <mat-icon *ngIf="!p.busy">check</mat-icon> Confirm
-              </button>
-              <button class="vs-btn-ghost ac-btn-sm" type="button" [disabled]="p.busy" (click)="dismissProposal(p)">Dismiss</button>
-            </div>
-            <div class="ac-proposal-status" *ngIf="p.status === 'confirmed'"><mat-icon>check_circle</mat-icon> Done</div>
-            <div class="ac-proposal-status" *ngIf="p.status === 'dismissed'"><mat-icon>cancel</mat-icon> Dismissed</div>
-            <div class="ac-proposal-status ac-proposal-status--error" *ngIf="p.status === 'error'"><mat-icon>error</mat-icon> Failed</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="vs-glass-strong ac-panel">
-        <div class="ac-messages" #scrollAnchor>
-          <div class="ac-empty" *ngIf="messages().length === 0">
-            <mat-icon class="ac-empty-icon">auto_awesome</mat-icon>
-            <div class="ac-empty-title">Ask me anything about your schedule</div>
-            <div class="ac-suggestions">
-              <button class="vs-btn-ghost ac-suggestion" type="button" *ngFor="let s of suggestions" (click)="sendSuggestion(s)">
-                {{ s }}
-              </button>
+            <div class="acc-trend-card vs-glass" animate.enter="vs-fade-in">
+              <div class="acc-trend-head"><span>Staffing Scheduled</span><small>hours / day</small></div>
+              <app-trend-sparkline *ngIf="staffingHistory().length >= 3; else staffingCollecting" [data]="staffingHoursTrend()" color="var(--success)"></app-trend-sparkline>
+              <ng-template #staffingCollecting>
+                <div class="acc-collecting">Collecting data — a new data point is added each day.</div>
+              </ng-template>
             </div>
           </div>
 
-          <div class="ac-msg" *ngFor="let m of messages()" [class.ac-msg--user]="m.role === 'user'">
-            <div class="ac-bubble">
-              <div class="ac-bubble-text">{{ m.text }}</div>
+          <!-- Recommended actions -->
+          <div class="vs-glass-strong acc-section" *ngIf="digestProposals().length" animate.enter="vs-fade-in">
+            <div class="acc-section-head"><mat-icon>auto_awesome</mat-icon><span>Recommended Actions</span></div>
+            <div class="ac-proposals">
+              <div class="ac-proposal" *ngFor="let p of digestProposals()" [class.ac-proposal--done]="p.status !== 'pending'">
+                <div class="ac-proposal-summary">
+                  <mat-icon class="ac-proposal-icon">{{ iconFor(p.kind) }}</mat-icon>
+                  <span>{{ p.summary }}</span>
+                </div>
+                <div class="ac-proposal-actions" *ngIf="p.status === 'pending'">
+                  <button class="vs-btn-primary ac-btn-sm" type="button" [disabled]="p.busy" (click)="confirmProposal(p)">
+                    <mat-icon *ngIf="!p.busy">check</mat-icon> Confirm
+                  </button>
+                  <button class="vs-btn-ghost ac-btn-sm" type="button" [disabled]="p.busy" (click)="dismissProposal(p)">Dismiss</button>
+                </div>
+                <div class="ac-proposal-status" *ngIf="p.status === 'confirmed'"><mat-icon>check_circle</mat-icon> Done</div>
+                <div class="ac-proposal-status" *ngIf="p.status === 'dismissed'"><mat-icon>cancel</mat-icon> Dismissed</div>
+                <div class="ac-proposal-status ac-proposal-status--error" *ngIf="p.status === 'error'"><mat-icon>error</mat-icon> Failed</div>
+              </div>
+            </div>
+          </div>
 
-              <div class="ac-proposals" *ngIf="m.proposals.length">
-                <div class="ac-proposal" *ngFor="let p of m.proposals" [class.ac-proposal--done]="p.status !== 'pending'">
-                  <div class="ac-proposal-summary">
-                    <mat-icon class="ac-proposal-icon">{{ iconFor(p.kind) }}</mat-icon>
-                    <span>{{ p.summary }}</span>
-                  </div>
-                  <div class="ac-proposal-actions" *ngIf="p.status === 'pending'">
-                    <button class="vs-btn-primary ac-btn-sm" type="button" [disabled]="p.busy" (click)="confirmProposal(p)">
-                      <mat-icon *ngIf="!p.busy">check</mat-icon> Confirm
-                    </button>
-                    <button class="vs-btn-ghost ac-btn-sm" type="button" [disabled]="p.busy" (click)="dismissProposal(p)">Dismiss</button>
-                  </div>
-                  <div class="ac-proposal-status" *ngIf="p.status === 'confirmed'"><mat-icon>check_circle</mat-icon> Done</div>
-                  <div class="ac-proposal-status" *ngIf="p.status === 'dismissed'"><mat-icon>cancel</mat-icon> Dismissed</div>
-                  <div class="ac-proposal-status ac-proposal-status--error" *ngIf="p.status === 'error'"><mat-icon>error</mat-icon> Failed</div>
+          <!-- Coverage gaps -->
+          <div class="vs-glass-strong acc-section" *ngIf="digest()?.gaps?.length" animate.enter="vs-fade-in">
+            <div class="acc-section-head"><mat-icon>event_busy</mat-icon><span>Coverage Gaps</span></div>
+            <div class="acc-gap-row" *ngFor="let g of digest()!.gaps">
+              <div class="acc-gap-main">
+                <strong>{{ g.title }}</strong>
+                <span>{{ g.locationName || 'Unspecified location' }} · {{ g.requiredJobRole || 'Any role' }}</span>
+              </div>
+              <span class="acc-gap-time">{{ g.startAtMs | date:'EEE MMM d, h:mm a' }}</span>
+              <span class="vs-badge vs-badge--warning" *ngIf="g.needsPublish">Needs publish</span>
+            </div>
+          </div>
+
+          <!-- Today's briefing -->
+          <div class="vs-glass-strong acc-section" *ngIf="digest() as d" animate.enter="vs-fade-in">
+            <div class="acc-section-head">
+              <mat-icon class="ac-digest-icon">wb_sunny</mat-icon>
+              <span>Today's Briefing</span>
+              <small class="acc-section-date">{{ d.generatedAt?.toDate ? (d.generatedAt.toDate() | date:'EEE MMM d, h:mm a') : d.dateKey }}</small>
+            </div>
+            <div class="ac-digest-summary">{{ d.summary }}</div>
+
+            <div class="ac-alerts" *ngIf="d.alerts?.length">
+              <div class="ac-alert" *ngFor="let a of d.alerts" [class.ac-alert--critical]="a.severity === 'critical'">
+                <mat-icon class="ac-alert-icon">{{ a.severity === 'critical' ? 'error' : 'warning' }}</mat-icon>
+                <span>{{ a.detail }}</span>
+              </div>
+            </div>
+
+            <div class="ac-forecast" *ngIf="d.forecast as f" [class.ac-forecast--worsening]="f.direction === 'worsening'" [class.ac-forecast--improving]="f.direction === 'improving'">
+              <mat-icon class="ac-forecast-icon">{{ f.direction === 'worsening' ? 'trending_up' : f.direction === 'improving' ? 'trending_down' : 'trending_flat' }}</mat-icon>
+              <div>
+                <div class="ac-forecast-title">
+                  Long-term outlook: {{ f.direction === 'worsening' ? 'Trending worse' : f.direction === 'improving' ? 'Trending better' : 'Stable' }}
+                </div>
+                <div class="ac-forecast-detail" *ngIf="f.commentary">{{ f.commentary }}</div>
+                <div class="ac-forecast-detail" *ngIf="!f.commentary">
+                  {{ f.recentProblemDays }} problem day(s) in the last 4 weeks (avg {{ f.recentAvgGaps | number:'1.0-1' }} unfilled shifts) vs {{ f.priorProblemDays }} in the prior 4 weeks (avg {{ f.priorAvgGaps | number:'1.0-1' }}).
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="ac-msg" *ngIf="sending()">
-            <div class="ac-bubble ac-bubble--typing">
-              <span></span><span></span><span></span>
-            </div>
-          </div>
         </div>
 
-        <div class="ac-composer">
-          <input
-            class="vs-input ac-input"
-            type="text"
-            placeholder="Ask the copilot..."
-            [(ngModel)]="draft"
-            (keydown.enter)="send()"
-            [disabled]="sending()">
-          <button class="vs-btn-primary ac-send-btn" type="button" [disabled]="sending() || !draft.trim()" (click)="send()">
-            <mat-icon>send</mat-icon>
-          </button>
+        <!-- Docked chat -->
+        <div class="vs-glass-strong ac-panel acc-chat">
+          <div class="ac-messages" #scrollAnchor>
+            <div class="ac-empty" *ngIf="messages().length === 0">
+              <mat-icon class="ac-empty-icon">auto_awesome</mat-icon>
+              <div class="ac-empty-title">Ask me anything about your schedule</div>
+              <div class="ac-suggestions">
+                <button class="vs-btn-ghost ac-suggestion" type="button" *ngFor="let s of suggestions" (click)="sendSuggestion(s)">
+                  {{ s }}
+                </button>
+              </div>
+            </div>
+
+            <div class="ac-msg" *ngFor="let m of messages()" [class.ac-msg--user]="m.role === 'user'">
+              <div class="ac-bubble">
+                <div class="ac-bubble-text">{{ m.text }}</div>
+
+                <div class="ac-proposals" *ngIf="m.proposals.length">
+                  <div class="ac-proposal" *ngFor="let p of m.proposals" [class.ac-proposal--done]="p.status !== 'pending'">
+                    <div class="ac-proposal-summary">
+                      <mat-icon class="ac-proposal-icon">{{ iconFor(p.kind) }}</mat-icon>
+                      <span>{{ p.summary }}</span>
+                    </div>
+                    <div class="ac-proposal-actions" *ngIf="p.status === 'pending'">
+                      <button class="vs-btn-primary ac-btn-sm" type="button" [disabled]="p.busy" (click)="confirmProposal(p)">
+                        <mat-icon *ngIf="!p.busy">check</mat-icon> Confirm
+                      </button>
+                      <button class="vs-btn-ghost ac-btn-sm" type="button" [disabled]="p.busy" (click)="dismissProposal(p)">Dismiss</button>
+                    </div>
+                    <div class="ac-proposal-status" *ngIf="p.status === 'confirmed'"><mat-icon>check_circle</mat-icon> Done</div>
+                    <div class="ac-proposal-status" *ngIf="p.status === 'dismissed'"><mat-icon>cancel</mat-icon> Dismissed</div>
+                    <div class="ac-proposal-status ac-proposal-status--error" *ngIf="p.status === 'error'"><mat-icon>error</mat-icon> Failed</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ac-msg" *ngIf="sending()">
+              <div class="ac-bubble ac-bubble--typing">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="ac-composer">
+            <input
+              class="vs-input ac-input"
+              type="text"
+              placeholder="Ask the copilot..."
+              [(ngModel)]="draft"
+              (keydown.enter)="send()"
+              [disabled]="sending()">
+            <button class="vs-btn-primary ac-send-btn" type="button" [disabled]="sending() || !draft.trim()" (click)="send()">
+              <mat-icon>send</mat-icon>
+            </button>
+          </div>
         </div>
       </div>
     </div>
   `,
   styles: [`
-    .ac-page { width: 100%; max-width: 900px; margin: 0 auto; }
+    .acc-page { width: 100%; max-width: 1400px; margin: 0 auto; }
 
-    .ac-digest { padding: 18px 20px; margin-bottom: 16px; }
-    .ac-digest-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-    .ac-digest-icon { color: #f59e0b; font-size: 24px !important; width: 24px !important; height: 24px !important; }
-    .ac-digest-title { font-weight: 800; font-size: 15px; }
-    .ac-digest-date { font-size: 11.5px; color: var(--text-muted); }
+    .acc-shell { display: grid; grid-template-columns: 1fr 380px; gap: 20px; align-items: start; }
+    @media (max-width: 1100px) { .acc-shell { grid-template-columns: 1fr; } }
+
+    .acc-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+    .acc-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    @media (max-width: 900px) { .acc-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .acc-kpi-card { display: flex; align-items: center; justify-content: center; padding: 16px; min-height: 148px; }
+
+    .acc-trends { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    @media (max-width: 900px) { .acc-trends { grid-template-columns: 1fr; } }
+    .acc-trend-card { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .acc-trend-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .acc-trend-head span { font-weight: 800; font-size: 13px; color: var(--text); }
+    .acc-trend-head small { font-size: 11px; color: var(--text-muted); }
+    .acc-collecting { height: 64px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--text-muted); font-size: 12px; padding: 0 8px; }
+
+    .acc-section { padding: 18px 20px; }
+    .acc-section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-weight: 800; font-size: 14px; color: var(--text); }
+    .acc-section-date { margin-left: auto; font-weight: 500; font-size: 11.5px; color: var(--text-muted); }
+
+    .acc-gap-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+      padding: 10px 0; border-top: 1px solid var(--border);
+    }
+    .acc-gap-row:first-of-type { border-top: none; padding-top: 0; }
+    .acc-gap-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .acc-gap-main strong { font-size: 13.5px; color: var(--text); }
+    .acc-gap-main span { font-size: 12px; color: var(--text-muted); }
+    .acc-gap-time { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+
+    .acc-chat { display: flex; flex-direction: column; height: min(85vh, 900px); overflow: hidden; position: sticky; top: 20px; }
+    @media (max-width: 1100px) { .acc-chat { position: static; height: 560px; } }
+
+    .ac-digest-icon { color: #f59e0b; font-size: 22px !important; width: 22px !important; height: 22px !important; }
     .ac-digest-summary { font-size: 13.5px; line-height: 1.5; color: var(--text); margin-bottom: 4px; }
 
     .ac-alerts { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
@@ -186,8 +278,7 @@ const SUGGESTIONS = [
     .ac-forecast-title { font-weight: 800; font-size: 12.5px; margin-bottom: 2px; }
     .ac-forecast-detail { font-size: 12px; line-height: 1.4; color: var(--text-muted); }
 
-    .ac-panel { display: flex; flex-direction: column; height: min(72vh, 760px); overflow: hidden; }
-
+    .ac-panel { display: flex; flex-direction: column; overflow: hidden; }
     .ac-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 
     .ac-empty { margin: auto; text-align: center; color: var(--text-muted); padding: 20px; }
@@ -199,7 +290,7 @@ const SUGGESTIONS = [
     .ac-msg { display: flex; }
     .ac-msg--user { justify-content: flex-end; }
     .ac-bubble {
-      max-width: 78%; padding: 12px 16px; border-radius: 14px;
+      max-width: 88%; padding: 12px 16px; border-radius: 14px;
       background: var(--bg-elevated); border: 1px solid var(--border);
       white-space: pre-wrap; line-height: 1.5; font-size: 14px;
     }
@@ -211,7 +302,9 @@ const SUGGESTIONS = [
     .ac-bubble--typing span:nth-child(3) { animation-delay: .3s; }
     @keyframes ac-bounce { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
 
-    .ac-proposals { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .ac-proposals { display: flex; flex-direction: column; gap: 8px; }
+    .acc-section .ac-proposals { margin-top: 0; }
+    .ac-bubble .ac-proposals { margin-top: 10px; }
     .ac-proposal {
       border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
       background: var(--panel); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
@@ -235,15 +328,22 @@ export class AiCopilotPage implements OnDestroy {
   @ViewChild('scrollAnchor') private scrollAnchor?: ElementRef<HTMLDivElement>;
 
   suggestions = SUGGESTIONS;
+  trendDays = TREND_DAYS;
   draft = '';
   messages = signal<DisplayMessage[]>([]);
   sending = signal(false);
 
   digest = signal<AiDigest | null>(null);
   digestProposals = signal<DisplayProposal[]>([]);
+  digestHistory = signal<AiDigest[]>([]);
+  metrics = signal<OrgMetricsSummary | null>(null);
+  staffingHistory = signal<StaffingSnapshot[]>([]);
 
   private history: AiChatTurn[] = [];
   private unsubDigest: (() => void) | null = null;
+  private unsubHistory: (() => void) | null = null;
+  private unsubMetrics: (() => void) | null = null;
+  private unsubStaffing: (() => void) | null = null;
 
   constructor(
     private ai: AiAssistantCommands,
@@ -252,6 +352,8 @@ export class AiCopilotPage implements OnDestroy {
     private toast: ToastService,
     private ctx: OrgContextService,
     private digestRepo: AiDigestRepo,
+    private metricsRepo: MetricsRepo,
+    private staffingRepo: StaffingSnapshotsRepo,
   ) {
     const bind = () => {
       const orgId = this.ctx.orgId();
@@ -260,6 +362,9 @@ export class AiCopilotPage implements OnDestroy {
         this.digest.set(d);
         this.digestProposals.set((d?.proposals || []).map((p) => ({ ...p, status: 'pending', busy: false })));
       });
+      this.unsubHistory = this.digestRepo.watchHistory(orgId, TREND_DAYS, (list) => this.digestHistory.set(list));
+      this.unsubMetrics = this.metricsRepo.watchSummary(orgId, (m) => this.metrics.set(m));
+      this.unsubStaffing = this.staffingRepo.watchHistory(orgId, TREND_DAYS, (list) => this.staffingHistory.set(list));
     };
     bind();
     setTimeout(bind, 800);
@@ -268,6 +373,80 @@ export class AiCopilotPage implements OnDestroy {
 
   ngOnDestroy() {
     this.unsubDigest?.();
+    this.unsubHistory?.();
+    this.unsubMetrics?.();
+    this.unsubStaffing?.();
+  }
+
+  coveragePct(): number {
+    const m = this.metrics();
+    if (!m) return 0;
+    const total = (m.openCount || 0) + (m.assignedCount || 0);
+    if (total === 0) return 100; // nothing scheduled at all — nothing uncovered either
+    return Math.round(((m.assignedCount || 0) / total) * 100);
+  }
+
+  coverageVariant(): RadialGaugeVariant {
+    const pct = this.coveragePct();
+    return pct >= 90 ? 'success' : pct >= 70 ? 'warning' : 'danger';
+  }
+
+  riskScore() {
+    return computeRiskScore(this.digest()?.alerts ?? []);
+  }
+
+  riskVariant(): RadialGaugeVariant {
+    const level = this.riskScore().level;
+    return level === 'low' ? 'success' : level === 'medium' ? 'warning' : 'danger';
+  }
+
+  riskLabel(): string {
+    const level = this.riskScore().level;
+    return level === 'low' ? 'Low' : level === 'medium' ? 'Medium' : 'High';
+  }
+
+  private trendDirection() {
+    return this.digest()?.forecast?.direction;
+  }
+
+  trendIcon(): string {
+    const d = this.trendDirection();
+    return d === 'worsening' ? 'trending_up' : d === 'improving' ? 'trending_down' : 'trending_flat';
+  }
+
+  trendVariant(): StatCardVariant {
+    const d = this.trendDirection();
+    return d === 'worsening' ? 'danger' : d === 'improving' ? 'success' : 'primary';
+  }
+
+  trendLabel(): string {
+    const d = this.trendDirection();
+    return d === 'worsening' ? 'Worsening' : d === 'improving' ? 'Improving' : d === 'stable' ? 'Stable' : 'No data yet';
+  }
+
+  private last30Dates(): string[] {
+    const dates: string[] = [];
+    const now = new Date();
+    for (let i = TREND_DAYS - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+      dates.push(d.toISOString().slice(0, 10));
+    }
+    return dates;
+  }
+
+  coverageGapsTrend(): number[] {
+    const byDate = new Map(this.digestHistory().map((d) => [d.dateKey, d.gaps?.length ?? 0]));
+    return this.last30Dates().map((date) => byDate.get(date) ?? 0);
+  }
+
+  riskTrend(): number[] {
+    const byDate = new Map(this.digestHistory().map((d) => [d.dateKey, computeRiskScore(d.alerts ?? []).score]));
+    return this.last30Dates().map((date) => byDate.get(date) ?? 0);
+  }
+
+  staffingHoursTrend(): number[] {
+    const byDate = new Map(this.staffingHistory().map((s) => [s.dateKey, s.scheduledHours]));
+    return this.last30Dates().map((date) => byDate.get(date) ?? 0);
   }
 
   sendSuggestion(text: string) {

@@ -435,6 +435,15 @@ service cloud.firestore {
         allow write: if false; // Cloud Functions only
       }
 
+      // ── Staffing Snapshots (scheduled Cloud Function writes) ──
+      match /staffingSnapshots/{snapshotId} {
+        allow read:  if signedIn() && (
+          isSuperAdmin() ||
+          (isOrgMember(orgId) && isOrgAdminLike())
+        );
+        allow write: if false; // Cloud Functions only
+      }
+
       // ── Industry Configuration Engine — resolved org snapshot ──────
       // Readable by every org member (terminology affects staff-facing
       // screens too, not just admins). Only activateIndustryProfile
