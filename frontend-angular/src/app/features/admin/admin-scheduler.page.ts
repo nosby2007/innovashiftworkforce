@@ -220,6 +220,7 @@ interface OrgSite {
               <div class="sch-detail-item"><span>{{ 'scheduler.status' | transloco }}</span> <span class="vs-badge vs-badge--neutral">{{ s.status | uppercase }}</span></div>
               <div class="sch-detail-item"><span>{{ 'scheduler.location' | transloco }}</span> {{ s.locationName }}</div>
               <div class="sch-detail-item"><span>{{ 'scheduler.assignedLabel' | transloco }}</span> {{ s.assignedUserId ? userLabel(s.assignedUserId) : '—' }}</div>
+              <div class="sch-detail-item" *ngIf="nextSchedulerActions()"><span>{{ 'scheduler.coverageSignal' | transloco }}</span> {{ coverageSignal(s) }}</div>
             </div>
           </div>
         </ng-template>

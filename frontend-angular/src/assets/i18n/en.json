@@ -1218,6 +1218,7 @@
     "status": "Status",
     "location": "Location",
     "assignedLabel": "Assigned",
+    "coverageSignal": "Coverage signal",
     "searchStaffPlaceholder": "Search staff (name/email/role)",
     "staffMemberFallback": "Staff member",
     "select": "Select",

@@ -204,7 +204,7 @@ import { TranslocoModule } from '@jsverse/transloco';
               <span class="at-schedule-card-date">{{ fmtDate(s.startAt) }}</span>
               <div class="at-schedule-card-time">{{ fmtTime(s.startAt) }} &ndash; {{ fmtTime(s.endAt) }}</div>
               <div class="at-loc"><mat-icon>location_on</mat-icon>{{ s.locationName || 'No location' }}</div>
-              <div class="at-daily-meta">
+              <div class="at-daily-meta" *ngIf="nextStaffAttendanceCard()">
                 <span><mat-icon>schedule</mat-icon>{{ shiftHours(s).toFixed(2) }} hrs</span>
                 <span *ngIf="shiftRequiresAutoBreak(s)"><mat-icon>free_breakfast</mat-icon>Auto 30 min break if no break is taken</span>
               </div>

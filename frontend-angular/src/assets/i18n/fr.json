@@ -1218,6 +1218,7 @@
     "status": "Statut",
     "location": "Emplacement",
     "assignedLabel": "Assigné",
+    "coverageSignal": "Signal de couverture",
     "searchStaffPlaceholder": "Rechercher du personnel (nom/courriel/rôle)",
     "staffMemberFallback": "Membre du personnel",
     "select": "Sélectionner",
