@@ -14,6 +14,10 @@ import {
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { ConnectivityService } from '../connectivity/connectivity.service';
 
+// The 7 built-in keys. An org can also define its own custom document
+// types (see document-type-catalog.util.ts's mergeCustomDocumentTypes), so
+// EmployeeDocumentRecord.type below is a plain string, not this union —
+// this type only names the built-ins for labelFor()'s lookup table.
 export type EmployeeDocumentType = 'identity' | 'w4' | 'w2' | 'certification' | 'payroll' | 'policy' | 'other';
 export type EmployeeDocumentStatus = 'pending' | 'verified' | 'rejected';
 
@@ -23,7 +27,7 @@ export interface EmployeeDocumentRecord {
   userId: string;
   userDisplayName?: string | null;
   userEmail?: string | null;
-  type: EmployeeDocumentType;
+  type: string;
   title: string;
   fileName: string;
   storagePath: string;
@@ -43,7 +47,7 @@ type UploadInput = {
   userId: string;
   userDisplayName?: string | null;
   userEmail?: string | null;
-  type: EmployeeDocumentType;
+  type: string;
   title: string;
   file: File;
 };
@@ -117,7 +121,7 @@ export class EmployeeDocumentsRepo {
     return getDownloadURL(ref(getStorage(), record.storagePath));
   }
 
-  labelFor(type: EmployeeDocumentType): string {
+  labelFor(type: string): string {
     const labels: Record<EmployeeDocumentType, string> = {
       identity: 'Identity Document',
       w4: 'W-4 Withholding',
@@ -127,7 +131,10 @@ export class EmployeeDocumentsRepo {
       policy: 'Policy Acknowledgement',
       other: 'Other Document',
     };
-    return labels[type] || 'Document';
+    // Custom (org-defined) types aren't in this lookup — they use the same
+    // value === label convention as custom job roles, so the raw type
+    // string is already a reasonable display label.
+    return labels[type as EmployeeDocumentType] || type || 'Document';
   }
 
   private safeFileName(name: string): string {

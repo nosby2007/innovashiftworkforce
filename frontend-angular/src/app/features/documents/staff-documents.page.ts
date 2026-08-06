@@ -3,14 +3,25 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
-import { doc, getFirestore, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, getFirestore, onSnapshot } from 'firebase/firestore';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { profileCompletion } from '../../shared/utils/profile-completion.util';
-import { EmployeeDocumentRecord, EmployeeDocumentType, EmployeeDocumentsRepo } from '../../core/repos/employee-documents.repo';
+import { EmployeeDocumentRecord, EmployeeDocumentsRepo } from '../../core/repos/employee-documents.repo';
 import { ToastService } from '../../core/ui/toast.service';
 import { DocumentScanService } from '../../core/camera/document-scan.service';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
+import { DOCUMENT_TYPE_OPTIONS, DocumentTypeOption, mergeCustomDocumentTypes } from '../../shared/utils/document-type-catalog.util';
+
+const DOCUMENT_TYPE_I18N_KEYS: Record<string, string> = {
+  identity: 'documents.typeIdentity',
+  w4: 'documents.typeW4',
+  w2: 'documents.typeW2',
+  certification: 'documents.typeCertification',
+  payroll: 'documents.typePayroll',
+  policy: 'documents.typePolicy',
+  other: 'documents.typeOther',
+};
 
 type DocumentTile = {
   title: string;
@@ -87,13 +98,7 @@ type DocumentTile = {
               <label>
                 <span>{{ 'documents.documentType' | transloco }}</span>
                 <select class="doc-input" [(ngModel)]="uploadType">
-                  <option value="identity">{{ 'documents.typeIdentity' | transloco }}</option>
-                  <option value="w4">{{ 'documents.typeW4' | transloco }}</option>
-                  <option value="w2">{{ 'documents.typeW2' | transloco }}</option>
-                  <option value="certification">{{ 'documents.typeCertification' | transloco }}</option>
-                  <option value="payroll">{{ 'documents.typePayroll' | transloco }}</option>
-                  <option value="policy">{{ 'documents.typePolicy' | transloco }}</option>
-                  <option value="other">{{ 'documents.typeOther' | transloco }}</option>
+                  <option *ngFor="let opt of documentTypeOptions()" [value]="opt.value">{{ documentTypeLabel(opt) }}</option>
                 </select>
               </label>
               <label>
@@ -239,7 +244,8 @@ export class StaffDocumentsPage implements OnDestroy {
   uid: string | null = null;
   user = signal<any>(null);
   documents = signal<EmployeeDocumentRecord[]>([]);
-  uploadType: EmployeeDocumentType = 'identity';
+  uploadType = 'identity';
+  customDocumentTypes: string[] = [];
   uploadTitle = '';
   selectedFile: File | null = null;
   uploadBusy = false;
@@ -282,6 +288,24 @@ export class StaffDocumentsPage implements OnDestroy {
     this.unsubDocs = this.docsRepo.watchForUser(this.orgId, this.uid, (items) => {
       this.documents.set(items);
     });
+    this.loadCustomDocumentTypes();
+  }
+
+  private async loadCustomDocumentTypes() {
+    if (!this.orgId) return;
+    try {
+      const snap = await getDoc(doc(getFirestore(), 'orgs', this.orgId));
+      this.customDocumentTypes = (snap.data() as any)?.customDocumentTypes || [];
+    } catch { /* non-critical */ }
+  }
+
+  documentTypeOptions(): DocumentTypeOption[] {
+    return mergeCustomDocumentTypes(DOCUMENT_TYPE_OPTIONS, this.customDocumentTypes);
+  }
+
+  documentTypeLabel(opt: DocumentTypeOption): string {
+    const key = DOCUMENT_TYPE_I18N_KEYS[opt.value];
+    return key ? this.i18n.translate(key) : opt.label;
   }
 
   completion() {
@@ -406,7 +430,7 @@ export class StaffDocumentsPage implements OnDestroy {
     return this.documents().filter((item) => item.status === 'pending').length;
   }
 
-  docLabel(type: EmployeeDocumentType) {
+  docLabel(type: string) {
     return this.docsRepo.labelFor(type);
   }
 

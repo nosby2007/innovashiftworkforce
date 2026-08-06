@@ -10,6 +10,7 @@ export interface OrgUser {
   accessRole?: string | null;   // staff, manager, scheduler, admin, hr
   active?: boolean;
   photoURL?: string | null;
+  skills?: string[];            // org-defined skill catalog tags, admin-managed
 }
 
 @Injectable({ providedIn: 'root' })

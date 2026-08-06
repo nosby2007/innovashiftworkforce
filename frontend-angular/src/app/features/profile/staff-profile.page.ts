@@ -52,6 +52,9 @@ const EMPTY_DEPENDENT: DependentDraft = {
             <span>{{ 'profile.myProfile' | transloco }}</span>
             <h1>{{ draft.displayName || draft.email || ('profile.staffMemberFallback' | transloco) }}</h1>
             <p>{{ draft.title || draft.jobRole || ('profile.staffFallback' | transloco) }} · {{ draft.department || ('profile.departmentNotSet' | transloco) }} · {{ draft.employeeNumber || ('profile.employeeIdPending' | transloco) }}</p>
+            <div class="prof-skill-chips" *ngIf="draft.skills?.length">
+              <span class="prof-skill-chip" *ngFor="let skill of draft.skills">{{ skill }}</span>
+            </div>
           </div>
         </div>
         <div class="prof-actions">
@@ -490,6 +493,8 @@ const EMPTY_DEPENDENT: DependentDraft = {
     .prof-identity span { display:block; color:var(--text-muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; font-weight:900; margin-bottom:8px; }
     .prof-identity h1 { margin:0; color:var(--text); font-size:30px; line-height:1.1; }
     .prof-identity p { margin:10px 0 0; color:var(--text-muted); font-size:15px; }
+    .prof-skill-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .prof-skill-chip { padding:4px 10px; border-radius:999px; background:rgba(255,255,255,0.08); color:var(--text); font-size:12px; font-weight:700; }
     .prof-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     .prof-actions button, .prof-card-head button { display:inline-flex; align-items:center; gap:7px; }
     .prof-empty { max-width:1120px; margin:0 auto; padding:18px; display:flex; align-items:center; gap:10px; }
@@ -946,6 +951,7 @@ export class StaffProfilePage implements OnDestroy {
       email: data?.email || this.ctx.email() || '',
       photoURL: data?.photoURL || this.ctx.photoURL() || '',
       jobRole: data?.jobRole || this.ctx.jobRole() || '',
+      skills: Array.isArray(data?.skills) ? data.skills : [],
       employeeNumber: data?.employeeNumber || profile?.employeeNumber || '',
       title: profile?.title || data?.title || '',
       department: profile?.department || data?.department || '',
@@ -991,6 +997,7 @@ export class StaffProfilePage implements OnDestroy {
       email: '',
       photoURL: '',
       jobRole: '',
+      skills: [] as string[],
       employeeNumber: '',
       title: '',
       department: '',
