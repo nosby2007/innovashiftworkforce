@@ -60,6 +60,7 @@ export interface NavigationConfig {
 
 export interface DashboardsConfig {
   widgetSetId: string | null;
+  hiddenWidgetKeys?: string[];
 }
 
 export interface AiConfig {

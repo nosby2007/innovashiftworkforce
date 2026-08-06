@@ -174,7 +174,7 @@ const INERT_SECTIONS = {
   payroll: { notes: null },
   attendance: { geofenceStrictness: 'default' },
   navigation: { hiddenNavKeys: [] },
-  dashboards: { widgetSetId: null },
+  dashboards: { widgetSetId: null, hiddenWidgetKeys: [] },
   ai: { industryContextPrompt: null },
 };
 

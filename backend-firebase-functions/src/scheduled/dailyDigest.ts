@@ -18,15 +18,38 @@ const OPEN_STATUSES = new Set(['draft', 'open', 'published']);
 const ADMIN_LIKE_ROLES = ['admin', 'manager', 'scheduler', 'hr'];
 const NOTIFY_BATCH_CHUNK_SIZE = 400;
 
-// Compliance/fatigue thresholds — healthcare-typical defaults. Not yet
-// configurable per org; a reasonable starting point rather than a precise
+// Compliance/fatigue thresholds — healthcare-typical defaults, used as a
+// fallback for any org that hasn't set its own values in Org Settings >
+// Fatigue & Rest Rules (minRestHours/maxConsecutiveDays/
+// maxWeeklyScheduledHours on the orgs/{orgId} doc). Not a precise
 // regulatory citation for any specific state.
 const ASSIGNED_STATUSES = new Set(['assigned', 'claimed', 'in_progress', 'completed']);
 const COMPLIANCE_WINDOW_BACK_MS = 1 * 24 * 60 * 60 * 1000; // include yesterday, so a rest gap spanning midnight is still caught
 const COMPLIANCE_WINDOW_FWD_MS = 7 * 24 * 60 * 60 * 1000;
-const MIN_REST_HOURS = 8;
-const MAX_CONSECUTIVE_DAYS = 6;
-const MAX_WEEKLY_HOURS = 60;
+
+export interface FatigueRules {
+  minRestHours: number;
+  maxConsecutiveDays: number;
+  maxWeeklyHours: number;
+}
+
+export const DEFAULT_FATIGUE_RULES: FatigueRules = {
+  minRestHours: 8,
+  maxConsecutiveDays: 6,
+  maxWeeklyHours: 60,
+};
+
+export function resolveFatigueRules(orgData: Record<string, unknown> | undefined | null): FatigueRules {
+  const pick = (value: unknown, fallback: number) => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  };
+  return {
+    minRestHours: pick(orgData?.minRestHours, DEFAULT_FATIGUE_RULES.minRestHours),
+    maxConsecutiveDays: pick(orgData?.maxConsecutiveDays, DEFAULT_FATIGUE_RULES.maxConsecutiveDays),
+    maxWeeklyHours: pick(orgData?.maxWeeklyScheduledHours, DEFAULT_FATIGUE_RULES.maxWeeklyHours),
+  };
+}
 
 // Long-term understaffing forecast — reuses the aiDigests history that's
 // already stored (one doc per day that had gaps/alerts). Only computed
@@ -94,7 +117,7 @@ async function findCoverageGaps(db: FirebaseFirestore.Firestore, orgId: string, 
   return gaps;
 }
 
-async function findComplianceAlerts(db: FirebaseFirestore.Firestore, orgId: string, nowMs: number): Promise<ComplianceAlert[]> {
+async function findComplianceAlerts(db: FirebaseFirestore.Firestore, orgId: string, nowMs: number, rules: FatigueRules): Promise<ComplianceAlert[]> {
   const windowStart = nowMs - COMPLIANCE_WINDOW_BACK_MS;
   const windowEnd = nowMs + COMPLIANCE_WINDOW_FWD_MS;
 
@@ -147,7 +170,7 @@ async function findComplianceAlerts(db: FirebaseFirestore.Firestore, orgId: stri
           type: 'overlap', severity: 'critical', userId: uid, userLabel,
           detail: `${userLabel} is double-booked: "${prev.title}" overlaps "${curr.title}" around ${fmt(curr.startAtMs)}.`,
         });
-      } else if (gapHours < MIN_REST_HOURS) {
+      } else if (gapHours < rules.minRestHours) {
         alerts.push({
           type: 'insufficient_rest', severity: 'warning', userId: uid, userLabel,
           detail: `${userLabel} has only ${gapHours.toFixed(1)}h of rest between "${prev.title}" (ends ${fmt(prev.endAtMs)}) and "${curr.title}" (starts ${fmt(curr.startAtMs)}).`,
@@ -166,7 +189,7 @@ async function findComplianceAlerts(db: FirebaseFirestore.Firestore, orgId: stri
       streak = currDate - prevDate === 86_400_000 ? streak + 1 : 1;
       maxStreak = Math.max(maxStreak, streak);
     }
-    if (maxStreak > MAX_CONSECUTIVE_DAYS) {
+    if (maxStreak > rules.maxConsecutiveDays) {
       alerts.push({
         type: 'excessive_consecutive', severity: 'warning', userId: uid, userLabel,
         detail: `${userLabel} is scheduled for ${maxStreak} consecutive days.`,
@@ -175,7 +198,7 @@ async function findComplianceAlerts(db: FirebaseFirestore.Firestore, orgId: stri
 
     // Total scheduled hours across the ~8-day window.
     const totalHours = shifts.reduce((sum, s) => sum + (s.endAtMs - s.startAtMs) / 3_600_000, 0);
-    if (totalHours > MAX_WEEKLY_HOURS) {
+    if (totalHours > rules.maxWeeklyHours) {
       alerts.push({
         type: 'weekly_hours', severity: 'warning', userId: uid, userLabel,
         detail: `${userLabel} is scheduled for ${totalHours.toFixed(1)} hours this week.`,
@@ -331,10 +354,10 @@ async function notifyAdminsOfDigest(db: FirebaseFirestore.Firestore, orgId: stri
   });
 }
 
-async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: string, orgName: string, client: OpenAI | null, nowMs: number) {
+async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: string, orgName: string, client: OpenAI | null, nowMs: number, rules: FatigueRules) {
   const [gaps, alerts] = await Promise.all([
     findCoverageGaps(db, orgId, nowMs),
-    findComplianceAlerts(db, orgId, nowMs),
+    findComplianceAlerts(db, orgId, nowMs, rules),
   ]);
   if (gaps.length === 0 && alerts.length === 0) return; // nothing to report — skip writing a doc and skip the API call entirely
 
@@ -392,8 +415,10 @@ export const dailyDigest = onSchedule(
 
     for (const orgDoc of orgsSnap.docs) {
       try {
-        const orgName = String((orgDoc.data() as any)?.name || orgDoc.id);
-        await generateDigestForOrg(db, orgDoc.id, orgName, client, nowMs);
+        const orgData = orgDoc.data() as Record<string, unknown>;
+        const orgName = String(orgData?.name || orgDoc.id);
+        const rules = resolveFatigueRules(orgData);
+        await generateDigestForOrg(db, orgDoc.id, orgName, client, nowMs, rules);
       } catch (e) {
         logger.error(`[dailyDigest] failed for org ${orgDoc.id}`, e);
       }

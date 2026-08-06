@@ -73,6 +73,9 @@ interface OrgSettings {
   overtimeMultiplier: number;
   overtimeWeeklyThresholdHours: number;
   holidayWorkMultiplier: number;
+  minRestHours: number;
+  maxConsecutiveDays: number;
+  maxWeeklyScheduledHours: number;
   holidays: OrgHoliday[];
   customJobRoles: string[];
   customDocumentTypes: string[];
@@ -136,6 +139,9 @@ const DEFAULT_SETTINGS: OrgSettings = {
   overtimeMultiplier: 1.5,
   overtimeWeeklyThresholdHours: 40,
   holidayWorkMultiplier: 1.5,
+  minRestHours: 8,
+  maxConsecutiveDays: 6,
+  maxWeeklyScheduledHours: 60,
   holidays: [],
   customJobRoles: [],
   customDocumentTypes: [],
@@ -426,6 +432,36 @@ const PLAN_BADGE: Record<string, string> = {
                 <button class="vs-btn-ghost" type="button" (click)="removeHoliday(i)">
                   <mat-icon>delete</mat-icon> {{ 'orgSettings.remove' | transloco }}
                 </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Fatigue & Rest Rules section -->
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">{{ 'orgSettings.fatigueRulesTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.fatigueRulesSubtitle' | transloco }}</div>
+            </div>
+            <mat-icon class="ors-section-icon">bedtime</mat-icon>
+          </div>
+          <div class="vs-panel-body ors-form">
+            <div class="vs-form-row vs-form-row--3">
+              <div>
+                <label class="vs-field-label" for="ors-min-rest">{{ 'orgSettings.minRestHoursLabel' | transloco }}</label>
+                <input id="ors-min-rest" type="number" class="vs-input" min="1" [(ngModel)]="draft.minRestHours" placeholder="8">
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">{{ 'orgSettings.minRestHoursHint' | transloco }}</div>
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-max-consecutive">{{ 'orgSettings.maxConsecutiveDaysLabel' | transloco }}</label>
+                <input id="ors-max-consecutive" type="number" class="vs-input" min="1" [(ngModel)]="draft.maxConsecutiveDays" placeholder="6">
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">{{ 'orgSettings.maxConsecutiveDaysHint' | transloco }}</div>
+              </div>
+              <div>
+                <label class="vs-field-label" for="ors-max-weekly">{{ 'orgSettings.maxWeeklyScheduledHoursLabel' | transloco }}</label>
+                <input id="ors-max-weekly" type="number" class="vs-input" min="1" [(ngModel)]="draft.maxWeeklyScheduledHours" placeholder="60">
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">{{ 'orgSettings.maxWeeklyScheduledHoursHint' | transloco }}</div>
               </div>
             </div>
           </div>
@@ -1691,6 +1727,9 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         overtimeMultiplier: Math.max(1, Number(this.draft.overtimeMultiplier || 1.5)),
         overtimeWeeklyThresholdHours: Math.max(1, Number(this.draft.overtimeWeeklyThresholdHours || 40)),
         holidayWorkMultiplier: Math.max(1, Number(this.draft.holidayWorkMultiplier || 1.5)),
+        minRestHours: Math.max(1, Number(this.draft.minRestHours || 8)),
+        maxConsecutiveDays: Math.max(1, Number(this.draft.maxConsecutiveDays || 6)),
+        maxWeeklyScheduledHours: Math.max(1, Number(this.draft.maxWeeklyScheduledHours || 60)),
         holidays: normalizedHolidays,
         customJobRoles: normalizedCustomJobRoles,
         customDocumentTypes: normalizedCustomDocumentTypes,

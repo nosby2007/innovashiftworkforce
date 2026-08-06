@@ -44,6 +44,7 @@ export const GENERIC_WORKFORCE_SNAPSHOT: OrganizationExperienceSnapshot = {
   },
   dashboards: {
     widgetSetId: null,
+    hiddenWidgetKeys: [],
   },
   ai: {
     industryContextPrompt: null,
