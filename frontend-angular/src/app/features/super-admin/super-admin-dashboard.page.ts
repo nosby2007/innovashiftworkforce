@@ -20,6 +20,7 @@ import { computeBillingSummary } from '../../shared/utils/billing-summary.util';
 import { ACCESS_ROLES, JOB_ROLES } from '../../shared/models/access-roles.model';
 import { SuperAdminAddEmployeesComponent } from './super-admin-add-employees.component';
 import { SuperAdminDemoRequestsComponent } from './super-admin-demo-requests.component';
+import { StatCardComponent } from '../../shared/ui/stat-card/stat-card.component';
 
 const PLANS = ['free', 'starter', 'pro', 'enterprise'] as const;
 const PLAN_STATUSES = ['active', 'trialing', 'past_due', 'canceled'] as const;
@@ -89,7 +90,7 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, TablePaginatorComponent, SuperAdminAddEmployeesComponent, SuperAdminDemoRequestsComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, TablePaginatorComponent, SuperAdminAddEmployeesComponent, SuperAdminDemoRequestsComponent, StatCardComponent],
   template: `
     <div class="vs-page-pad">
       <div class="vs-page-header">
@@ -141,21 +142,9 @@ const DEFAULT_ORG_DRAFT: OrgDraft = {
         <app-super-admin-demo-requests (convert)="onConvertRequest($event)"></app-super-admin-demo-requests>
 
         <div class="vs-grid-3 sa-kpis">
-          <div class="vs-stat-card vs-stat--primary">
-            <div class="vs-stat-label">Total Organizations</div>
-            <div class="vs-stat-value">{{ orgs().length }}</div>
-            <mat-icon class="vs-stat-icon">business</mat-icon>
-          </div>
-          <div class="vs-stat-card vs-stat--success">
-            <div class="vs-stat-label">Active Tenants</div>
-            <div class="vs-stat-value">{{ activeOrgs() }}</div>
-            <mat-icon class="vs-stat-icon">check_circle</mat-icon>
-          </div>
-          <div class="vs-stat-card vs-stat--warning">
-            <div class="vs-stat-label">At-Risk Orgs</div>
-            <div class="vs-stat-value">{{ atRiskOrgs() }}</div>
-            <mat-icon class="vs-stat-icon">warning</mat-icon>
-          </div>
+          <app-stat-card variant="primary" icon="business" label="Total Organizations" [value]="orgs().length"></app-stat-card>
+          <app-stat-card variant="success" icon="check_circle" label="Active Tenants" [value]="activeOrgs()"></app-stat-card>
+          <app-stat-card variant="warning" icon="warning" label="At-Risk Orgs" [value]="atRiskOrgs()"></app-stat-card>
         </div>
 
         <section class="sa-health-strip">
