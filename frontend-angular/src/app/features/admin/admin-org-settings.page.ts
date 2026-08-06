@@ -73,6 +73,7 @@ interface OrgSettings {
   overtimeWeeklyThresholdHours: number;
   holidayWorkMultiplier: number;
   holidays: OrgHoliday[];
+  customJobRoles: string[];
   defaultFederalTaxPercent: number;
   defaultStateTaxPercent: number;
   defaultSocialSecurityPercent: number;
@@ -133,6 +134,7 @@ const DEFAULT_SETTINGS: OrgSettings = {
   overtimeWeeklyThresholdHours: 40,
   holidayWorkMultiplier: 1.5,
   holidays: [],
+  customJobRoles: [],
   // Real US federal/state/FICA figures only get applied for US orgs — see
   // ngOnInit(), which fills these in via defaultDeductionElectionsForCountry
   // the first time an org's settings are loaded with none saved yet.
@@ -417,6 +419,47 @@ const PLAN_BADGE: Record<string, string> = {
               <div class="ors-site-footer">
                 <span class="vs-muted">Staff who don't work this day are paid these hours automatically; staff who do work it get the holiday multiplier instead.</span>
                 <button class="vs-btn-ghost" type="button" (click)="removeHoliday(i)">
+                  <mat-icon>delete</mat-icon> Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Custom Job Roles section -->
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">Custom Job Roles</div>
+              <div class="vs-panel-subtitle">Roles specific to your organization, shown alongside the built-in list when inviting staff or creating shifts</div>
+            </div>
+            <mat-icon class="ors-section-icon">badge</mat-icon>
+          </div>
+          <div class="vs-panel-body ors-form">
+            <div class="ors-site-actions" style="justify-content:space-between;">
+              <strong>Custom Roles</strong>
+              <button class="vs-btn-ghost" (click)="addCustomJobRole()" type="button">
+                <mat-icon>add</mat-icon> Add Role
+              </button>
+            </div>
+
+            <div *ngIf="draft.customJobRoles.length === 0" class="ors-empty-site vs-glass">
+              <mat-icon>badge</mat-icon>
+              <div>
+                <strong>No custom roles added.</strong>
+                <div class="vs-muted">Custom roles appear before "Other" in every job-role dropdown across the app.</div>
+              </div>
+            </div>
+
+            <div class="ors-site-card" *ngFor="let role of draft.customJobRoles; index as i">
+              <div class="vs-form-row">
+                <div>
+                  <label class="vs-field-label">Role Name *</label>
+                  <input class="vs-input" [(ngModel)]="draft.customJobRoles[i]" placeholder="e.g. Line Cook">
+                </div>
+              </div>
+              <div class="ors-site-footer">
+                <button class="vs-btn-ghost" type="button" (click)="removeCustomJobRole(i)">
                   <mat-icon>delete</mat-icon> Remove
                 </button>
               </div>
@@ -1285,6 +1328,20 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     };
   }
 
+  addCustomJobRole() {
+    this.draft = {
+      ...this.draft,
+      customJobRoles: [...this.draft.customJobRoles, ''],
+    };
+  }
+
+  removeCustomJobRole(index: number) {
+    this.draft = {
+      ...this.draft,
+      customJobRoles: this.draft.customJobRoles.filter((_, i) => i !== index),
+    };
+  }
+
   cadenceOptions = CADENCE_OPTIONS;
 
   cadenceDescription(cadence: AccrualPolicy['cadence']): string {
@@ -1446,6 +1503,17 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         }))
         .filter((p) => p.label);
 
+      const seenCustomJobRoles = new Set<string>();
+      const normalizedCustomJobRoles: string[] = (this.draft.customJobRoles || [])
+        .map((r) => String(r || '').trim())
+        .filter((r) => {
+          const key = r.toLowerCase();
+          if (!r || key === 'other' || seenCustomJobRoles.has(key)) return false;
+          seenCustomJobRoles.add(key);
+          return true;
+        })
+        .slice(0, 25);
+
       const normalizedAccrualPolicy: AccrualPolicy = {
         enabled: !!this.draft.accrualPolicy?.enabled,
         cadence: this.draft.accrualPolicy?.cadence || 'monthly',
@@ -1487,6 +1555,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         overtimeWeeklyThresholdHours: Math.max(1, Number(this.draft.overtimeWeeklyThresholdHours || 40)),
         holidayWorkMultiplier: Math.max(1, Number(this.draft.holidayWorkMultiplier || 1.5)),
         holidays: normalizedHolidays,
+        customJobRoles: normalizedCustomJobRoles,
         defaultFederalTaxPercent: Math.max(0, Number(this.draft.defaultFederalTaxPercent || 0)),
         defaultStateTaxPercent: Math.max(0, Number(this.draft.defaultStateTaxPercent || 0)),
         defaultSocialSecurityPercent: Math.max(0, Number(this.draft.defaultSocialSecurityPercent || 0)),
@@ -1511,8 +1580,8 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         orgId: this.orgId,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans, experienceFlags: normalizedExperienceFlags, dataRetention: normalizedDataRetention });
-      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, benefitPlans: normalizedBenefitPlans, experienceFlags: normalizedExperienceFlags, dataRetention: normalizedDataRetention };
+      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, customJobRoles: normalizedCustomJobRoles, benefitPlans: normalizedBenefitPlans, experienceFlags: normalizedExperienceFlags, dataRetention: normalizedDataRetention });
+      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, customJobRoles: normalizedCustomJobRoles, benefitPlans: normalizedBenefitPlans, experienceFlags: normalizedExperienceFlags, dataRetention: normalizedDataRetention };
       this.ctx.setContext({
         orgId: this.ctx.orgId(),
         uid: this.ctx.uid(),

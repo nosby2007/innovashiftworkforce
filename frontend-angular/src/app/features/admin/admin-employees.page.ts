@@ -13,7 +13,7 @@ import { TerminologyService } from '../../core/experience/terminology.service';
 import { OrgExperienceService } from '../../core/experience/org-experience.service';
 import { UsersRepo, OrgUser } from '../../core/repos/users.repo';
 import { ToastService } from '../../core/ui/toast.service';
-import { resolveJobRoleOptions } from '../../shared/utils/job-role-catalog.util';
+import { resolveJobRoleOptions, mergeCustomJobRoles } from '../../shared/utils/job-role-catalog.util';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'employees.roleLabelAdmin',
@@ -448,6 +448,7 @@ export class AdminEmployeesPage implements OnDestroy {
   orgId: string | null = null;
   currentUid: string | null = null;
   orgIndustry = 'Healthcare';
+  customJobRoles: string[] = [];
   users = signal<OrgUser[]>([]);
   loading = signal(true);
   search = '';
@@ -519,7 +520,7 @@ export class AdminEmployeesPage implements OnDestroy {
   }
 
   jobRoleOptions() {
-    return resolveJobRoleOptions(this.orgIndustry, this.orgExperience.config());
+    return mergeCustomJobRoles(resolveJobRoleOptions(this.orgIndustry, this.orgExperience.config()), this.customJobRoles);
   }
 
   openInviteDrawer() {
@@ -672,6 +673,8 @@ export class AdminEmployeesPage implements OnDestroy {
     try {
       const snap = await getDoc(doc(getFirestore(), 'orgs', orgId));
       const industry = String((snap.data() as any)?.industry || '').trim();
+      const customJobRoles = (snap.data() as any)?.customJobRoles;
+      this.customJobRoles = Array.isArray(customJobRoles) ? customJobRoles : [];
       if (industry) {
         this.orgIndustry = industry;
         this.inviteDraft.jobRole = this.jobRoleOptions()[0]?.value ?? this.inviteDraft.jobRole;

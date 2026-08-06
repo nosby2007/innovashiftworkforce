@@ -5,7 +5,7 @@ import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { AdminShiftsService } from '../../core/services/admin-shifts.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
-import { resolveJobRoleOptions } from '../../shared/utils/job-role-catalog.util';
+import { resolveJobRoleOptions, mergeCustomJobRoles } from '../../shared/utils/job-role-catalog.util';
 import { OrgExperienceService } from '../../core/experience/org-experience.service';
 
 import { MatIconModule } from '@angular/material/icon';
@@ -127,6 +127,7 @@ interface OrgSite {
 export class AdminShiftCreatePage {
   orgId: string | null = null;
   orgIndustry = 'Healthcare';
+  customJobRoles: string[] = [];
 
   title = '';
   locationId = '';
@@ -154,7 +155,7 @@ export class AdminShiftCreatePage {
   }
 
   jobRoleOptions() {
-    return resolveJobRoleOptions(this.orgIndustry, this.orgExperience.config());
+    return mergeCustomJobRoles(resolveJobRoleOptions(this.orgIndustry, this.orgExperience.config()), this.customJobRoles);
   }
 
   canSubmit() {
@@ -214,6 +215,8 @@ export class AdminShiftCreatePage {
       const snap = await getDoc(doc(getFirestore(), 'orgs', orgId));
       const industry = String((snap.data() as any)?.industry || '').trim();
       const sites = Array.isArray((snap.data() as any)?.sites) ? (snap.data() as any).sites : [];
+      const customJobRoles = (snap.data() as any)?.customJobRoles;
+      this.customJobRoles = Array.isArray(customJobRoles) ? customJobRoles : [];
       if (industry) {
         this.orgIndustry = industry;
         this.primaryRole = this.jobRoleOptions()[0]?.value ?? this.primaryRole;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getJobRoleOptions, resolveJobRoleOptions } from './job-role-catalog.util';
+import { getJobRoleOptions, resolveJobRoleOptions, mergeCustomJobRoles } from './job-role-catalog.util';
 import { OrganizationExperienceConfig } from '../models/experience-config.model';
 
 function baseSnapshot(recommendedJobRoles?: { value: string; label: string }[]): OrganizationExperienceConfig['snapshot'] {
@@ -64,5 +64,48 @@ describe('resolveJobRoleOptions', () => {
       snapshot: baseSnapshot(undefined),
     } as OrganizationExperienceConfig);
     expect(missingResult).toEqual(getJobRoleOptions('Healthcare'));
+  });
+});
+
+describe('mergeCustomJobRoles', () => {
+  const base = getJobRoleOptions('Retail'); // GENERIC_ROLES, ends with Other
+
+  it('returns base unchanged when customRoles is null, undefined, or empty', () => {
+    expect(mergeCustomJobRoles(base, null)).toEqual(base);
+    expect(mergeCustomJobRoles(base, undefined)).toEqual(base);
+    expect(mergeCustomJobRoles(base, [])).toEqual(base);
+  });
+
+  it('inserts custom roles before the trailing Other entry', () => {
+    const result = mergeCustomJobRoles(base, ['Barista']);
+    expect(result[result.length - 1]).toEqual({ value: 'Other', label: 'Other' });
+    expect(result.find((o) => o.value === 'Barista')).toEqual({ value: 'Barista', label: 'Barista' });
+    expect(result.length).toBe(base.length + 1);
+  });
+
+  it('appends at the end when base has no Other entry', () => {
+    const noOther = base.filter((o) => o.value !== 'Other');
+    const result = mergeCustomJobRoles(noOther, ['Barista']);
+    expect(result[result.length - 1]).toEqual({ value: 'Barista', label: 'Barista' });
+  });
+
+  it('dedupes case-insensitively against the base list', () => {
+    const result = mergeCustomJobRoles(base, ['manager', 'ADMIN']);
+    expect(result.length).toBe(base.length);
+  });
+
+  it('dedupes case-insensitively against itself', () => {
+    const result = mergeCustomJobRoles(base, ['Barista', 'barista', 'BARISTA']);
+    expect(result.filter((o) => o.value.toLowerCase() === 'barista').length).toBe(1);
+  });
+
+  it('drops blank entries and a literal "Other" (case-insensitive)', () => {
+    const result = mergeCustomJobRoles(base, ['', '   ', 'other', 'OTHER']);
+    expect(result).toEqual(base);
+  });
+
+  it('trims whitespace from custom role names', () => {
+    const result = mergeCustomJobRoles(base, ['  Barista  ']);
+    expect(result.find((o) => o.value === 'Barista')).toBeTruthy();
   });
 });
