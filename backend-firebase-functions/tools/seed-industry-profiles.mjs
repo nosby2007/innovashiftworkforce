@@ -128,6 +128,9 @@ const PROFILES = [
       },
       features: { recommendedPlanFeatures: [] },
       compliance: { regulatoryNotes: 'Recommended only — confirm background-check and safeguarding requirements with your compliance team.' },
+      // Instructors are typically salaried, not hourly — "hours worked" isn't
+      // the operational KPI school admins lead with; class-session coverage is.
+      dashboards: { widgetSetId: null, hiddenWidgetKeys: ['widgets.kpiLaborWorked'] },
       ai: { industryContextPrompt: 'You are the InnovaShift AI Copilot, an assistant embedded in a school/campus staffing app. Staff are instructors, work units are class sessions, and locations are campuses — use education-appropriate framing.' },
     },
   },
@@ -162,6 +165,9 @@ const PROFILES = [
       },
       features: { recommendedPlanFeatures: [] },
       compliance: { regulatoryNotes: 'Recommended only — confirm food-handler and alcohol-service certification requirements with your compliance team.' },
+      // High-turnover, part-time-heavy staffing — coverage and labor hours are
+      // the operational KPIs; raw headcount isn't a meaningful signal here.
+      dashboards: { widgetSetId: null, hiddenWidgetKeys: ['widgets.kpiTotalEmployees'] },
       ai: { industryContextPrompt: 'You are the InnovaShift AI Copilot, an assistant embedded in a restaurant staffing app. Staff are team members, and coverage often means opening/closing readiness and station coverage — use restaurant-appropriate framing.' },
     },
   },

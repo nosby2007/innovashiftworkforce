@@ -150,7 +150,9 @@ export const INDUSTRY_PROFILE_SEEDS: IndustryProfileSeed[] = [
       payroll: { notes: null },
       attendance: { geofenceStrictness: 'default' },
       navigation: { hiddenNavKeys: [] },
-      dashboards: { widgetSetId: null, hiddenWidgetKeys: [] },
+      // Instructors are typically salaried, not hourly — "hours worked" isn't
+      // the operational KPI school admins lead with; class-session coverage is.
+      dashboards: { widgetSetId: null, hiddenWidgetKeys: ['widgets.kpiLaborWorked'] },
       ai: { industryContextPrompt: 'You are the InnovaShift AI Copilot, an assistant embedded in a school/campus staffing app. Staff are instructors, work units are class sessions, and locations are campuses — use education-appropriate framing.' },
       features: { recommendedPlanFeatures: [] },
     },
@@ -193,7 +195,9 @@ export const INDUSTRY_PROFILE_SEEDS: IndustryProfileSeed[] = [
       payroll: { notes: null },
       attendance: { geofenceStrictness: 'default' },
       navigation: { hiddenNavKeys: [] },
-      dashboards: { widgetSetId: null, hiddenWidgetKeys: [] },
+      // High-turnover, part-time-heavy staffing — coverage and labor hours are
+      // the operational KPIs; raw headcount isn't a meaningful signal here.
+      dashboards: { widgetSetId: null, hiddenWidgetKeys: ['widgets.kpiTotalEmployees'] },
       ai: { industryContextPrompt: 'You are the InnovaShift AI Copilot, an assistant embedded in a restaurant staffing app. Staff are team members, and coverage often means opening/closing readiness and station coverage — use restaurant-appropriate framing.' },
       features: { recommendedPlanFeatures: [] },
     },
