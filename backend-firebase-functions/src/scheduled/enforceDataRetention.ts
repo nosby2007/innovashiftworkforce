@@ -138,6 +138,19 @@ async function purgeExpiredContactRateLocks(db: FirebaseFirestore.Firestore, now
   return snap.size;
 }
 
+async function purgeExpiredSandboxRateLocks(db: FirebaseFirestore.Firestore, nowMs: number): Promise<number> {
+  const snap = await db.collection('sandboxProvisionRateLocks')
+    .where('expiresAt', '<=', Timestamp.fromMillis(nowMs))
+    .limit(BATCH_LIMIT)
+    .get();
+  if (snap.empty) return 0;
+
+  const batch = db.batch();
+  snap.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+  return snap.size;
+}
+
 // ── Confirmed-only categories (org must opt in via a set *Years figure) ──
 
 async function writeRetentionAudit(orgId: string, action: string, category: string, years: number, count: number): Promise<void> {
@@ -319,17 +332,19 @@ export const enforceDataRetention = onSchedule(
     const bucket = admin.storage().bucket();
     const nowMs = Date.now();
 
-    const [bankInfoPurged, auditLogsPurged, errorLogsPurged, rateLocksPurged, confirmed] = await Promise.all([
+    const [bankInfoPurged, auditLogsPurged, errorLogsPurged, rateLocksPurged, sandboxRateLocksPurged, confirmed] = await Promise.all([
       purgeExpiredBankInfo(db, nowMs),
       purgeExpiredAuditLogs(db, nowMs),
       purgeExpiredClientErrorLogs(db, nowMs),
       purgeExpiredContactRateLocks(db, nowMs),
+      purgeExpiredSandboxRateLocks(db, nowMs),
       enforceConfirmedRetentionForOrgs(db, bucket, nowMs),
     ]);
 
     logger.info(
       `[enforceDataRetention] Unconditional: ${bankInfoPurged} bank info record(s), ${auditLogsPurged} audit log(s) past 6yr, ` +
-      `${errorLogsPurged} client error log(s) past 1yr, ${rateLocksPurged} expired contact rate lock(s). ` +
+      `${errorLogsPurged} client error log(s) past 1yr, ${rateLocksPurged} expired contact rate lock(s), ` +
+      `${sandboxRateLocksPurged} expired sandbox-provisioning rate lock(s). ` +
       `Confirmed-only: ${confirmed.timeEntries} time entries, ${confirmed.payrollRuns} payroll runs, ` +
       `${confirmed.accrualLedger} accrual ledger entries, ${confirmed.timeOffRequests} time-off requests, ` +
       `${confirmed.employeeDocuments} employee documents.`

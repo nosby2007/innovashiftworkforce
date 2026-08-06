@@ -48,6 +48,14 @@
   // ]
   "indexes": [
     {
+      "collectionGroup": "orgs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isDemo", "mode": "ASCENDING" },
+        { "fieldPath": "demoExpiresAt", "mode": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "shifts",
       "queryScope": "COLLECTION",
       "fields": [

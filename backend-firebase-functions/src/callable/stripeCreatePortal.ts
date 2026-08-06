@@ -31,6 +31,9 @@ export const stripeCreatePortal = onCall({ secrets: [stripeSecretKey] }, async (
   const orgSnap = await orgRef.get();
   const orgData = orgSnap.data();
 
+  if (orgData?.isDemo === true) {
+    throw new HttpsError('failed-precondition', 'Billing is not available for demo organizations. Sign up for a real account to upgrade.');
+  }
   if (!orgData?.stripeCustomerId) {
     throw new HttpsError('failed-precondition', 'Organization has no active billing customer. Please upgrade first.');
   }

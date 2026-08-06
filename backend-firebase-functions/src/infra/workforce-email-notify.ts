@@ -231,10 +231,27 @@ function emailHash(email: string): string {
  * a failed delivery can be retried up to MAX_DELIVERY_ATTEMPTS. The short lease
  * prevents concurrent trigger deliveries for the same event and recipient.
  */
+/** Sandbox ("try a live demo") orgs must never trigger a real email send —
+ *  this is checked at the single choke point every automatic workforce
+ *  email (shift assigned, time-entry clock-in/out, shift-swap requests)
+ *  routes through, so gating here covers all of them at once. */
+export function shouldSkipEmailForDemoOrg(orgData: Record<string, unknown> | undefined | null): boolean {
+  return orgData?.['isDemo'] === true;
+}
+
 export async function sendWorkforceEmail(
   request: WorkforceEmailDeliveryRequest,
 ): Promise<WorkforceEmailDeliveryResult> {
   const { db, orgId, eventKey, eventType, recipient } = request;
+
+  // retryable: false ensures the underlying shift/time-entry/swap write is
+  // never blocked or retried because of this skip.
+  const orgSnap = await db.collection('orgs').doc(orgId).get();
+  if (shouldSkipEmailForDemoOrg(orgSnap.data() as Record<string, unknown> | undefined)) {
+    logger.info('[workforceEmail] skipped — demo org', { orgId, eventType, recipientUid: recipient.uid });
+    return { claimed: false, sent: false, skipped: true, retryable: false, attemptCount: 0, reason: 'demo-org' };
+  }
+
   const ref = db.collection('orgs').doc(orgId).collection('notificationDeliveries')
     .doc(deliveryId(eventKey, recipient));
 

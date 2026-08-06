@@ -80,6 +80,8 @@ export class SessionBootstrapService {
             taxProfile:  fallback.taxProfile  ?? null,
             formerOrgId: fallback.formerOrgId ?? null,
             minRestHours: fallback.minRestHours ?? null,
+            isDemo: fallback.isDemo ?? false,
+            demoExpiresAtMs: fallback.demoExpiresAtMs ?? null,
           });
         } finally {
           if (first) {

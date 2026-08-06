@@ -19,6 +19,7 @@ export interface TenantContext {
   isAdminLike: boolean;   // admin | scheduler | manager | hr
   isAdminOrHr: boolean;   // admin | hr — payroll, PTO decisions, employee documents
   isSuperAdmin: boolean;
+  isDemo: boolean;        // "try a live demo" sandbox org — see callable/provisionSandboxOrg.ts
 }
 
 const ADMIN_LIKE: ReadonlySet<string> = new Set(['admin', 'scheduler', 'manager', 'hr']);
@@ -45,6 +46,7 @@ export function resolveTenant(req: any): TenantContext {
     isAdminLike: isSuperAdmin || (role != null && ADMIN_LIKE.has(role)),
     isAdminOrHr: isSuperAdmin || (role != null && ADMIN_OR_HR.has(role)),
     isSuperAdmin,
+    isDemo: claims.isDemo === true,
   };
 }
 
@@ -85,6 +87,7 @@ export async function resolveTenantWithFallback(req: any): Promise<TenantContext
     isAdminLike: isSuperAdmin || (role != null && ADMIN_LIKE.has(role)),
     isAdminOrHr: isSuperAdmin || (role != null && ADMIN_OR_HR.has(role)),
     isSuperAdmin,
+    isDemo: claims.isDemo === true,
   };
 }
 

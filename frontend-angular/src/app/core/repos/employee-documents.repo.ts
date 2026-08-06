@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { ConnectivityService } from '../connectivity/connectivity.service';
+import { OrgContextService } from '../tenancy/org-context.service';
 
 // The 7 built-in keys. An org can also define its own custom document
 // types (see document-type-catalog.util.ts's mergeCustomDocumentTypes), so
@@ -54,7 +55,7 @@ type UploadInput = {
 
 @Injectable({ providedIn: 'root' })
 export class EmployeeDocumentsRepo {
-  constructor(private zone: NgZone, private connectivity: ConnectivityService) {}
+  constructor(private zone: NgZone, private connectivity: ConnectivityService, private ctx: OrgContextService) {}
 
   watchForUser(orgId: string, userId: string, cb: (items: EmployeeDocumentRecord[]) => void) {
     const q = query(
@@ -84,6 +85,9 @@ export class EmployeeDocumentsRepo {
     // Storage uploads don't queue offline like Firestore writes do — fail
     // fast with a clear message instead of hanging or erroring obscurely.
     this.connectivity.assertOnline();
+    if (this.ctx.isDemo()) {
+      throw new Error('Document uploads are disabled in demo mode.');
+    }
     const docId = doc(collection(getFirestore(), `orgs/${input.orgId}/employeeDocuments`)).id;
     const safeName = this.safeFileName(input.file.name);
     const storagePath = `orgs/${input.orgId}/users/${input.userId}/documents/${docId}-${safeName}`;

@@ -43,7 +43,7 @@ const EMPTY_DEPENDENT: DependentDraft = {
               <span *ngIf="!draft.photoURL">{{ initials() }}</span>
             </div>
             <button class="prof-avatar-edit" type="button" (click)="avatarInput.click()"
-                    [disabled]="uploadingPhoto" [attr.aria-label]="'profile.changePhotoAria' | transloco">
+                    [disabled]="uploadingPhoto || ctx.isDemo()" [attr.aria-label]="'profile.changePhotoAria' | transloco">
               <mat-icon>{{ uploadingPhoto ? 'hourglass_empty' : 'photo_camera' }}</mat-icon>
             </button>
             <input #avatarInput type="file" accept="image/*" hidden (change)="onAvatarSelected($event)">
@@ -613,7 +613,7 @@ export class StaffProfilePage implements OnDestroy {
 
   constructor(
     private zone: NgZone,
-    private ctx: OrgContextService,
+    public ctx: OrgContextService,
     private toast: ToastService,
     private appLock: AppLockService,
     private connectivity: ConnectivityService,
@@ -879,6 +879,10 @@ export class StaffProfilePage implements OnDestroy {
     }
     if (file.size > 5 * 1024 * 1024) {
       this.toast.error(this.i18n.translate('profile.imageTooLarge'));
+      return;
+    }
+    if (this.ctx.isDemo()) {
+      this.toast.error('Photo uploads are disabled in demo mode.');
       return;
     }
     try {

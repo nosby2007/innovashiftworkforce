@@ -5,6 +5,7 @@ import {
   formatDurationMs,
   joinEmailLines,
   resolveEmailPreferences,
+  shouldSkipEmailForDemoOrg,
 } from './workforce-email-notify';
 
 describe('workforce email preferences', () => {
@@ -24,6 +25,19 @@ describe('workforce email preferences', () => {
     expect(preferences.callOutManagers).toBe(false);
     expect(preferences.clockInEmployee).toBe(true);
     expect(preferences.shiftSwapDecisions).toBe(true);
+  });
+});
+
+describe('shouldSkipEmailForDemoOrg', () => {
+  it('skips a sandbox ("try a live demo") org', () => {
+    expect(shouldSkipEmailForDemoOrg({ isDemo: true })).toBe(true);
+  });
+
+  it('does not skip a real org, with or without an explicit isDemo:false', () => {
+    expect(shouldSkipEmailForDemoOrg({ isDemo: false })).toBe(false);
+    expect(shouldSkipEmailForDemoOrg({})).toBe(false);
+    expect(shouldSkipEmailForDemoOrg(null)).toBe(false);
+    expect(shouldSkipEmailForDemoOrg(undefined)).toBe(false);
   });
 });
 
