@@ -146,6 +146,40 @@ aren't part of this deploy pipeline:
      `infra/stripe-plans.ts`.
   Enterprise stays custom pricing sold through the demo-request flow, not
   Stripe Checkout — its pricing card links to Contact Sales, same as today.
+- **"Try a live demo" sandbox org** (`provisionSandboxOrg`, the public,
+  unauthenticated callable behind the landing page's "Try the demo here"
+  button) — needs one manual IAM grant beyond a normal deploy. It's the
+  only place in this codebase that calls `admin.auth().createCustomToken()`;
+  since functions run under the Firebase-managed default runtime service
+  account (`atlanta-e04aa@appspot.gserviceaccount.com` — confirm the exact
+  identity on the function's **Details** tab in the [Cloud Functions
+  Console](https://console.cloud.google.com/functions/list?project=atlanta-e04aa),
+  since Google can change the default) with no local private key available,
+  signing a custom token requires calling the IAM `signBlob` API, which
+  needs the **Service Account Token Creator**
+  (`roles/iam.serviceAccountTokenCreator`) role granted **on that same
+  service account, to itself**. This is not granted by default and does
+  not come from any of the roles above. Without it, every
+  `provisionSandboxOrg` call fails late (after the Auth user + org/seed
+  Firestore writes already succeeded) with an `internal` error visible to
+  the client as a raw 500, and under any concurrent load the IAM API's
+  retry/backoff can push the whole call past the function's timeout,
+  surfacing as a 504 instead. Grant it once, from [IAM & Admin →
+  IAM](https://console.cloud.google.com/iam-admin/iam?project=atlanta-e04aa):
+  find `atlanta-e04aa@appspot.gserviceaccount.com` in the member list (or
+  add it if it isn't listed as a principal yet) → **Edit principal** → **Add
+  another role** → **Service Account Token Creator**. Equivalent one-liner:
+  ```bash
+  gcloud iam service-accounts add-iam-policy-binding \
+    atlanta-e04aa@appspot.gserviceaccount.com \
+    --member="serviceAccount:atlanta-e04aa@appspot.gserviceaccount.com" \
+    --role="roles/iam.serviceAccountTokenCreator" \
+    --project=atlanta-e04aa
+  ```
+  The function code now cleans up the partially-created Auth user and
+  returns a clean `internal` error on any failure (rather than leaking an
+  orphaned demo Auth account), but that's a symptom fix — this IAM grant is
+  what actually makes sandbox provisioning succeed.
 
 ## Android — deploy to testers (`android-distribute.yml`)
 
