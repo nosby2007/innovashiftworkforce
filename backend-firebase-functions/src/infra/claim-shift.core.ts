@@ -1,22 +1,8 @@
 import { HttpsError } from 'firebase-functions/v2/https';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { shiftRoleMatches } from '../domain/job-roles';
-import { dayBoundsMs } from '../domain/dates';
-
-const MAX_ASSIGNED_HOURS_PER_DAY = 16;
-
-function utcDayKeyFromMillis(ms: number): string {
-  const d = new Date(ms);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function durationHours(startMs: number, endMs: number): number {
-  if (!startMs || !endMs || endMs <= startMs) return 0;
-  return (endMs - startMs) / 3_600_000;
-}
+import { dayBoundsMs, toMillis } from '../domain/dates';
+import { checkShiftEligibility, computeFatigueWindowMs, resolveFatigueRules, ShiftSlice } from '../domain/shift-eligibility';
 
 /**
  * Transactionally assigns an open/published shift to a user. Shared by the
@@ -50,9 +36,10 @@ export async function claimShiftForUser(db: FirebaseFirestore.Firestore, orgId: 
       throw new HttpsError('failed-precondition', 'This shift has already ended and cannot be claimed.');
     }
 
-    const [orgUserSnap, rootUserSnap] = await Promise.all([
+    const [orgUserSnap, rootUserSnap, orgSnap] = await Promise.all([
       tx.get(db.collection('orgs').doc(orgId).collection('users').doc(uid)),
       tx.get(db.collection('users').doc(uid)),
+      tx.get(db.collection('orgs').doc(orgId)),
     ]);
     const orgUser = orgUserSnap.exists ? (orgUserSnap.data() as any) : null;
     const rootUser = rootUserSnap.exists ? (rootUserSnap.data() as any) : null;
@@ -88,37 +75,28 @@ export async function claimShiftForUser(db: FirebaseFirestore.Firestore, orgId: 
       }
     }
 
-    const targetDay = utcDayKeyFromMillis(startMs);
-    let targetDayHours = durationHours(startMs, endMs);
+    const rules = resolveFatigueRules(orgSnap.exists ? orgSnap.data() : null);
+    const { windowStartMs, windowEndMs } = computeFatigueWindowMs(startMs, rules);
 
     const myAssignedSnap = await tx.get(
       db.collection('orgs').doc(orgId).collection('shifts')
         .where('assignedUserId', '==', uid)
-        .limit(200)
+        .where('startAt', '>=', Timestamp.fromMillis(windowStartMs))
+        .where('startAt', '<', Timestamp.fromMillis(windowEndMs))
+        .limit(500)
     );
+    const otherShifts: ShiftSlice[] = myAssignedSnap.docs.map((doc) => {
+      const other: any = doc.data();
+      return { id: doc.id, startAtMs: toMillis(other.startAt), endAtMs: toMillis(other.endAt), status: String(other.status || '') };
+    });
 
-    for (const doc of myAssignedSnap.docs) {
-      if (doc.id === shiftId) continue;
-      const other = doc.data() as any;
-      if (['cancelled', 'completed', 'expired', 'no_show'].includes(other.status)) continue;
-
-      const otherStart = other.startAt?.toMillis ? other.startAt.toMillis() : Number(other.startAt || 0);
-      const otherEnd = other.endAt?.toMillis ? other.endAt.toMillis() : Number(other.endAt || 0);
-      if (!otherStart || !otherEnd || otherEnd <= otherStart) continue;
-
-      if (utcDayKeyFromMillis(otherStart) === targetDay) {
-        targetDayHours += durationHours(otherStart, otherEnd);
-      }
-
-      const overlaps = startMs < otherEnd && endMs > otherStart;
-      if (overlaps) {
-        throw new HttpsError('failed-precondition', 'Cannot request a shift that overlaps an already assigned shift.');
-      }
-    }
-
-    if (targetDayHours > MAX_ASSIGNED_HOURS_PER_DAY) {
-      throw new HttpsError('failed-precondition', `Cannot request more than ${MAX_ASSIGNED_HOURS_PER_DAY} scheduled hours in one day.`);
-    }
+    const violation = checkShiftEligibility({
+      targetShift: { id: shiftId, startAtMs: startMs, endAtMs: endMs },
+      otherShifts,
+      rules,
+      personLabel: 'You',
+    });
+    if (violation) throw new HttpsError('failed-precondition', violation.message);
 
     const auditEntry = {
       action: 'CLAIMED',

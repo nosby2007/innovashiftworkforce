@@ -8,6 +8,10 @@ import { Proposal, buildProposal } from '../domain/ai-proposals';
 import { sendPushToUids } from '../infra/push';
 import { deriveUnderstaffingTrend, UnderstaffingTrend } from '../domain/understaffing-trend';
 import { getAiIndustryContext } from '../infra/ai-industry-context';
+import { ASSIGNED_STATUSES, FatigueRules, DEFAULT_FATIGUE_RULES, resolveFatigueRules } from '../domain/shift-eligibility';
+
+export type { FatigueRules };
+export { DEFAULT_FATIGUE_RULES, resolveFatigueRules };
 
 const openaiApiKey = defineSecret('OPENAI_API_KEY');
 
@@ -23,33 +27,8 @@ const NOTIFY_BATCH_CHUNK_SIZE = 400;
 // Fatigue & Rest Rules (minRestHours/maxConsecutiveDays/
 // maxWeeklyScheduledHours on the orgs/{orgId} doc). Not a precise
 // regulatory citation for any specific state.
-const ASSIGNED_STATUSES = new Set(['assigned', 'claimed', 'in_progress', 'completed']);
 const COMPLIANCE_WINDOW_BACK_MS = 1 * 24 * 60 * 60 * 1000; // include yesterday, so a rest gap spanning midnight is still caught
 const COMPLIANCE_WINDOW_FWD_MS = 7 * 24 * 60 * 60 * 1000;
-
-export interface FatigueRules {
-  minRestHours: number;
-  maxConsecutiveDays: number;
-  maxWeeklyHours: number;
-}
-
-export const DEFAULT_FATIGUE_RULES: FatigueRules = {
-  minRestHours: 8,
-  maxConsecutiveDays: 6,
-  maxWeeklyHours: 60,
-};
-
-export function resolveFatigueRules(orgData: Record<string, unknown> | undefined | null): FatigueRules {
-  const pick = (value: unknown, fallback: number) => {
-    const n = Number(value);
-    return Number.isFinite(n) && n > 0 ? n : fallback;
-  };
-  return {
-    minRestHours: pick(orgData?.minRestHours, DEFAULT_FATIGUE_RULES.minRestHours),
-    maxConsecutiveDays: pick(orgData?.maxConsecutiveDays, DEFAULT_FATIGUE_RULES.maxConsecutiveDays),
-    maxWeeklyHours: pick(orgData?.maxWeeklyScheduledHours, DEFAULT_FATIGUE_RULES.maxWeeklyHours),
-  };
-}
 
 // Long-term understaffing forecast — reuses the aiDigests history that's
 // already stored (one doc per day that had gaps/alerts). Only computed

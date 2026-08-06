@@ -1347,7 +1347,12 @@ export class MarketplacePage implements OnDestroy {
   }
 
   matchFor(s: Shift) {
-    return scoreShiftMatch(s, this.myShifts(), this.ctx.jobRole());
+    return scoreShiftMatch(s, this.myShifts(), this.ctx.jobRole(), this.resolvedMinRestHours());
+  }
+
+  private resolvedMinRestHours(): number {
+    const n = Number(this.ctx.minRestHours());
+    return Number.isFinite(n) && n > 0 ? n : 8;
   }
 
   matchBadge(s: Shift): { label: string; icon: string; cls: string } | null {

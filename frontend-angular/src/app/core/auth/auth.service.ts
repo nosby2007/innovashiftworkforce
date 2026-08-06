@@ -21,6 +21,7 @@ export interface ResolvedOrgContext {
   payFrequency?: string;
   taxProfile?: string;
   formerOrgId?: string;
+  minRestHours?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -141,6 +142,7 @@ export class AuthService {
         payFrequency: org?.payFrequency || undefined,
         taxProfile: org?.taxProfile || undefined,
         formerOrgId: root?.formerOrgId || undefined,
+        minRestHours: Number.isFinite(Number(org?.minRestHours)) && Number(org?.minRestHours) > 0 ? Number(org.minRestHours) : undefined,
       };
     } catch {
       return {};

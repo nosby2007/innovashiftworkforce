@@ -19,6 +19,10 @@ export interface OrgContext {
   // kept so they can still reach their own historical payslips after their
   // live membership (orgId/accessRole) has been nulled out.
   formerOrgId?: string | null;
+  // Org's configured minimum rest hours between shifts (Fatigue & Rest
+  // Rules in Org Settings) — used to score "tight turnaround" shift
+  // matches against the org's real policy instead of a hardcoded default.
+  minRestHours?: number | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -38,6 +42,7 @@ export class OrgContextService {
   readonly payFrequency= signal<string | null>(null);
   readonly taxProfile  = signal<string | null>(null);
   readonly formerOrgId = signal<string | null>(null);
+  readonly minRestHours = signal<number | null>(null);
 
   setContext(ctx: OrgContext) {
     this.orgId.set(ctx.orgId);
@@ -55,6 +60,7 @@ export class OrgContextService {
     this.payFrequency.set(ctx.payFrequency ?? null);
     this.taxProfile.set(ctx.taxProfile ?? null);
     this.formerOrgId.set(ctx.formerOrgId ?? null);
+    this.minRestHours.set(ctx.minRestHours ?? null);
   }
 
   clear() {
@@ -62,6 +68,7 @@ export class OrgContextService {
       orgId: null, uid: null, accessRole: null, platformRole: null,
       displayName: null, email: null, photoURL: null, jobRole: null, plan: null, planStatus: null,
       countryCode: null, currencyCode: null, payFrequency: null, taxProfile: null, formerOrgId: null,
+      minRestHours: null,
     });
   }
 }
