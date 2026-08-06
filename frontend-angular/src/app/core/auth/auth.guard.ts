@@ -35,6 +35,8 @@ export const authGuard: CanActivateFn = async () => {
       payFrequency: fallback.payFrequency ?? null,
       taxProfile: fallback.taxProfile ?? null,
       formerOrgId: fallback.formerOrgId ?? null,
+      isDemo: fallback.isDemo ?? false,
+      demoExpiresAtMs: fallback.demoExpiresAtMs ?? null,
     });
   }
 

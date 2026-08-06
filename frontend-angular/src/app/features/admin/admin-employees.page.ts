@@ -45,7 +45,7 @@ const ROLE_BADGE: Record<string, string> = {
           </p>
         </div>
         <div class="vs-page-actions">
-          <button class="vs-btn-primary emp-btn" (click)="openInviteDrawer()">
+          <button class="vs-btn-primary emp-btn" (click)="openInviteDrawer()" [disabled]="ctx.isDemo()" [title]="ctx.isDemo() ? 'Inviting new users is disabled in demo mode.' : ''">
             <mat-icon>person_add</mat-icon> {{ 'employees.inviteEmployee' | transloco: { term: terminology.workforceMemberSingular() | lowercase } }}
           </button>
         </div>
@@ -502,7 +502,7 @@ export class AdminEmployeesPage implements OnDestroy {
     return list;
   });
 
-  constructor(private ctx: OrgContextService, public terminology: TerminologyService, private orgExperience: OrgExperienceService, private usersRepo: UsersRepo, private toast: ToastService, private router: Router) {
+  constructor(public ctx: OrgContextService, public terminology: TerminologyService, private orgExperience: OrgExperienceService, private usersRepo: UsersRepo, private toast: ToastService, private router: Router) {
     const orgId = this.ctx.orgId();
     this.currentUid = this.ctx.uid();
     this.orgId = orgId;

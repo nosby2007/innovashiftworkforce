@@ -48,6 +48,9 @@ export const stripeCreateCheckout = onCall({ secrets: [stripeSecretKey, stripePr
   if (!orgData) {
     throw new HttpsError('not-found', 'Organization not found.');
   }
+  if (orgData.isDemo === true) {
+    throw new HttpsError('failed-precondition', 'Billing is not available for demo organizations. Sign up for a real account to upgrade.');
+  }
 
   let customerId = orgData.stripeCustomerId;
 

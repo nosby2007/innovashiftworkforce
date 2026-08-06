@@ -42,6 +42,13 @@ export const sendMessage = onCall({ secrets: [sendgridApiKey] }, async (req) => 
     throw new HttpsError('invalid-argument', 'internetChannel must be email|sms.');
   }
 
+  if (internet) {
+    const callerOrgSnap = await db.collection('orgs').doc(ctx.orgId).get();
+    if ((callerOrgSnap.data() as any)?.isDemo === true) {
+      throw new HttpsError('failed-precondition', 'Sending real email/SMS is disabled in demo mode. In-app announcements still work.');
+    }
+  }
+
   if (targetType === 'platformAll' && !ctx.isSuperAdmin) {
     throw new HttpsError('permission-denied', 'Only super-admin can send platform-wide messages.');
   }

@@ -23,6 +23,12 @@ export interface OrgContext {
   // Rules in Org Settings) — used to score "tight turnaround" shift
   // matches against the org's real policy instead of a hardcoded default.
   minRestHours?: number | null;
+  // "Try a live demo" sandbox org (see callable/provisionSandboxOrg.ts) —
+  // isDemo drives the persistent SandboxBannerComponent and disables a
+  // handful of cost/abuse-sensitive actions (uploads, billing, invites).
+  // demoExpiresAtMs is when the org is torn down (epoch ms).
+  isDemo?: boolean;
+  demoExpiresAtMs?: number | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -43,6 +49,8 @@ export class OrgContextService {
   readonly taxProfile  = signal<string | null>(null);
   readonly formerOrgId = signal<string | null>(null);
   readonly minRestHours = signal<number | null>(null);
+  readonly isDemo = signal(false);
+  readonly demoExpiresAtMs = signal<number | null>(null);
 
   setContext(ctx: OrgContext) {
     this.orgId.set(ctx.orgId);
@@ -61,6 +69,8 @@ export class OrgContextService {
     this.taxProfile.set(ctx.taxProfile ?? null);
     this.formerOrgId.set(ctx.formerOrgId ?? null);
     this.minRestHours.set(ctx.minRestHours ?? null);
+    this.isDemo.set(ctx.isDemo ?? false);
+    this.demoExpiresAtMs.set(ctx.demoExpiresAtMs ?? null);
   }
 
   clear() {
@@ -68,7 +78,7 @@ export class OrgContextService {
       orgId: null, uid: null, accessRole: null, platformRole: null,
       displayName: null, email: null, photoURL: null, jobRole: null, plan: null, planStatus: null,
       countryCode: null, currencyCode: null, payFrequency: null, taxProfile: null, formerOrgId: null,
-      minRestHours: null,
+      minRestHours: null, isDemo: false, demoExpiresAtMs: null,
     });
   }
 }

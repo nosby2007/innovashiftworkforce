@@ -860,14 +860,14 @@ const PLAN_BADGE: Record<string, string> = {
               <div class="ors-plan-item vs-glass ors-plan-upgrade">
                 <div class="vs-stat-label">{{ 'orgSettings.changePlanLabel' | transloco }}</div>
                 <div class="ors-plan-choices">
-                  <button class="vs-btn-ghost ors-plan-choice-btn" type="button" (click)="upgradeToPlan('starter')" [disabled]="billingBusy() || settings().plan === 'starter'">
+                  <button class="vs-btn-ghost ors-plan-choice-btn" type="button" (click)="upgradeToPlan('starter')" [disabled]="billingBusy() || settings().plan === 'starter' || ctx.isDemo()">
                     <mat-icon>{{ billingBusy() ? 'hourglass_empty' : 'bolt' }}</mat-icon> {{ 'orgSettings.starterPlanBtn' | transloco }}
                   </button>
-                  <button class="vs-btn-primary ors-plan-choice-btn" type="button" (click)="upgradeToPlan('pro')" [disabled]="billingBusy() || settings().plan === 'pro'">
+                  <button class="vs-btn-primary ors-plan-choice-btn" type="button" (click)="upgradeToPlan('pro')" [disabled]="billingBusy() || settings().plan === 'pro' || ctx.isDemo()">
                     <mat-icon>{{ billingBusy() ? 'hourglass_empty' : 'workspace_premium' }}</mat-icon> {{ 'orgSettings.proPlanBtn' | transloco }}
                   </button>
                 </div>
-                <button class="vs-btn-ghost ors-upgrade-btn" type="button" (click)="manageBilling()" [disabled]="billingBusy() || !hasBillingCustomer()" *ngIf="hasBillingCustomer()">
+                <button class="vs-btn-ghost ors-upgrade-btn" type="button" (click)="manageBilling()" [disabled]="billingBusy() || !hasBillingCustomer() || ctx.isDemo()" *ngIf="hasBillingCustomer()">
                   <mat-icon>credit_card</mat-icon> {{ 'orgSettings.manageBillingBtn' | transloco }}
                 </button>
                 <span class="vs-muted" style="font-size:12px;">{{ 'orgSettings.needEnterprise' | transloco }} <a href="mailto:contact@innovacarereview.com">{{ 'orgSettings.contactSales' | transloco }}</a>.</span>
@@ -1254,7 +1254,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   private marker: Leaflet.Marker | null = null;
   private circle: Leaflet.Circle | null = null;
 
-  constructor(private ctx: OrgContextService, private toast: ToastService, private plans: PlanEntitlementsService, private experience: OrgExperienceService, private i18n: TranslocoService) {
+  constructor(public ctx: OrgContextService, private toast: ToastService, private plans: PlanEntitlementsService, private experience: OrgExperienceService, private i18n: TranslocoService) {
     this.orgId = this.ctx.orgId();
   }
 

@@ -8,6 +8,7 @@ import { resolveTenantWithFallback } from '../infra/tenancy';
 import { Proposal, buildProposal } from '../domain/ai-proposals';
 import { entryHours, grossPay, estimatedDeductions, estimatedNet } from '../domain/payroll-math';
 import { getAiIndustryContext } from '../infra/ai-industry-context';
+import { DEMO_AI_MESSAGE_CAP } from '../domain/sandbox-config';
 
 export const openaiApiKey = defineSecret('OPENAI_API_KEY');
 
@@ -360,6 +361,20 @@ export const aiAssistantChat = onCall({ secrets: [openaiApiKey] }, async (req) =
   const admin = initFirebase();
   const db = admin.firestore();
   const orgId = ctx.orgId;
+
+  if (ctx.isDemo) {
+    const orgRef = db.collection('orgs').doc(orgId);
+    const allowed = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(orgRef);
+      const count = Number((snap.data() as any)?.demoAiMessageCount || 0);
+      if (count >= DEMO_AI_MESSAGE_CAP) return false;
+      tx.update(orgRef, { demoAiMessageCount: count + 1 });
+      return true;
+    });
+    if (!allowed) {
+      throw new HttpsError('resource-exhausted', 'This demo has reached its AI assistant message limit. Sign up for unlimited use.');
+    }
+  }
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const industryContext = await getAiIndustryContext(db, orgId);

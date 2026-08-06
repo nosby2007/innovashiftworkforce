@@ -3,6 +3,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 import { combineLatest } from 'rxjs';
 import { SeoService } from '../../../core/seo/seo.service';
+import { SandboxCtaButtonComponent } from '../sandbox/sandbox-cta-button.component';
 
 // Cloudinary image assets
 const IMG = {
@@ -16,7 +17,7 @@ const IMG = {
 @Component({
   selector: 'app-landing',
   standalone: true,
-  imports: [RouterLink, TranslocoModule],
+  imports: [RouterLink, TranslocoModule, SandboxCtaButtonComponent],
   template: `
     <div class="land">
 
@@ -40,6 +41,7 @@ const IMG = {
             </p>
             <div class="hero__actions">
               <a routerLink="contact" class="btn-primary" id="hero-get-started">{{ 'landing.startFreeTrial' | transloco }}</a>
+              <app-sandbox-cta-button id="hero-try-sandbox"></app-sandbox-cta-button>
               <a routerLink="features" class="btn-ghost"  id="hero-features">{{ 'landing.seeFeatures' | transloco }}</a>
             </div>
             <div class="hero__trust">

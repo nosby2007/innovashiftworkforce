@@ -13,6 +13,14 @@ import { ASSIGNED_STATUSES, FatigueRules, DEFAULT_FATIGUE_RULES, resolveFatigueR
 export type { FatigueRules };
 export { DEFAULT_FATIGUE_RULES, resolveFatigueRules };
 
+/** Sandbox ("try a live demo") orgs must never be swept into this daily job
+ *  — it would incur real, unmetered OpenAI cost and a real push
+ *  notification every day, with zero user interaction, until the org is
+ *  cleaned up (see scheduled/cleanupExpiredSandboxOrgs.ts). */
+export function shouldSkipOrgForDigest(orgData: Record<string, unknown> | undefined | null): boolean {
+  return orgData?.['isDemo'] === true;
+}
+
 const openaiApiKey = defineSecret('OPENAI_API_KEY');
 
 // Keep in sync with the MODEL constant in callable/aiAssistantChat.ts.
@@ -454,6 +462,7 @@ export const dailyDigest = onSchedule(
     for (const orgDoc of orgsSnap.docs) {
       try {
         const orgData = orgDoc.data() as Record<string, unknown>;
+        if (shouldSkipOrgForDigest(orgData)) continue;
         const orgName = String(orgData?.name || orgDoc.id);
         const rules = resolveFatigueRules(orgData);
         await generateDigestForOrg(db, orgDoc.id, orgName, client, nowMs, rules);

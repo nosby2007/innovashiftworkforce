@@ -45,6 +45,9 @@ export const adminInviteUser = onCall({ secrets: [sendgridApiKey] }, async (req)
 
   const orgSnap = await db.collection('orgs').doc(callerOrg).get();
   const orgIndustry = String((orgSnap.data() as any)?.industry || '').trim();
+  if ((orgSnap.data() as any)?.isDemo === true) {
+    throw new HttpsError('failed-precondition', 'Inviting new users is disabled in demo mode.');
+  }
 
   let userRecord;
   let isNewUser = false;

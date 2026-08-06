@@ -20,6 +20,7 @@ import { lookupUserByEmail } from './callable/lookupUserByEmail';
 import { listPlatformOrgs } from './callable/listPlatformOrgs';
 import { updatePlatformOrg } from './callable/updatePlatformOrg';
 import { createOrg } from './callable/createOrg';
+import { provisionSandboxOrg } from './callable/provisionSandboxOrg';
 import { claimShift } from './callable/claimShift';
 import { listShiftSwapCandidates, listShiftSwapRequests, requestShiftSwap, respondShiftSwap } from './callable/shiftSwap';
 import { checkIn, checkOut, breakOut, breakIn } from './callable/checkInOut';
@@ -51,6 +52,7 @@ import { aiAssistantChat } from './callable/aiAssistantChat';
 import { dailyDigest } from './scheduled/dailyDigest';
 import { cleanupArchivedNotifications } from './scheduled/cleanupArchivedNotifications';
 import { enforceDataRetention } from './scheduled/enforceDataRetention';
+import { cleanupExpiredSandboxOrgs } from './scheduled/cleanupExpiredSandboxOrgs';
 import { superAdminCreateUsers } from './callable/superAdminCreateUsers';
 import { listContactRequests } from './callable/listContactRequests';
 import { updateContactRequestStatus } from './callable/updateContactRequestStatus';
@@ -71,6 +73,7 @@ export {
   listPlatformOrgs,
   updatePlatformOrg,
   createOrg,
+  provisionSandboxOrg,
   claimShift,
   listShiftSwapCandidates,
   listShiftSwapRequests,
@@ -121,6 +124,7 @@ export {
   dailyDigest,
   cleanupArchivedNotifications,
   enforceDataRetention,
+  cleanupExpiredSandboxOrgs,
   superAdminCreateUsers,
   listContactRequests,
   updateContactRequestStatus,
