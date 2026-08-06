@@ -29,36 +29,37 @@ import { StatCardComponent } from '../../shared/ui/stat-card/stat-card.component
 import { TerminologyService } from '../../core/experience/terminology.service';
 import { OrgExperienceService } from '../../core/experience/org-experience.service';
 import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, TablePaginatorComponent, StatCardComponent],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, TablePaginatorComponent, StatCardComponent, TranslocoModule],
   template: `
     <div class="vs-page-pad admin-brand-page">
 
       <!-- Page Header -->
       <div class="admin-brand-hero">
         <div>
-          <div class="admin-brand-kicker">Staff Operations Center</div>
-          <h1>Admin Dashboard</h1>
-          <p *ngIf="orgId">Coordinate schedules, requests, timecards, and staff messages for your organization.</p>
-          <p *ngIf="!orgId">Missing organization context. Contact a Super Admin to provision your account.</p>
+          <div class="admin-brand-kicker">{{ 'adminDashboard.kicker' | transloco }}</div>
+          <h1>{{ 'adminDashboard.title' | transloco }}</h1>
+          <p *ngIf="orgId">{{ 'adminDashboard.subtitle' | transloco }}</p>
+          <p *ngIf="!orgId">{{ 'adminDashboard.missingOrgContextSubtitle' | transloco }}</p>
         </div>
         <div class="admin-brand-actions">
           <a routerLink="/admin/employees" class="ad-hero-btn">
             <mat-icon>people</mat-icon> {{ terminology.workforceMemberPlural() }}
           </a>
           <a routerLink="/admin/readiness" class="ad-hero-btn">
-            <mat-icon>health_and_safety</mat-icon> Readiness
+            <mat-icon>health_and_safety</mat-icon> {{ 'adminDashboard.readiness' | transloco }}
           </a>
           <a routerLink="/admin/documents" class="ad-hero-btn">
-            <mat-icon>folder_shared</mat-icon> Documents
+            <mat-icon>folder_shared</mat-icon> {{ 'adminDashboard.documents' | transloco }}
           </a>
           <a routerLink="/admin/timesheets" class="ad-hero-btn">
-            <mat-icon>receipt_long</mat-icon> Timesheets
+            <mat-icon>receipt_long</mat-icon> {{ 'adminDashboard.timesheets' | transloco }}
           </a>
           <a routerLink="/admin/scheduler" class="ad-hero-btn ad-hero-btn--primary">
-            <mat-icon>calendar_month</mat-icon> Scheduler
+            <mat-icon>calendar_month</mat-icon> {{ 'adminDashboard.scheduler' | transloco }}
           </a>
         </div>
       </div>
@@ -67,44 +68,44 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
       <div *ngIf="!orgId" class="ad-no-org vs-glass">
         <mat-icon>warning_amber</mat-icon>
         <div>
-          <strong>Missing organization context.</strong>
-          <p>Your account has no organization assigned. Contact a Super Admin to provision your account.</p>
+          <strong>{{ 'adminDashboard.missingOrgContextTitle' | transloco }}</strong>
+          <p>{{ 'adminDashboard.missingOrgContextBody' | transloco }}</p>
         </div>
       </div>
 
       <!-- KPI Cards -->
       <div *ngIf="orgId" class="vs-grid-3 ad-kpis">
         <app-stat-card variant="primary" icon="event_available"
-          label="Open / Published" [value]="metrics()?.openCount ?? 0"
-          [sub]="terminology.workUnitPlural() + ' available to fill'">
+          [label]="'adminDashboard.kpiOpenPublished' | transloco" [value]="metrics()?.openCount ?? 0"
+          [sub]="'adminDashboard.kpiOpenPublishedSub' | transloco: { term: terminology.workUnitPlural() }">
         </app-stat-card>
         <app-stat-card variant="success" icon="how_to_reg"
-          label="Assigned" [value]="metrics()?.assignedCount ?? 0"
-          [sub]="terminology.workUnitPlural() + ' with confirmed staff'">
+          [label]="'adminDashboard.kpiAssigned' | transloco" [value]="metrics()?.assignedCount ?? 0"
+          [sub]="'adminDashboard.kpiAssignedSub' | transloco: { term: terminology.workUnitPlural() }">
         </app-stat-card>
         <app-stat-card variant="warning" icon="schedule"
-          label="Open Next 7 Days" [value]="metrics()?.upcoming7dOpenCount ?? 0"
-          sub="Require immediate action">
+          [label]="'adminDashboard.kpiOpenNext7Days' | transloco" [value]="metrics()?.upcoming7dOpenCount ?? 0"
+          [sub]="'adminDashboard.kpiOpenNext7DaysSub' | transloco">
         </app-stat-card>
       </div>
 
       <!-- Workforce KPI Cards -->
       <div *ngIf="orgId" class="vs-grid-4 ad-kpis">
         <app-stat-card variant="primary" icon="groups"
-          [label]="'Total ' + terminology.workforceMemberPlural()" [value]="totalEmployeesCount()"
-          sub="Active headcount">
+          [label]="'adminDashboard.kpiTotalEmployees' | transloco: { term: terminology.workforceMemberPlural() }" [value]="totalEmployeesCount()"
+          [sub]="'adminDashboard.kpiTotalEmployeesSub' | transloco">
         </app-stat-card>
         <app-stat-card variant="success" icon="bolt"
-          [label]="'Active ' + terminology.workUnitPlural()" [value]="weeklyActiveShiftsCount()"
-          [sub]="'Live or needing coverage, ' + weekLabel">
+          [label]="'adminDashboard.kpiActiveShifts' | transloco: { term: terminology.workUnitPlural() }" [value]="weeklyActiveShiftsCount()"
+          [sub]="'adminDashboard.kpiActiveShiftsSub' | transloco: { week: weekLabel }">
         </app-stat-card>
         <app-stat-card variant="warning" icon="verified"
-          label="Coverage Rate" [value]="coverageRatePct() !== null ? coverageRatePct() + '%' : '—'"
-          [sub]="'Assigned vs. all open ' + terminology.workUnitPlural()">
+          [label]="'adminDashboard.kpiCoverageRate' | transloco" [value]="coverageRatePct() !== null ? coverageRatePct() + '%' : '—'"
+          [sub]="'adminDashboard.kpiCoverageRateSub' | transloco: { term: terminology.workUnitPlural() }">
         </app-stat-card>
         <app-stat-card variant="primary" icon="timelapse"
-          label="Labor Worked" [value]="(weeklyLaborHours() | number:'1.0-1') + 'h'"
-          [sub]="'Clocked hours, ' + weekLabel">
+          [label]="'adminDashboard.kpiLaborWorked' | transloco" [value]="(weeklyLaborHours() | number:'1.0-1') + 'h'"
+          [sub]="'adminDashboard.kpiLaborWorkedSub' | transloco: { week: weekLabel }">
         </app-stat-card>
       </div>
 
@@ -112,38 +113,38 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
         <article class="ad-workforce-card" [class.is-warn]="incompleteProfileCount() > 0">
           <mat-icon>manage_accounts</mat-icon>
           <div>
-            <span>Profile Readiness</span>
+            <span>{{ 'adminDashboard.profileReadiness' | transloco }}</span>
             <strong>{{ profileReadyPercent() }}%</strong>
-            <small>{{ incompleteProfileCount() }} employee profile(s) need attention</small>
+            <small>{{ 'adminDashboard.profileReadinessSub' | transloco: { count: incompleteProfileCount(), term: terminology.workforceMemberSingular() | lowercase } }}</small>
           </div>
-          <a routerLink="/admin/employees">Review</a>
+          <a routerLink="/admin/employees">{{ 'adminDashboard.review' | transloco }}</a>
         </article>
         <article class="ad-workforce-card" [class.is-warn]="missingPayrollSetupCount() > 0">
           <mat-icon>payments</mat-icon>
           <div>
-            <span>Payroll Setup</span>
+            <span>{{ 'adminDashboard.payrollSetup' | transloco }}</span>
             <strong>{{ missingPayrollSetupCount() }}</strong>
-            <small>missing pay rate, tax, or W-2 readiness</small>
+            <small>{{ 'adminDashboard.payrollSetupSub' | transloco }}</small>
           </div>
-          <a routerLink="/admin/payroll">Open</a>
+          <a routerLink="/admin/payroll">{{ 'adminDashboard.open' | transloco }}</a>
         </article>
         <article class="ad-workforce-card" [class.is-warn]="pendingPtoCount() > 0">
           <mat-icon>event_available</mat-icon>
           <div>
-            <span>PTO Queue</span>
+            <span>{{ 'adminDashboard.ptoQueue' | transloco }}</span>
             <strong>{{ pendingPtoCount() }}</strong>
-            <small>{{ approvedPtoCount() }} approved request(s) feed payroll</small>
+            <small>{{ 'adminDashboard.ptoQueueSub' | transloco: { count: approvedPtoCount() } }}</small>
           </div>
-          <a routerLink="/admin/pto">Manage</a>
+          <a routerLink="/admin/pto">{{ 'adminDashboard.manage' | transloco }}</a>
         </article>
         <article class="ad-workforce-card" [class.is-warn]="totalExceptionsForCenter() > 0">
           <mat-icon>fact_check</mat-icon>
           <div>
-            <span>Operational Risk</span>
+            <span>{{ 'adminDashboard.operationalRisk' | transloco }}</span>
             <strong>{{ totalExceptionsForCenter() }}</strong>
-            <small>timecard, shift switch, and open shift actions</small>
+            <small>{{ 'adminDashboard.operationalRiskSub' | transloco: { term: terminology.workUnitSingular() | lowercase, termPlural: terminology.workUnitPlural() | lowercase } }}</small>
           </div>
-          <a routerLink="/admin/timesheets">Resolve</a>
+          <a routerLink="/admin/timesheets">{{ 'adminDashboard.resolve' | transloco }}</a>
         </article>
       </section>
 
@@ -151,15 +152,15 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
       <div *ngIf="orgId" class="ad-quick-links">
         <a routerLink="/admin/shifts/new" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.createShift')">
           <div class="ad-ql-icon"><mat-icon>add_circle</mat-icon></div>
-          <div class="ad-ql-label">Create {{ terminology.workUnitSingular() }}</div>
+          <div class="ad-ql-label">{{ 'adminDashboard.quickLinkCreateShift' | transloco: { term: terminology.workUnitSingular() } }}</div>
         </a>
         <a routerLink="/admin/scheduler" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.scheduler')">
           <div class="ad-ql-icon"><mat-icon>calendar_month</mat-icon></div>
-          <div class="ad-ql-label">Scheduler</div>
+          <div class="ad-ql-label">{{ 'adminDashboard.scheduler' | transloco }}</div>
         </a>
         <a routerLink="/app/marketplace" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.marketplace')">
           <div class="ad-ql-icon"><mat-icon>storefront</mat-icon></div>
-          <div class="ad-ql-label">Marketplace</div>
+          <div class="ad-ql-label">{{ 'adminDashboard.marketplace' | transloco }}</div>
         </a>
         <a routerLink="/admin/employees" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.employees')">
           <div class="ad-ql-icon"><mat-icon>people</mat-icon></div>
@@ -167,19 +168,19 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
         </a>
         <a routerLink="/admin/timesheets" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.timesheets')">
           <div class="ad-ql-icon"><mat-icon>receipt_long</mat-icon></div>
-          <div class="ad-ql-label">Timesheets</div>
+          <div class="ad-ql-label">{{ 'adminDashboard.timesheets' | transloco }}</div>
         </a>
         <a routerLink="/admin/payroll" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.payroll')">
           <div class="ad-ql-icon"><mat-icon>payments</mat-icon></div>
-          <div class="ad-ql-label">Payroll</div>
+          <div class="ad-ql-label">{{ 'adminDashboard.payroll' | transloco }}</div>
         </a>
         <a routerLink="/admin/audit" class="ad-ql-card vs-glass" *ngIf="canViewAudit() && !isHidden('quickLinks.auditLog')">
           <div class="ad-ql-icon"><mat-icon>history</mat-icon></div>
-          <div class="ad-ql-label">Audit Log</div>
+          <div class="ad-ql-label">{{ 'adminDashboard.auditLog' | transloco }}</div>
         </a>
         <a routerLink="/admin/org-settings" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.orgSettings')">
           <div class="ad-ql-icon"><mat-icon>business</mat-icon></div>
-          <div class="ad-ql-label">Org Settings</div>
+          <div class="ad-ql-label">{{ 'adminDashboard.orgSettings' | transloco }}</div>
         </a>
       </div>
 
@@ -187,30 +188,30 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
         <article class="ad-command-card ad-command-card--primary">
           <div class="ad-command-icon"><mat-icon>campaign</mat-icon></div>
           <div>
-            <h2>Communicate with staff</h2>
-            <p>Broadcast schedule updates, policy reminders, open shift alerts, or direct staff messages.</p>
-            <a href="#ad-communication-center">Open communication center</a>
+            <h2>{{ 'adminDashboard.communicateTitle' | transloco }}</h2>
+            <p>{{ 'adminDashboard.communicateBody' | transloco: { term: terminology.workUnitSingular() | lowercase } }}</p>
+            <a href="#ad-communication-center">{{ 'adminDashboard.openCommunicationCenter' | transloco }}</a>
           </div>
         </article>
         <article class="ad-command-card">
           <div class="ad-command-icon"><mat-icon>fact_check</mat-icon></div>
           <div>
-            <h2>Review employee requests</h2>
-            <p>{{ actionQueueCount() }} item(s) need admin action across shift switches and timecard corrections.</p>
+            <h2>{{ 'adminDashboard.reviewRequestsTitle' | transloco: { term: terminology.workforceMemberPlural() | lowercase } }}</h2>
+            <p>{{ 'adminDashboard.reviewRequestsBody' | transloco: { count: actionQueueCount(), term: terminology.workUnitSingular() | lowercase } }}</p>
             <div class="ad-command-pills">
-              <span>{{ swapRequests().length }} shift switch</span>
-              <span>{{ pending().length }} timecard</span>
+              <span>{{ 'adminDashboard.pillShiftSwitch' | transloco: { count: swapRequests().length, term: terminology.workUnitSingular() | lowercase } }}</span>
+              <span>{{ 'adminDashboard.pillTimecard' | transloco: { count: pending().length } }}</span>
             </div>
           </div>
         </article>
         <article class="ad-command-card">
           <div class="ad-command-icon"><mat-icon>groups</mat-icon></div>
           <div>
-            <h2>Staff coverage</h2>
-            <p>{{ coverageRate() }}% assigned coverage from current open and assigned shift counts.</p>
+            <h2>{{ 'adminDashboard.staffCoverageTitle' | transloco }}</h2>
+            <p>{{ 'adminDashboard.staffCoverageBody' | transloco: { pct: coverageRate(), term: terminology.workUnitPlural() | lowercase } }}</p>
             <div class="ad-command-pills">
-              <span>{{ metrics()?.assignedCount ?? 0 }} assigned</span>
-              <span>{{ metrics()?.openCount ?? 0 }} open</span>
+              <span>{{ 'adminDashboard.pillAssigned' | transloco: { count: metrics()?.assignedCount ?? 0 } }}</span>
+              <span>{{ 'adminDashboard.pillOpen' | transloco: { count: metrics()?.openCount ?? 0 } }}</span>
             </div>
           </div>
         </article>
@@ -220,8 +221,8 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
       <section *ngIf="orgId" class="vs-glass-strong ad-section">
         <div class="vs-panel-head">
           <div>
-            <div class="vs-panel-title">{{ terminology.workUnitSingular() }} Lifecycle Overview</div>
-            <div class="vs-panel-subtitle">This week — {{ weekLabel }}</div>
+            <div class="vs-panel-title">{{ 'adminDashboard.lifecycleOverview' | transloco: { term: terminology.workUnitSingular() } }}</div>
+            <div class="vs-panel-subtitle">{{ 'adminDashboard.thisWeek' | transloco: { week: weekLabel } }}</div>
           </div>
         </div>
         <div class="ad-lifecycle-tabs">
@@ -230,7 +231,7 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
                   [class.ad-lc-tab--active]="lifecycleTab === tab.key"
                   (click)="selectLifecycleTab(tab.key)">
             <mat-icon>{{ tab.icon }}</mat-icon>
-            <span>{{ tab.label }}</span>
+            <span>{{ tab.labelKey | transloco }}</span>
             <span class="ad-lc-count" *ngIf="lifecycleTab === tab.key">{{ lifecycleShifts().length }}</span>
           </button>
         </div>
@@ -238,7 +239,7 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
           <input
             type="search"
             class="ad-table-search"
-            placeholder="Search title, location, or assignee…"
+            [placeholder]="'adminDashboard.searchLifecyclePlaceholder' | transloco"
             [value]="lifecycleCtrl.filterText()"
             (input)="lifecycleCtrl.setFilter($any($event.target).value)">
         </div>
@@ -246,17 +247,17 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
           <table class="vs-table ad-table">
             <thead>
               <tr>
-                <th class="ad-th-sort" (click)="lifecycleCtrl.toggleSort('title')">Title {{ lifecycleCtrl.sortIndicator('title') }}</th>
-                <th class="ad-th-sort" (click)="lifecycleCtrl.toggleSort('start')">Date {{ lifecycleCtrl.sortIndicator('start') }}</th>
-                <th>Time</th>
-                <th>Location</th>
-                <th>Assigned To</th>
-                <th>Status</th>
+                <th class="ad-th-sort" (click)="lifecycleCtrl.toggleSort('title')">{{ 'adminDashboard.colTitle' | transloco }} {{ lifecycleCtrl.sortIndicator('title') }}</th>
+                <th class="ad-th-sort" (click)="lifecycleCtrl.toggleSort('start')">{{ 'adminDashboard.colDate' | transloco }} {{ lifecycleCtrl.sortIndicator('start') }}</th>
+                <th>{{ 'adminDashboard.colTime' | transloco }}</th>
+                <th>{{ 'adminDashboard.colLocation' | transloco }}</th>
+                <th>{{ 'adminDashboard.colAssignedTo' | transloco }}</th>
+                <th>{{ 'adminDashboard.colStatus' | transloco }}</th>
               </tr>
             </thead>
             <tbody>
               <tr class="vs-empty" *ngIf="lifecycleCtrl.pageRows().length === 0">
-                <td colspan="6">No shifts with status "{{ lifecycleTab }}" this week.</td>
+                <td colspan="6">{{ 'adminDashboard.noShiftsForStatus' | transloco: { term: terminology.workUnitPlural(), status: lifecycleTab } }}</td>
               </tr>
               <tr *ngFor="let s of lifecycleCtrl.pageRows()" class="vs-row">
                 <td><strong>{{ s.title }}</strong></td>
@@ -284,34 +285,34 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
       <section *ngIf="orgId" class="vs-glass-strong ad-section">
         <div class="vs-panel-head">
           <div>
-            <div class="vs-panel-title">{{ terminology.workUnitSingular() }} Switch Requests</div>
-            <div class="vs-panel-subtitle">Manager review for shift covers and trades</div>
+            <div class="vs-panel-title">{{ 'adminDashboard.switchRequests' | transloco: { term: terminology.workUnitSingular() } }}</div>
+            <div class="vs-panel-subtitle">{{ 'adminDashboard.switchRequestsSub' | transloco: { term: terminology.workUnitSingular() | lowercase } }}</div>
           </div>
           <div class="ad-actions-cell">
             <span class="vs-badge" [class.vs-badge--warning]="swapRequests().length > 0" [class.vs-badge--neutral]="swapRequests().length === 0">
-              {{ swapRequests().length }} pending
+              {{ 'adminDashboard.pending' | transloco: { count: swapRequests().length } }}
             </span>
             <button class="vs-btn-ghost ad-action-btn" (click)="refreshSwapRequests()" [disabled]="swapListBusy">
-              <mat-icon>sync</mat-icon> {{ swapListBusy ? 'Loading' : 'Refresh' }}
+              <mat-icon>sync</mat-icon> {{ (swapListBusy ? 'adminDashboard.loading' : 'adminDashboard.refresh') | transloco }}
             </button>
           </div>
         </div>
 
         <div *ngIf="swapRequests().length === 0" class="ad-empty">
           <mat-icon>check_circle</mat-icon>
-          <span>No pending shift switch requests.</span>
+          <span>{{ 'adminDashboard.noPendingSwitchRequests' | transloco: { term: terminology.workUnitSingular() | lowercase } }}</span>
         </div>
 
         <div *ngIf="swapRequests().length > 0" class="vs-table-shell">
           <table class="vs-table ad-table">
             <thead>
               <tr>
-                <th>Type</th>
-                <th class="ad-th-sort" (click)="swapCtrl.toggleSort('shift')">Source {{ terminology.workUnitSingular() }} {{ swapCtrl.sortIndicator('shift') }}</th>
-                <th>Requester</th>
-                <th>Target</th>
-                <th class="ad-th-sort" (click)="swapCtrl.toggleSort('requested')">Requested {{ swapCtrl.sortIndicator('requested') }}</th>
-                <th style="text-align:right">Actions</th>
+                <th>{{ 'adminDashboard.colType' | transloco }}</th>
+                <th class="ad-th-sort" (click)="swapCtrl.toggleSort('shift')">{{ 'adminDashboard.colSourceShift' | transloco: { term: terminology.workUnitSingular() } }} {{ swapCtrl.sortIndicator('shift') }}</th>
+                <th>{{ 'adminDashboard.colRequester' | transloco }}</th>
+                <th>{{ 'adminDashboard.colTarget' | transloco }}</th>
+                <th class="ad-th-sort" (click)="swapCtrl.toggleSort('requested')">{{ 'adminDashboard.colRequested' | transloco }} {{ swapCtrl.sortIndicator('requested') }}</th>
+                <th style="text-align:right">{{ 'adminDashboard.colActions' | transloco }}</th>
               </tr>
             </thead>
             <tbody>
@@ -325,28 +326,28 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
                   <strong>{{ r.shiftTitle }}</strong>
                   <div class="vs-muted">{{ fmtMsRange(r.sourceStartAtMs, r.sourceEndAtMs) }}</div>
                   <div class="vs-muted" *ngIf="r.targetShiftTitle">
-                    Trade for {{ r.targetShiftTitle }} - {{ fmtMsRange(r.targetStartAtMs, r.targetEndAtMs) }}
+                    {{ 'adminDashboard.tradeFor' | transloco: { title: r.targetShiftTitle, range: fmtMsRange(r.targetStartAtMs, r.targetEndAtMs) } }}
                   </div>
                 </td>
-                <td>{{ r.requesterName || 'Staff member' }}</td>
-                <td>{{ r.targetName || 'Staff member' }}</td>
+                <td>{{ r.requesterName || ('adminDashboard.staffMemberFallback' | transloco) }}</td>
+                <td>{{ r.targetName || ('adminDashboard.staffMemberFallback' | transloco) }}</td>
                 <td>{{ fmtMs(r.createdAtMs) }}</td>
                 <td style="text-align:right">
                   <div class="ad-actions-cell">
                     <button class="vs-btn-ghost ad-action-btn ad-action-btn--approve"
                             (click)="decideSwap(r, 'accept')"
                             [disabled]="swapBusyId === r.requestId">
-                      <mat-icon>check</mat-icon> Approve
+                      <mat-icon>check</mat-icon> {{ 'adminDashboard.approve' | transloco }}
                     </button>
                     <button class="vs-btn-ghost ad-action-btn ad-action-btn--reject"
                             (click)="decideSwap(r, 'reject')"
                             [disabled]="swapBusyId === r.requestId">
-                      <mat-icon>close</mat-icon> Decline
+                      <mat-icon>close</mat-icon> {{ 'adminDashboard.decline' | transloco }}
                     </button>
                     <button class="vs-btn-ghost ad-action-btn"
                             (click)="decideSwap(r, 'cancel')"
                             [disabled]="swapBusyId === r.requestId">
-                      <mat-icon>block</mat-icon> Cancel
+                      <mat-icon>block</mat-icon> {{ 'adminDashboard.cancel' | transloco }}
                     </button>
                   </div>
                 </td>
@@ -361,17 +362,17 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
       <section *ngIf="orgId" class="vs-glass-strong ad-section">
         <div class="vs-panel-head">
           <div>
-            <div class="vs-panel-title">Pending Time Corrections</div>
-            <div class="vs-panel-subtitle">Approve or reject employee clock-in/out corrections</div>
+            <div class="vs-panel-title">{{ 'adminDashboard.pendingTimeCorrections' | transloco }}</div>
+            <div class="vs-panel-subtitle">{{ 'adminDashboard.pendingTimeCorrectionsSub' | transloco: { term: terminology.workforceMemberSingular() | lowercase } }}</div>
           </div>
           <span class="vs-badge" [class.vs-badge--warning]="pending().length > 0" [class.vs-badge--neutral]="pending().length === 0">
-            {{ pending().length }} pending
+            {{ 'adminDashboard.pending' | transloco: { count: pending().length } }}
           </span>
         </div>
 
         <div *ngIf="pending().length === 0" class="ad-empty">
           <mat-icon>check_circle</mat-icon>
-          <span>No pending approvals. All caught up!</span>
+          <span>{{ 'adminDashboard.noPendingApprovals' | transloco }}</span>
         </div>
 
         <div *ngIf="pending().length > 0" class="vs-table-shell">
@@ -380,9 +381,9 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
               <tr>
                 <th>{{ terminology.workforceMemberSingular() }}</th>
                 <th>{{ terminology.workUnitSingular() }}</th>
-                <th class="ad-th-sort" (click)="pendingCtrl.toggleSort('checkIn')">Check In {{ pendingCtrl.sortIndicator('checkIn') }}</th>
-                <th class="ad-th-sort" (click)="pendingCtrl.toggleSort('checkOut')">Check Out {{ pendingCtrl.sortIndicator('checkOut') }}</th>
-                <th style="text-align:right">Actions</th>
+                <th class="ad-th-sort" (click)="pendingCtrl.toggleSort('checkIn')">{{ 'adminDashboard.colCheckIn' | transloco }} {{ pendingCtrl.sortIndicator('checkIn') }}</th>
+                <th class="ad-th-sort" (click)="pendingCtrl.toggleSort('checkOut')">{{ 'adminDashboard.colCheckOut' | transloco }} {{ pendingCtrl.sortIndicator('checkOut') }}</th>
+                <th style="text-align:right">{{ 'adminDashboard.colActions' | transloco }}</th>
               </tr>
             </thead>
             <tbody>
@@ -390,7 +391,7 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
                 <td>
                   <span class="vs-strong">{{ pendingUserLabel(e) }}</span>
                 </td>
-                <td class="vs-muted">Assigned shift</td>
+                <td class="vs-muted">{{ 'adminDashboard.assignedShiftFallback' | transloco: { term: terminology.workUnitSingular() } }}</td>
                 <td>{{ fmt(e.checkInAt) }}</td>
                 <td>{{ fmt(e.checkOutAt) }}</td>
                 <td style="text-align:right">
@@ -398,12 +399,12 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
                     <button class="vs-btn-ghost ad-action-btn ad-action-btn--approve"
                             (click)="decide(e.id, 'approved')"
                             [disabled]="busyId === e.id">
-                      <mat-icon>check</mat-icon> Approve
+                      <mat-icon>check</mat-icon> {{ 'adminDashboard.approve' | transloco }}
                     </button>
                     <button class="vs-btn-ghost ad-action-btn ad-action-btn--reject"
                             (click)="decide(e.id, 'rejected')"
                             [disabled]="busyId === e.id">
-                      <mat-icon>close</mat-icon> Reject
+                      <mat-icon>close</mat-icon> {{ 'adminDashboard.reject' | transloco }}
                     </button>
                   </div>
                 </td>
@@ -417,58 +418,58 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
       <section *ngIf="orgId" id="ad-communication-center" class="vs-glass-strong ad-section ad-comm-section">
         <div class="vs-panel-head">
           <div>
-            <div class="vs-panel-title">Communication Center</div>
-            <div class="vs-panel-subtitle">Send in-app and internet notifications to one, many, org, or all platform users</div>
+            <div class="vs-panel-title">{{ 'adminDashboard.communicationCenter' | transloco }}</div>
+            <div class="vs-panel-subtitle">{{ 'adminDashboard.communicationCenterSub' | transloco }}</div>
           </div>
         </div>
 
         <div class="ad-comm-form">
           <div class="vs-form-row vs-form-row--2">
             <div>
-              <label class="vs-field-label">Title *</label>
-              <input class="vs-input" [(ngModel)]="commTitle" placeholder="Important update">
+              <label class="vs-field-label">{{ 'adminDashboard.titleRequired' | transloco }}</label>
+              <input class="vs-input" [(ngModel)]="commTitle" [placeholder]="'adminDashboard.titlePlaceholder' | transloco">
             </div>
             <div>
-              <label class="vs-field-label">Type</label>
+              <label class="vs-field-label">{{ 'adminDashboard.type' | transloco }}</label>
               <select class="vs-select" [(ngModel)]="commType">
-                <option value="announcement">announcement</option>
-                <option value="system">system</option>
-                <option value="alert">alert</option>
-                <option value="policy">policy</option>
+                <option value="announcement">{{ 'adminDashboard.typeAnnouncement' | transloco }}</option>
+                <option value="system">{{ 'adminDashboard.typeSystem' | transloco }}</option>
+                <option value="alert">{{ 'adminDashboard.typeAlert' | transloco }}</option>
+                <option value="policy">{{ 'adminDashboard.typePolicy' | transloco }}</option>
               </select>
             </div>
           </div>
 
           <div class="vs-form-row">
             <div>
-              <label class="vs-field-label">Message *</label>
-              <textarea class="vs-input" rows="3" [(ngModel)]="commBody" placeholder="Message content..."></textarea>
+              <label class="vs-field-label">{{ 'adminDashboard.messageRequired' | transloco }}</label>
+              <textarea class="vs-input" rows="3" [(ngModel)]="commBody" [placeholder]="'adminDashboard.messagePlaceholder' | transloco"></textarea>
             </div>
           </div>
 
           <div class="vs-form-row vs-form-row--2">
             <div>
-              <label class="vs-field-label">Audience</label>
+              <label class="vs-field-label">{{ 'adminDashboard.audience' | transloco }}</label>
               <select class="vs-select" [(ngModel)]="commTargetType" (ngModelChange)="onTargetTypeChange()">
-                <option value="single">Single user</option>
-                <option value="multi">Multiple users</option>
-                <option value="orgAll">All users in my organization</option>
-                <option value="platformAll" *ngIf="isSuperAdmin()">All users in platform</option>
+                <option value="single">{{ 'adminDashboard.audienceSingle' | transloco }}</option>
+                <option value="multi">{{ 'adminDashboard.audienceMulti' | transloco }}</option>
+                <option value="orgAll">{{ 'adminDashboard.audienceOrgAll' | transloco }}</option>
+                <option value="platformAll" *ngIf="isSuperAdmin()">{{ 'adminDashboard.audiencePlatformAll' | transloco }}</option>
               </select>
             </div>
             <div>
-              <label class="vs-field-label">Delivery</label>
+              <label class="vs-field-label">{{ 'adminDashboard.delivery' | transloco }}</label>
               <div class="ad-comm-checks">
-                <label><input type="checkbox" [(ngModel)]="commInApp"> In-app</label>
-                <label><input type="checkbox" [(ngModel)]="commInternet"> Internet (email/sms)</label>
+                <label><input type="checkbox" [(ngModel)]="commInApp"> {{ 'adminDashboard.deliveryInApp' | transloco }}</label>
+                <label><input type="checkbox" [(ngModel)]="commInternet"> {{ 'adminDashboard.deliveryInternet' | transloco }}</label>
               </div>
             </div>
           </div>
 
           <div class="vs-form-row" *ngIf="commTargetType==='single' || commTargetType==='multi'">
             <div>
-              <label class="vs-field-label">Target Users</label>
-              <input class="vs-input" [(ngModel)]="commUserQuery" (ngModelChange)="refreshCommCandidates()" placeholder="Search by name, email or UID">
+              <label class="vs-field-label">{{ 'adminDashboard.targetUsers' | transloco }}</label>
+              <input class="vs-input" [(ngModel)]="commUserQuery" (ngModelChange)="refreshCommCandidates()" [placeholder]="'adminDashboard.targetUsersPlaceholder' | transloco">
               <div class="ad-comm-users" *ngIf="commCandidates.length > 0">
                 <button type="button"
                         *ngFor="let u of commCandidates"
@@ -478,16 +479,16 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
                   {{ commUserLabel(u) }}
                 </button>
               </div>
-              <div class="ad-comm-help">{{ commTargetType==='single' ? 'Select one user.' : 'Select one or multiple users.' }}</div>
+              <div class="ad-comm-help">{{ (commTargetType==='single' ? 'adminDashboard.selectOneUser' : 'adminDashboard.selectOneOrMultipleUsers') | transloco }}</div>
             </div>
           </div>
 
           <div class="vs-form-row" *ngIf="commInternet">
             <div>
-              <label class="vs-field-label">Internet Channel</label>
+              <label class="vs-field-label">{{ 'adminDashboard.internetChannel' | transloco }}</label>
               <select class="vs-select" [(ngModel)]="commInternetChannel">
-                <option value="email">email</option>
-                <option value="sms">sms</option>
+                <option value="email">{{ 'adminDashboard.channelEmail' | transloco }}</option>
+                <option value="sms">{{ 'adminDashboard.channelSms' | transloco }}</option>
               </select>
             </div>
           </div>
@@ -495,7 +496,7 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
           <div class="ad-comm-actions">
             <button class="vs-btn-primary" (click)="sendCommunication()" [disabled]="commBusy">
               <mat-icon>send</mat-icon>
-              {{ commBusy ? 'Sending...' : 'Send Message' }}
+              {{ (commBusy ? 'adminDashboard.sending' : 'adminDashboard.sendMessage') | transloco }}
             </button>
           </div>
         </div>
@@ -504,7 +505,7 @@ import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
       <!-- Metrics timestamp -->
       <div *ngIf="orgId && metrics()?.updatedAt" class="ad-updated">
         <mat-icon>update</mat-icon>
-        Metrics refreshed: {{ fmt(metrics()!.updatedAt) }}
+        {{ 'adminDashboard.metricsRefreshed' | transloco: { time: fmt(metrics()!.updatedAt) } }}
       </div>
     </div>
   `,
@@ -939,12 +940,12 @@ export class AdminDashboardPage implements OnDestroy {
   });
   weekLabel = '';
   lifecycleTabs = [
-    { key: 'open' as ShiftStatus,       label: 'Open',        icon: 'event_available' },
-    { key: 'claimed' as ShiftStatus,    label: 'Claimed',     icon: 'how_to_reg' },
-    { key: 'in_progress' as ShiftStatus,label: 'In Progress', icon: 'timelapse' },
-    { key: 'completed' as ShiftStatus,  label: 'Completed',   icon: 'check_circle' },
-    { key: 'expired' as ShiftStatus,    label: 'Expired',     icon: 'timer_off' },
-    { key: 'cancelled' as ShiftStatus,  label: 'Cancelled',   icon: 'cancel' },
+    { key: 'open' as ShiftStatus,       labelKey: 'adminDashboard.lifecycleOpen',       icon: 'event_available' },
+    { key: 'claimed' as ShiftStatus,    labelKey: 'adminDashboard.lifecycleClaimed',    icon: 'how_to_reg' },
+    { key: 'in_progress' as ShiftStatus,labelKey: 'adminDashboard.lifecycleInProgress', icon: 'timelapse' },
+    { key: 'completed' as ShiftStatus,  labelKey: 'adminDashboard.lifecycleCompleted',  icon: 'check_circle' },
+    { key: 'expired' as ShiftStatus,    labelKey: 'adminDashboard.lifecycleExpired',    icon: 'timer_off' },
+    { key: 'cancelled' as ShiftStatus,  labelKey: 'adminDashboard.lifecycleCancelled',  icon: 'cancel' },
   ];
   private unsubLifecycle: (() => void) | null = null;
 
@@ -976,7 +977,8 @@ export class AdminDashboardPage implements OnDestroy {
     private toast: ToastService,
     private plans: PlanEntitlementsService,
     public terminology: TerminologyService,
-    private orgExperience: OrgExperienceService
+    private orgExperience: OrgExperienceService,
+    private i18n: TranslocoService
   ) {
     this.effectRef = effect(() => {
       const orgId = this.ctx.orgId();
@@ -1056,9 +1058,9 @@ export class AdminDashboardPage implements OnDestroy {
     this.busyId = entryId;
     try {
       await this.adminCmd.decideTimeCorrection(entryId, decision);
-      this.toast.success(decision === 'approved' ? 'Correction approved.' : 'Correction rejected.');
+      this.toast.success(this.i18n.translate(decision === 'approved' ? 'adminDashboard.correctionApproved' : 'adminDashboard.correctionRejected'));
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Decision failed.');
+      this.toast.errorFrom(e, this.i18n.translate('adminDashboard.decisionFailed'));
     } finally {
       this.busyId = null;
     }
@@ -1075,7 +1077,7 @@ export class AdminDashboardPage implements OnDestroy {
       const res: any = await this.shiftCommands.listShiftSwapRequests('pending', 50);
       this.swapRequests.set(Array.isArray(res?.items) ? res.items : []);
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Failed to load shift switch requests.');
+      this.toast.errorFrom(e, this.i18n.translate('adminDashboard.failedToLoadSwitchRequests', { term: this.terminology.workUnitSingular().toLowerCase() }));
     } finally {
       this.swapListBusy = false;
     }
@@ -1086,18 +1088,18 @@ export class AdminDashboardPage implements OnDestroy {
     this.swapBusyId = r.requestId;
     try {
       await this.shiftCommands.respondShiftSwap(r.requestId, decision);
-      const label = decision === 'accept' ? 'approved' : decision === 'reject' ? 'declined' : 'cancelled';
-      this.toast.success(`Shift switch ${label}.`);
+      const key = decision === 'accept' ? 'adminDashboard.switchApproved' : decision === 'reject' ? 'adminDashboard.switchDeclined' : 'adminDashboard.switchCancelled';
+      this.toast.success(this.i18n.translate(key, { term: this.terminology.workUnitSingular() }));
       await this.refreshSwapRequests();
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Shift switch decision failed.');
+      this.toast.errorFrom(e, this.i18n.translate('adminDashboard.switchDecisionFailed', { term: this.terminology.workUnitSingular() }));
     } finally {
       this.swapBusyId = null;
     }
   }
 
   swapKindLabel(r: any) {
-    return r?.kind === 'swap' ? 'Trade' : 'Cover';
+    return this.i18n.translate(r?.kind === 'swap' ? 'adminDashboard.trade' : 'adminDashboard.cover');
   }
 
   fmtMs(ms: any) {
@@ -1122,19 +1124,19 @@ export class AdminDashboardPage implements OnDestroy {
 
   async sendCommunication() {
     if (!this.commTitle.trim() || !this.commBody.trim()) {
-      this.toast.error('Title and message are required. [E_VALIDATION_MESSAGE_REQUIRED]');
+      this.toast.error(this.i18n.translate('adminDashboard.titleAndMessageRequired'));
       return;
     }
 
     const userIds = this.commSelectedUserIds.slice();
 
     if ((this.commTargetType === 'single' || this.commTargetType === 'multi') && !userIds.length) {
-      this.toast.error('Provide at least one target user UID. [E_VALIDATION_TARGET_UID_REQUIRED]');
+      this.toast.error(this.i18n.translate('adminDashboard.targetUidRequired'));
       return;
     }
 
     if (this.commTargetType === 'single' && userIds.length !== 1) {
-      this.toast.error('Select exactly one user for Single audience. [E_VALIDATION_SINGLE_TARGET]');
+      this.toast.error(this.i18n.translate('adminDashboard.singleTargetRequired'));
       return;
     }
 
@@ -1151,7 +1153,7 @@ export class AdminDashboardPage implements OnDestroy {
         internetChannel: this.commInternetChannel,
       });
 
-      this.toast.success(`Message sent to ${res?.recipientCount ?? 0} users.`);
+      this.toast.success(this.i18n.translate('adminDashboard.messageSentTo', { count: res?.recipientCount ?? 0 }));
       this.commTitle = '';
       this.commBody = '';
       this.commUserQuery = '';
@@ -1162,7 +1164,7 @@ export class AdminDashboardPage implements OnDestroy {
       this.commType = 'announcement';
       this.refreshCommCandidates();
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Failed to send message.');
+      this.toast.errorFrom(e, this.i18n.translate('adminDashboard.failedToSendMessage'));
     } finally {
       this.commBusy = false;
     }
@@ -1219,7 +1221,7 @@ export class AdminDashboardPage implements OnDestroy {
 
   pendingUserLabel(e: TimeEntry) {
     const uid = String(e.userId || '').trim();
-    if (!uid) return 'Unknown employee';
+    if (!uid) return this.i18n.translate('adminDashboard.unknownEmployeeFallback', { term: this.terminology.workforceMemberSingular() });
     const user = this.commOrgUsers().find((u) => u.uid === uid);
     if (!user) return `${uid.slice(0, 8)}...`;
     return user.displayName || user.email || `${uid.slice(0, 8)}...`;
