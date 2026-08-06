@@ -28,7 +28,7 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
 import { StatCardComponent } from '../../shared/ui/stat-card/stat-card.component';
 import { TerminologyService } from '../../core/experience/terminology.service';
 import { OrgExperienceService } from '../../core/experience/org-experience.service';
-import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
+import { isNavKeyHidden, isWidgetHidden as isWidgetHiddenUtil } from '../../shared/utils/dashboard-visibility.util';
 import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 @Component({
@@ -75,15 +75,15 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
       <!-- KPI Cards -->
       <div *ngIf="orgId" class="vs-grid-3 ad-kpis">
-        <app-stat-card variant="primary" icon="event_available"
+        <app-stat-card *ngIf="!isWidgetHidden('widgets.kpiOpenPublished')" variant="primary" icon="event_available"
           [label]="'adminDashboard.kpiOpenPublished' | transloco" [value]="metrics()?.openCount ?? 0"
           [sub]="'adminDashboard.kpiOpenPublishedSub' | transloco: { term: terminology.workUnitPlural() }">
         </app-stat-card>
-        <app-stat-card variant="success" icon="how_to_reg"
+        <app-stat-card *ngIf="!isWidgetHidden('widgets.kpiAssigned')" variant="success" icon="how_to_reg"
           [label]="'adminDashboard.kpiAssigned' | transloco" [value]="metrics()?.assignedCount ?? 0"
           [sub]="'adminDashboard.kpiAssignedSub' | transloco: { term: terminology.workUnitPlural() }">
         </app-stat-card>
-        <app-stat-card variant="warning" icon="schedule"
+        <app-stat-card *ngIf="!isWidgetHidden('widgets.kpiOpenNext7Days')" variant="warning" icon="schedule"
           [label]="'adminDashboard.kpiOpenNext7Days' | transloco" [value]="metrics()?.upcoming7dOpenCount ?? 0"
           [sub]="'adminDashboard.kpiOpenNext7DaysSub' | transloco">
         </app-stat-card>
@@ -91,19 +91,19 @@ import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
       <!-- Workforce KPI Cards -->
       <div *ngIf="orgId" class="vs-grid-4 ad-kpis">
-        <app-stat-card variant="primary" icon="groups"
+        <app-stat-card *ngIf="!isWidgetHidden('widgets.kpiTotalEmployees')" variant="primary" icon="groups"
           [label]="'adminDashboard.kpiTotalEmployees' | transloco: { term: terminology.workforceMemberPlural() }" [value]="totalEmployeesCount()"
           [sub]="'adminDashboard.kpiTotalEmployeesSub' | transloco">
         </app-stat-card>
-        <app-stat-card variant="success" icon="bolt"
+        <app-stat-card *ngIf="!isWidgetHidden('widgets.kpiActiveShifts')" variant="success" icon="bolt"
           [label]="'adminDashboard.kpiActiveShifts' | transloco: { term: terminology.workUnitPlural() }" [value]="weeklyActiveShiftsCount()"
           [sub]="'adminDashboard.kpiActiveShiftsSub' | transloco: { week: weekLabel }">
         </app-stat-card>
-        <app-stat-card variant="warning" icon="verified"
+        <app-stat-card *ngIf="!isWidgetHidden('widgets.kpiCoverageRate')" variant="warning" icon="verified"
           [label]="'adminDashboard.kpiCoverageRate' | transloco" [value]="coverageRatePct() !== null ? coverageRatePct() + '%' : '—'"
           [sub]="'adminDashboard.kpiCoverageRateSub' | transloco: { term: terminology.workUnitPlural() }">
         </app-stat-card>
-        <app-stat-card variant="primary" icon="timelapse"
+        <app-stat-card *ngIf="!isWidgetHidden('widgets.kpiLaborWorked')" variant="primary" icon="timelapse"
           [label]="'adminDashboard.kpiLaborWorked' | transloco" [value]="(weeklyLaborHours() | number:'1.0-1') + 'h'"
           [sub]="'adminDashboard.kpiLaborWorkedSub' | transloco: { week: weekLabel }">
         </app-stat-card>
@@ -1052,6 +1052,10 @@ export class AdminDashboardPage implements OnDestroy {
 
   isHidden(key: string) {
     return isNavKeyHidden(key, this.orgExperience.config());
+  }
+
+  isWidgetHidden(key: string) {
+    return isWidgetHiddenUtil(key, this.orgExperience.config());
   }
 
   async decide(entryId: string, decision: 'approved' | 'rejected') {

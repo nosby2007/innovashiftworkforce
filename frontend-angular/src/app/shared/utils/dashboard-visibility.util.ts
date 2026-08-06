@@ -14,3 +14,17 @@ export function isNavKeyHidden(
   if (experience?.configurationStatus !== 'configured') return false;
   return experience.snapshot.navigation.hiddenNavKeys.includes(key);
 }
+
+/**
+ * True when the activated profile's DashboardsConfig.hiddenWidgetKeys lists
+ * this key. Same legacy-safe contract as isNavKeyHidden — no seed profile
+ * ships a non-empty hiddenWidgetKeys list yet, so this is real, tested
+ * infrastructure ahead of content.
+ */
+export function isWidgetHidden(
+  key: string,
+  experience: Pick<OrganizationExperienceConfig, 'configurationStatus' | 'snapshot'> | null | undefined
+): boolean {
+  if (experience?.configurationStatus !== 'configured') return false;
+  return (experience.snapshot.dashboards.hiddenWidgetKeys || []).includes(key);
+}

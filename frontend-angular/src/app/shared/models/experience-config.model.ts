@@ -71,6 +71,8 @@ export interface NavigationConfig {
 /** Phase 4: configurable dashboard widgets. Unread in Phase 1. */
 export interface DashboardsConfig {
   widgetSetId: string | null;
+  /** Phase 4 follow-on: dashboard widget/tile visibility. Optional so every existing dashboards:{...} fixture keeps compiling; absent/[] = nothing hidden (today's universal state). */
+  hiddenWidgetKeys?: string[];
 }
 
 /** Phase 3: spliced into aiAssistantChat.ts's system prompt. aiAssistantChat.ts is not touched in Phase 1. */
