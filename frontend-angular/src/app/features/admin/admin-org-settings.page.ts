@@ -75,6 +75,8 @@ interface OrgSettings {
   holidayWorkMultiplier: number;
   holidays: OrgHoliday[];
   customJobRoles: string[];
+  customDocumentTypes: string[];
+  customSkills: string[];
   defaultFederalTaxPercent: number;
   defaultStateTaxPercent: number;
   defaultSocialSecurityPercent: number;
@@ -136,6 +138,8 @@ const DEFAULT_SETTINGS: OrgSettings = {
   holidayWorkMultiplier: 1.5,
   holidays: [],
   customJobRoles: [],
+  customDocumentTypes: [],
+  customSkills: [],
   // Real US federal/state/FICA figures only get applied for US orgs — see
   // ngOnInit(), which fills these in via defaultDeductionElectionsForCountry
   // the first time an org's settings are loaded with none saved yet.
@@ -461,6 +465,88 @@ const PLAN_BADGE: Record<string, string> = {
               </div>
               <div class="ors-site-footer">
                 <button class="vs-btn-ghost" type="button" (click)="removeCustomJobRole(i)">
+                  <mat-icon>delete</mat-icon> {{ 'orgSettings.remove' | transloco }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Custom Document Types section -->
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">{{ 'orgSettings.customDocTypesTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.customDocTypesSubtitle' | transloco }}</div>
+            </div>
+            <mat-icon class="ors-section-icon">description</mat-icon>
+          </div>
+          <div class="vs-panel-body ors-form">
+            <div class="ors-site-actions" style="justify-content:space-between;">
+              <strong>{{ 'orgSettings.customDocTypesHeader' | transloco }}</strong>
+              <button class="vs-btn-ghost" (click)="addCustomDocumentType()" type="button">
+                <mat-icon>add</mat-icon> {{ 'orgSettings.addDocType' | transloco }}
+              </button>
+            </div>
+
+            <div *ngIf="draft.customDocumentTypes.length === 0" class="ors-empty-site vs-glass">
+              <mat-icon>description</mat-icon>
+              <div>
+                <strong>{{ 'orgSettings.noCustomDocTypesTitle' | transloco }}</strong>
+                <div class="vs-muted">{{ 'orgSettings.noCustomDocTypesHint' | transloco }}</div>
+              </div>
+            </div>
+
+            <div class="ors-site-card" *ngFor="let docType of draft.customDocumentTypes; index as i">
+              <div class="vs-form-row">
+                <div>
+                  <label class="vs-field-label">{{ 'orgSettings.docTypeNameLabel' | transloco }}</label>
+                  <input class="vs-input" [(ngModel)]="draft.customDocumentTypes[i]" [placeholder]="'orgSettings.docTypeNamePlaceholder' | transloco">
+                </div>
+              </div>
+              <div class="ors-site-footer">
+                <button class="vs-btn-ghost" type="button" (click)="removeCustomDocumentType(i)">
+                  <mat-icon>delete</mat-icon> {{ 'orgSettings.remove' | transloco }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Skills Catalog section -->
+        <section class="vs-glass-strong ors-section">
+          <div class="vs-panel-head">
+            <div>
+              <div class="vs-panel-title">{{ 'orgSettings.skillsCatalogTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.skillsCatalogSubtitle' | transloco }}</div>
+            </div>
+            <mat-icon class="ors-section-icon">verified</mat-icon>
+          </div>
+          <div class="vs-panel-body ors-form">
+            <div class="ors-site-actions" style="justify-content:space-between;">
+              <strong>{{ 'orgSettings.skillsCatalogHeader' | transloco }}</strong>
+              <button class="vs-btn-ghost" (click)="addCustomSkill()" type="button">
+                <mat-icon>add</mat-icon> {{ 'orgSettings.addSkill' | transloco }}
+              </button>
+            </div>
+
+            <div *ngIf="draft.customSkills.length === 0" class="ors-empty-site vs-glass">
+              <mat-icon>verified</mat-icon>
+              <div>
+                <strong>{{ 'orgSettings.noSkillsTitle' | transloco }}</strong>
+                <div class="vs-muted">{{ 'orgSettings.noSkillsHint' | transloco }}</div>
+              </div>
+            </div>
+
+            <div class="ors-site-card" *ngFor="let skill of draft.customSkills; index as i">
+              <div class="vs-form-row">
+                <div>
+                  <label class="vs-field-label">{{ 'orgSettings.skillNameLabel' | transloco }}</label>
+                  <input class="vs-input" [(ngModel)]="draft.customSkills[i]" [placeholder]="'orgSettings.skillNamePlaceholder' | transloco">
+                </div>
+              </div>
+              <div class="ors-site-footer">
+                <button class="vs-btn-ghost" type="button" (click)="removeCustomSkill(i)">
                   <mat-icon>delete</mat-icon> {{ 'orgSettings.remove' | transloco }}
                 </button>
               </div>
@@ -1343,6 +1429,34 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     };
   }
 
+  addCustomDocumentType() {
+    this.draft = {
+      ...this.draft,
+      customDocumentTypes: [...this.draft.customDocumentTypes, ''],
+    };
+  }
+
+  removeCustomDocumentType(index: number) {
+    this.draft = {
+      ...this.draft,
+      customDocumentTypes: this.draft.customDocumentTypes.filter((_, i) => i !== index),
+    };
+  }
+
+  addCustomSkill() {
+    this.draft = {
+      ...this.draft,
+      customSkills: [...this.draft.customSkills, ''],
+    };
+  }
+
+  removeCustomSkill(index: number) {
+    this.draft = {
+      ...this.draft,
+      customSkills: this.draft.customSkills.filter((_, i) => i !== index),
+    };
+  }
+
   cadenceOptions = CADENCE_OPTIONS;
 
   cadenceDescription(cadence: AccrualPolicy['cadence']): string {
@@ -1515,6 +1629,28 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         })
         .slice(0, 25);
 
+      const seenCustomDocumentTypes = new Set<string>();
+      const normalizedCustomDocumentTypes: string[] = (this.draft.customDocumentTypes || [])
+        .map((r) => String(r || '').trim())
+        .filter((r) => {
+          const key = r.toLowerCase();
+          if (!r || key === 'other' || seenCustomDocumentTypes.has(key)) return false;
+          seenCustomDocumentTypes.add(key);
+          return true;
+        })
+        .slice(0, 25);
+
+      const seenCustomSkills = new Set<string>();
+      const normalizedCustomSkills: string[] = (this.draft.customSkills || [])
+        .map((r) => String(r || '').trim())
+        .filter((r) => {
+          const key = r.toLowerCase();
+          if (!r || key === 'other' || seenCustomSkills.has(key)) return false;
+          seenCustomSkills.add(key);
+          return true;
+        })
+        .slice(0, 25);
+
       const normalizedAccrualPolicy: AccrualPolicy = {
         enabled: !!this.draft.accrualPolicy?.enabled,
         cadence: this.draft.accrualPolicy?.cadence || 'monthly',
@@ -1557,6 +1693,8 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         holidayWorkMultiplier: Math.max(1, Number(this.draft.holidayWorkMultiplier || 1.5)),
         holidays: normalizedHolidays,
         customJobRoles: normalizedCustomJobRoles,
+        customDocumentTypes: normalizedCustomDocumentTypes,
+        customSkills: normalizedCustomSkills,
         defaultFederalTaxPercent: Math.max(0, Number(this.draft.defaultFederalTaxPercent || 0)),
         defaultStateTaxPercent: Math.max(0, Number(this.draft.defaultStateTaxPercent || 0)),
         defaultSocialSecurityPercent: Math.max(0, Number(this.draft.defaultSocialSecurityPercent || 0)),
@@ -1581,8 +1719,8 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         orgId: this.orgId,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, customJobRoles: normalizedCustomJobRoles, benefitPlans: normalizedBenefitPlans, experienceFlags: normalizedExperienceFlags, dataRetention: normalizedDataRetention });
-      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, customJobRoles: normalizedCustomJobRoles, benefitPlans: normalizedBenefitPlans, experienceFlags: normalizedExperienceFlags, dataRetention: normalizedDataRetention };
+      this.settings.set({ ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, customJobRoles: normalizedCustomJobRoles, customDocumentTypes: normalizedCustomDocumentTypes, customSkills: normalizedCustomSkills, benefitPlans: normalizedBenefitPlans, experienceFlags: normalizedExperienceFlags, dataRetention: normalizedDataRetention });
+      this.draft = { ...this.draft, sites: normalizedSites, accrualPolicy: normalizedAccrualPolicy, holidays: normalizedHolidays, customJobRoles: normalizedCustomJobRoles, customDocumentTypes: normalizedCustomDocumentTypes, customSkills: normalizedCustomSkills, benefitPlans: normalizedBenefitPlans, experienceFlags: normalizedExperienceFlags, dataRetention: normalizedDataRetention };
       this.ctx.setContext({
         orgId: this.ctx.orgId(),
         uid: this.ctx.uid(),

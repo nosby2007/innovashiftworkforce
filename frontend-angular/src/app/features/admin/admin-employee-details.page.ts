@@ -60,6 +60,7 @@ type EmployeeProfileDraft = {
   retirement401kMatchPercent: number | null;
   retirement401kProvider: string | null;
   benefits: BenefitLine[];
+  skills: string[];
 };
 
 @Component({
@@ -221,6 +222,17 @@ type EmployeeProfileDraft = {
                   <div><span>PTO balance</span><strong>{{ accrualBalance().ptoBalance.toFixed(2) }}</strong></div>
                   <div><span>Sick balance</span><strong>{{ accrualBalance().sickBalance.toFixed(2) }}</strong></div>
                 </ng-container>
+              </div>
+            </article>
+
+            <article class="empd-admin-card" *ngIf="isAdminOrHr()">
+              <h3><mat-icon>verified</mat-icon> Skills</h3>
+              <div class="empd-benefit-empty" *ngIf="orgSkills.length === 0">No skills defined yet. Add some in Org Settings first.</div>
+              <div class="empd-skill-grid" *ngIf="orgSkills.length > 0">
+                <label class="empd-check" *ngFor="let skill of orgSkills">
+                  <input type="checkbox" [checked]="hasSkill(skill)" (change)="toggleSkill(skill, $any($event.target).checked)">
+                  {{ skill }}
+                </label>
               </div>
             </article>
 
@@ -581,6 +593,7 @@ type EmployeeProfileDraft = {
     .empd-payroll-facts span { display:block; color:var(--text-subtle); font-size:11px; font-weight:800; text-transform:uppercase; margin-bottom:4px; }
     .empd-payroll-facts strong { color:var(--text); }
     .empd-check { display:flex; align-items:center; gap:8px; color:var(--text-muted); font-size:13px; }
+    .empd-skill-grid { display:flex; flex-wrap:wrap; gap:10px 18px; }
     .empd-benefit-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin:16px 0 10px; }
     .empd-benefit-add { display:flex; gap:8px; align-items:center; }
     .empd-benefit-add .vs-select { min-width:160px; }
@@ -687,6 +700,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
   profileDraft: EmployeeProfileDraft = this.emptyProfileDraft();
   dependentsText = '';
   orgBenefitPlans = signal<BenefitLine[]>([]);
+  orgSkills: string[] = [];
   orgDeductionDefaults = { federalTaxPercent: 0, stateTaxPercent: 0, socialSecurityPercent: 0, medicarePercent: 0, retirement401kMatchPercent: 0, retirement401kProvider: '' };
   selectedBenefitPlanId = '';
   private directDepositSig: DirectDepositInfo | null = null;
@@ -778,6 +792,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
         retirement401kProvider: String(data.default401kProvider || ''),
       };
       this.orgBenefitPlans.set(Array.isArray(data.benefitPlans) ? data.benefitPlans : []);
+      this.orgSkills = Array.isArray(data.customSkills) ? data.customSkills : [];
     } catch { /* non-critical */ }
   }
 
@@ -800,6 +815,16 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
 
   removeEmployeeBenefit(index: number) {
     this.profileDraft.benefits = this.profileDraft.benefits.filter((_, i) => i !== index);
+  }
+
+  hasSkill(skill: string): boolean {
+    return this.profileDraft.skills.includes(skill);
+  }
+
+  toggleSkill(skill: string, checked: boolean) {
+    this.profileDraft.skills = checked
+      ? [...this.profileDraft.skills, skill]
+      : this.profileDraft.skills.filter((s) => s !== skill);
   }
 
   private createLocalId(prefix: string) {
@@ -1044,6 +1069,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
         accessRole: this.profileDraft.accessRole || 'staff',
         jobRole: this.profileDraft.jobRole.trim() || 'Staff',
         active: this.profileDraft.active !== false,
+        skills: this.profileDraft.skills.filter((s) => s && s.trim()),
         payRate: this.num(this.profileDraft.payRate),
         payType: this.profileDraft.payType || 'hourly',
         employeeNumber: this.profileDraft.employeeNumber.trim(),
@@ -1164,6 +1190,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
       retirement401kMatchPercent: deductions.retirement401kMatchPercent != null ? this.num(deductions.retirement401kMatchPercent) : null,
       retirement401kProvider: deductions.retirement401kProvider != null ? String(deductions.retirement401kProvider) : null,
       benefits: Array.isArray(deductions.benefits) ? deductions.benefits.map((b: any) => ({ id: String(b.id || this.createLocalId('benefit')), label: String(b.label || ''), provider: String(b.provider || ''), employeeAmount: this.num(b.employeeAmount || 0), employerAmount: this.num(b.employerAmount || 0) })) : [],
+      skills: Array.isArray(data.skills) ? data.skills.map((s: any) => String(s || '')).filter(Boolean) : [],
     };
     this.dependentsText = Array.isArray(data.dependents)
       ? data.dependents
@@ -1203,6 +1230,7 @@ export class AdminEmployeeDetailsPage implements OnDestroy {
       retirement401kMatchPercent: null,
       retirement401kProvider: null,
       benefits: [],
+      skills: [],
     };
   }
 
