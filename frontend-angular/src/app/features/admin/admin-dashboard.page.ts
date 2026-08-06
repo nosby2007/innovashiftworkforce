@@ -25,10 +25,14 @@ import { Timestamp } from 'firebase/firestore';
 import { profileCompletion } from '../../shared/utils/profile-completion.util';
 import { TableListController } from '../../shared/ui/table-list/table-list.controller';
 import { TablePaginatorComponent } from '../../shared/ui/table-list/table-paginator.component';
+import { StatCardComponent } from '../../shared/ui/stat-card/stat-card.component';
+import { TerminologyService } from '../../core/experience/terminology.service';
+import { OrgExperienceService } from '../../core/experience/org-experience.service';
+import { isNavKeyHidden } from '../../shared/utils/dashboard-visibility.util';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, TablePaginatorComponent],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, TablePaginatorComponent, StatCardComponent],
   template: `
     <div class="vs-page-pad admin-brand-page">
 
@@ -42,7 +46,7 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
         </div>
         <div class="admin-brand-actions">
           <a routerLink="/admin/employees" class="ad-hero-btn">
-            <mat-icon>people</mat-icon> Employees
+            <mat-icon>people</mat-icon> {{ terminology.workforceMemberPlural() }}
           </a>
           <a routerLink="/admin/readiness" class="ad-hero-btn">
             <mat-icon>health_and_safety</mat-icon> Readiness
@@ -70,52 +74,38 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
 
       <!-- KPI Cards -->
       <div *ngIf="orgId" class="vs-grid-3 ad-kpis">
-        <div class="vs-stat-card vs-stat--primary">
-          <div class="vs-stat-label">Open / Published</div>
-          <div class="vs-stat-value">{{ metrics()?.openCount ?? 0 }}</div>
-          <div class="vs-stat-sub">Shifts available to fill</div>
-          <mat-icon class="vs-stat-icon">event_available</mat-icon>
-        </div>
-        <div class="vs-stat-card vs-stat--success">
-          <div class="vs-stat-label">Assigned</div>
-          <div class="vs-stat-value">{{ metrics()?.assignedCount ?? 0 }}</div>
-          <div class="vs-stat-sub">Shifts with confirmed staff</div>
-          <mat-icon class="vs-stat-icon">how_to_reg</mat-icon>
-        </div>
-        <div class="vs-stat-card vs-stat--warning">
-          <div class="vs-stat-label">Open Next 7 Days</div>
-          <div class="vs-stat-value">{{ metrics()?.upcoming7dOpenCount ?? 0 }}</div>
-          <div class="vs-stat-sub">Require immediate action</div>
-          <mat-icon class="vs-stat-icon">schedule</mat-icon>
-        </div>
+        <app-stat-card variant="primary" icon="event_available"
+          label="Open / Published" [value]="metrics()?.openCount ?? 0"
+          [sub]="terminology.workUnitPlural() + ' available to fill'">
+        </app-stat-card>
+        <app-stat-card variant="success" icon="how_to_reg"
+          label="Assigned" [value]="metrics()?.assignedCount ?? 0"
+          [sub]="terminology.workUnitPlural() + ' with confirmed staff'">
+        </app-stat-card>
+        <app-stat-card variant="warning" icon="schedule"
+          label="Open Next 7 Days" [value]="metrics()?.upcoming7dOpenCount ?? 0"
+          sub="Require immediate action">
+        </app-stat-card>
       </div>
 
       <!-- Workforce KPI Cards -->
       <div *ngIf="orgId" class="vs-grid-4 ad-kpis">
-        <div class="vs-stat-card vs-stat--primary">
-          <div class="vs-stat-label">Total Employees</div>
-          <div class="vs-stat-value">{{ totalEmployeesCount() }}</div>
-          <div class="vs-stat-sub">Active headcount</div>
-          <mat-icon class="vs-stat-icon">groups</mat-icon>
-        </div>
-        <div class="vs-stat-card vs-stat--success">
-          <div class="vs-stat-label">Active Shifts</div>
-          <div class="vs-stat-value">{{ weeklyActiveShiftsCount() }}</div>
-          <div class="vs-stat-sub">Live or needing coverage, {{ weekLabel }}</div>
-          <mat-icon class="vs-stat-icon">bolt</mat-icon>
-        </div>
-        <div class="vs-stat-card vs-stat--warning">
-          <div class="vs-stat-label">Coverage Rate</div>
-          <div class="vs-stat-value">{{ coverageRatePct() !== null ? coverageRatePct() + '%' : '—' }}</div>
-          <div class="vs-stat-sub">Assigned vs. all open shifts</div>
-          <mat-icon class="vs-stat-icon">verified</mat-icon>
-        </div>
-        <div class="vs-stat-card vs-stat--primary">
-          <div class="vs-stat-label">Labor Worked</div>
-          <div class="vs-stat-value">{{ weeklyLaborHours() | number:'1.0-1' }}h</div>
-          <div class="vs-stat-sub">Clocked hours, {{ weekLabel }}</div>
-          <mat-icon class="vs-stat-icon">timelapse</mat-icon>
-        </div>
+        <app-stat-card variant="primary" icon="groups"
+          [label]="'Total ' + terminology.workforceMemberPlural()" [value]="totalEmployeesCount()"
+          sub="Active headcount">
+        </app-stat-card>
+        <app-stat-card variant="success" icon="bolt"
+          [label]="'Active ' + terminology.workUnitPlural()" [value]="weeklyActiveShiftsCount()"
+          [sub]="'Live or needing coverage, ' + weekLabel">
+        </app-stat-card>
+        <app-stat-card variant="warning" icon="verified"
+          label="Coverage Rate" [value]="coverageRatePct() !== null ? coverageRatePct() + '%' : '—'"
+          [sub]="'Assigned vs. all open ' + terminology.workUnitPlural()">
+        </app-stat-card>
+        <app-stat-card variant="primary" icon="timelapse"
+          label="Labor Worked" [value]="(weeklyLaborHours() | number:'1.0-1') + 'h'"
+          [sub]="'Clocked hours, ' + weekLabel">
+        </app-stat-card>
       </div>
 
       <section *ngIf="orgId" class="ad-workforce-center">
@@ -159,35 +149,35 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
 
       <!-- Quick Links -->
       <div *ngIf="orgId" class="ad-quick-links">
-        <a routerLink="/admin/shifts/new" class="ad-ql-card vs-glass">
+        <a routerLink="/admin/shifts/new" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.createShift')">
           <div class="ad-ql-icon"><mat-icon>add_circle</mat-icon></div>
-          <div class="ad-ql-label">Create Shift</div>
+          <div class="ad-ql-label">Create {{ terminology.workUnitSingular() }}</div>
         </a>
-        <a routerLink="/admin/scheduler" class="ad-ql-card vs-glass">
+        <a routerLink="/admin/scheduler" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.scheduler')">
           <div class="ad-ql-icon"><mat-icon>calendar_month</mat-icon></div>
           <div class="ad-ql-label">Scheduler</div>
         </a>
-        <a routerLink="/app/marketplace" class="ad-ql-card vs-glass">
+        <a routerLink="/app/marketplace" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.marketplace')">
           <div class="ad-ql-icon"><mat-icon>storefront</mat-icon></div>
           <div class="ad-ql-label">Marketplace</div>
         </a>
-        <a routerLink="/admin/employees" class="ad-ql-card vs-glass">
+        <a routerLink="/admin/employees" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.employees')">
           <div class="ad-ql-icon"><mat-icon>people</mat-icon></div>
-          <div class="ad-ql-label">Employees</div>
+          <div class="ad-ql-label">{{ terminology.workforceMemberPlural() }}</div>
         </a>
-        <a routerLink="/admin/timesheets" class="ad-ql-card vs-glass">
+        <a routerLink="/admin/timesheets" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.timesheets')">
           <div class="ad-ql-icon"><mat-icon>receipt_long</mat-icon></div>
           <div class="ad-ql-label">Timesheets</div>
         </a>
-        <a routerLink="/admin/payroll" class="ad-ql-card vs-glass">
+        <a routerLink="/admin/payroll" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.payroll')">
           <div class="ad-ql-icon"><mat-icon>payments</mat-icon></div>
           <div class="ad-ql-label">Payroll</div>
         </a>
-        <a routerLink="/admin/audit" class="ad-ql-card vs-glass" *ngIf="canViewAudit()">
+        <a routerLink="/admin/audit" class="ad-ql-card vs-glass" *ngIf="canViewAudit() && !isHidden('quickLinks.auditLog')">
           <div class="ad-ql-icon"><mat-icon>history</mat-icon></div>
           <div class="ad-ql-label">Audit Log</div>
         </a>
-        <a routerLink="/admin/org-settings" class="ad-ql-card vs-glass">
+        <a routerLink="/admin/org-settings" class="ad-ql-card vs-glass" *ngIf="!isHidden('quickLinks.orgSettings')">
           <div class="ad-ql-icon"><mat-icon>business</mat-icon></div>
           <div class="ad-ql-label">Org Settings</div>
         </a>
@@ -230,7 +220,7 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
       <section *ngIf="orgId" class="vs-glass-strong ad-section">
         <div class="vs-panel-head">
           <div>
-            <div class="vs-panel-title">Shift Lifecycle Overview</div>
+            <div class="vs-panel-title">{{ terminology.workUnitSingular() }} Lifecycle Overview</div>
             <div class="vs-panel-subtitle">This week — {{ weekLabel }}</div>
           </div>
         </div>
@@ -294,7 +284,7 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
       <section *ngIf="orgId" class="vs-glass-strong ad-section">
         <div class="vs-panel-head">
           <div>
-            <div class="vs-panel-title">Shift Switch Requests</div>
+            <div class="vs-panel-title">{{ terminology.workUnitSingular() }} Switch Requests</div>
             <div class="vs-panel-subtitle">Manager review for shift covers and trades</div>
           </div>
           <div class="ad-actions-cell">
@@ -317,7 +307,7 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
             <thead>
               <tr>
                 <th>Type</th>
-                <th class="ad-th-sort" (click)="swapCtrl.toggleSort('shift')">Source Shift {{ swapCtrl.sortIndicator('shift') }}</th>
+                <th class="ad-th-sort" (click)="swapCtrl.toggleSort('shift')">Source {{ terminology.workUnitSingular() }} {{ swapCtrl.sortIndicator('shift') }}</th>
                 <th>Requester</th>
                 <th>Target</th>
                 <th class="ad-th-sort" (click)="swapCtrl.toggleSort('requested')">Requested {{ swapCtrl.sortIndicator('requested') }}</th>
@@ -388,8 +378,8 @@ import { TablePaginatorComponent } from '../../shared/ui/table-list/table-pagina
           <table class="vs-table ad-table">
             <thead>
               <tr>
-                <th>Employee</th>
-                <th>Shift</th>
+                <th>{{ terminology.workforceMemberSingular() }}</th>
+                <th>{{ terminology.workUnitSingular() }}</th>
                 <th class="ad-th-sort" (click)="pendingCtrl.toggleSort('checkIn')">Check In {{ pendingCtrl.sortIndicator('checkIn') }}</th>
                 <th class="ad-th-sort" (click)="pendingCtrl.toggleSort('checkOut')">Check Out {{ pendingCtrl.sortIndicator('checkOut') }}</th>
                 <th style="text-align:right">Actions</th>
@@ -984,7 +974,9 @@ export class AdminDashboardPage implements OnDestroy {
     private shiftCommands: ShiftsCommands,
     private accruals: AccrualsRepo,
     private toast: ToastService,
-    private plans: PlanEntitlementsService
+    private plans: PlanEntitlementsService,
+    public terminology: TerminologyService,
+    private orgExperience: OrgExperienceService
   ) {
     this.effectRef = effect(() => {
       const orgId = this.ctx.orgId();
@@ -1054,6 +1046,10 @@ export class AdminDashboardPage implements OnDestroy {
 
   canViewAudit() {
     return this.plans.has('auditLog');
+  }
+
+  isHidden(key: string) {
+    return isNavKeyHidden(key, this.orgExperience.config());
   }
 
   async decide(entryId: string, decision: 'approved' | 'rejected') {
