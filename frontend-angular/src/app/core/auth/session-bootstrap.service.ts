@@ -79,6 +79,7 @@ export class SessionBootstrapService {
             payFrequency:fallback.payFrequency?? null,
             taxProfile:  fallback.taxProfile  ?? null,
             formerOrgId: fallback.formerOrgId ?? null,
+            minRestHours: fallback.minRestHours ?? null,
           });
         } finally {
           if (first) {

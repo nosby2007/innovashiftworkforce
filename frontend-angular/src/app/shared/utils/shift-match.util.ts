@@ -1,6 +1,6 @@
 import { Shift } from '../models/shift.model';
 
-const MIN_REST_HOURS = 8;
+const DEFAULT_MIN_REST_HOURS = 8;
 
 export type ShiftMatchLabel = 'great_fit' | 'role_mismatch' | 'conflict' | 'tight_turnaround' | null;
 
@@ -32,7 +32,7 @@ function shiftRoles(s: Shift): string[] {
  * field exists yet) or a reliability/no-show score (would need an explicit
  * product decision before silently deprioritizing anyone's visibility).
  */
-export function scoreShiftMatch(shift: Shift, myOtherShifts: Shift[], myJobRole: string | null): ShiftMatch {
+export function scoreShiftMatch(shift: Shift, myOtherShifts: Shift[], myJobRole: string | null, minRestHours = DEFAULT_MIN_REST_HOURS): ShiftMatch {
   const roles = shiftRoles(shift).map((r) => r.toLowerCase());
   const jobRole = (myJobRole || '').trim().toLowerCase();
   const roleMatches = roles.length === 0 || (jobRole !== '' && roles.includes(jobRole));
@@ -63,7 +63,7 @@ export function scoreShiftMatch(shift: Shift, myOtherShifts: Shift[], myJobRole:
     if (gapHours >= 0) minGapHours = Math.min(minGapHours, gapHours);
   }
 
-  const tightTurnaround = !hasConflict && minGapHours < MIN_REST_HOURS;
+  const tightTurnaround = !hasConflict && minGapHours < minRestHours;
 
   let score = 0;
   if (hasConflict) score -= 1000;

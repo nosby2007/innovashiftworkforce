@@ -5,40 +5,10 @@ import { resolveTenantWithFallback } from '../infra/tenancy';
 import { writeAudit } from '../infra/audit';
 import { shiftRoleMatches } from '../domain/job-roles';
 import { scoreSwapCandidate } from '../domain/swap-match';
+import { toMillis } from '../domain/dates';
+import { checkShiftEligibility, computeFatigueWindowMs, resolveFatigueRules, FatigueRules, ShiftSlice } from '../domain/shift-eligibility';
 
 const ACTIVE_SHIFT_STATUSES = new Set(['assigned', 'claimed']);
-const TERMINAL_SHIFT_STATUSES = new Set(['cancelled', 'completed', 'expired', 'no_show']);
-const MAX_ASSIGNED_HOURS_PER_DAY = 16;
-
-function toMillis(value: any): number {
-  if (!value) return 0;
-  if (typeof value.toMillis === 'function') return value.toMillis();
-  if (typeof value.seconds === 'number') return value.seconds * 1000;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function dayKey(ms: number): string {
-  const d = new Date(ms);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function hours(startAt: any, endAt: any): number {
-  const startMs = toMillis(startAt);
-  const endMs = toMillis(endAt);
-  return startMs > 0 && endMs > startMs ? (endMs - startMs) / 3_600_000 : 0;
-}
-
-function overlaps(aStart: any, aEnd: any, bStart: any, bEnd: any): boolean {
-  const as = toMillis(aStart);
-  const ae = toMillis(aEnd);
-  const bs = toMillis(bStart);
-  const be = toMillis(bEnd);
-  return as > 0 && ae > as && bs > 0 && be > bs && as < be && bs < ae;
-}
 
 function personName(user: any, uid: string): string {
   return String(user?.displayName || user?.email || user?.name || uid).trim();
@@ -120,6 +90,7 @@ async function assertUserCanTakeShift(
   shiftId: string,
   shift: any,
   excludedShiftIds: Set<string>,
+  rules: FatigueRules,
 ) {
   if (!userData || userData.active === false) {
     throw new HttpsError('failed-precondition', 'Target staff member is inactive or unavailable.');
@@ -136,34 +107,28 @@ async function assertUserCanTakeShift(
     throw new HttpsError('failed-precondition', 'Shift has an invalid schedule.');
   }
 
-  const targetDay = dayKey(startMs);
-  let totalHours = hours(shift.startAt, shift.endAt);
+  const { windowStartMs, windowEndMs } = computeFatigueWindowMs(startMs, rules);
 
   const assignedSnap = await tx.get(
     db.collection('orgs').doc(orgId).collection('shifts')
       .where('assignedUserId', '==', uid)
-      .limit(200)
+      .where('startAt', '>=', Timestamp.fromMillis(windowStartMs))
+      .where('startAt', '<', Timestamp.fromMillis(windowEndMs))
+      .limit(500)
   );
+  const otherShifts: ShiftSlice[] = assignedSnap.docs.map((doc: any) => {
+    const other: any = doc.data();
+    return { id: doc.id, startAtMs: toMillis(other.startAt), endAtMs: toMillis(other.endAt), status: String(other.status || '') };
+  });
 
-  for (const doc of assignedSnap.docs) {
-    if (excludedShiftIds.has(doc.id)) continue;
-    const other = doc.data() as any;
-    if (!other?.startAt || !other?.endAt) continue;
-    if (TERMINAL_SHIFT_STATUSES.has(String(other.status || '').trim())) continue;
-
-    if (overlaps(shift.startAt, shift.endAt, other.startAt, other.endAt)) {
-      throw new HttpsError('failed-precondition', `${personName(userData, uid)} already has an overlapping shift.`);
-    }
-
-    const otherStartMs = toMillis(other.startAt);
-    if (otherStartMs && dayKey(otherStartMs) === targetDay) {
-      totalHours += hours(other.startAt, other.endAt);
-    }
-  }
-
-  if (totalHours > MAX_ASSIGNED_HOURS_PER_DAY) {
-    throw new HttpsError('failed-precondition', `${personName(userData, uid)} would exceed ${MAX_ASSIGNED_HOURS_PER_DAY} scheduled hours that day.`);
-  }
+  const violation = checkShiftEligibility({
+    targetShift: { id: shiftId, startAtMs: startMs, endAtMs: endMs },
+    otherShifts,
+    excludedShiftIds,
+    rules,
+    personLabel: personName(userData, uid),
+  });
+  if (violation) throw new HttpsError('failed-precondition', violation.message);
 
   return { shiftId, startMs, endMs };
 }
@@ -193,7 +158,7 @@ export const listShiftSwapCandidates = onCall(async (req) => {
   const requester = requesterSnap.exists ? requesterSnap.data() as any : {};
   const requesterJobRole = String(requester?.jobRole || '').trim();
 
-  const [usersSnap, shiftsSnap] = await Promise.all([
+  const [usersSnap, shiftsSnap, orgSnap] = await Promise.all([
     db.collection('orgs').doc(orgId).collection('users').limit(1000).get(),
     db.collection('orgs').doc(orgId).collection('shifts')
       .where('startAt', '>=', Timestamp.fromMillis(Date.now()))
@@ -201,7 +166,9 @@ export const listShiftSwapCandidates = onCall(async (req) => {
       .orderBy('startAt', 'asc')
       .limit(1000)
       .get(),
+    db.collection('orgs').doc(orgId).get(),
   ]);
+  const rules = resolveFatigueRules(orgSnap.exists ? orgSnap.data() : null);
 
   const futureShiftsByUid = new Map<string, Array<ReturnType<typeof serializeShift>>>();
   for (const doc of shiftsSnap.docs) {
@@ -231,7 +198,7 @@ export const listShiftSwapCandidates = onCall(async (req) => {
         active: user?.active !== false,
         canCoverSource: user?.active !== false && shiftRoleMatches(user?.jobRole, source.requiredJobRoles ?? source.requiredJobRole),
         shifts,
-        match: scoreSwapCandidate(sourceSlice, shifts),
+        match: scoreSwapCandidate(sourceSlice, shifts, rules.minRestHours),
       };
     })
     .filter((user) => user.canCoverSource)
@@ -449,14 +416,15 @@ export const respondShiftSwap = onCall(async (req) => {
     const sourceRef = db.collection('orgs').doc(orgId).collection('shifts').doc(sourceShiftId);
     const targetUserRef = db.collection('orgs').doc(orgId).collection('users').doc(targetUid);
     const requesterUserRef = db.collection('orgs').doc(orgId).collection('users').doc(requesterUid);
+    const orgRef = db.collection('orgs').doc(orgId);
 
-    const reads: Promise<any>[] = [tx.get(sourceRef), tx.get(targetUserRef), tx.get(requesterUserRef)];
+    const reads: Promise<any>[] = [tx.get(sourceRef), tx.get(targetUserRef), tx.get(requesterUserRef), tx.get(orgRef)];
     const targetShiftRef = targetShiftId
       ? db.collection('orgs').doc(orgId).collection('shifts').doc(targetShiftId)
       : null;
     if (targetShiftRef) reads.push(tx.get(targetShiftRef));
 
-    const [sourceSnap, targetUserSnap, requesterUserSnap, targetShiftSnap] = await Promise.all(reads);
+    const [sourceSnap, targetUserSnap, requesterUserSnap, orgSnap, targetShiftSnap] = await Promise.all(reads);
     if (!sourceSnap.exists) throw new HttpsError('not-found', 'Source shift not found.');
     if (!targetUserSnap.exists) throw new HttpsError('not-found', 'Target staff member not found.');
     if (!requesterUserSnap.exists) throw new HttpsError('not-found', 'Requester staff member not found.');
@@ -464,6 +432,7 @@ export const respondShiftSwap = onCall(async (req) => {
     const source = sourceSnap.data() as any;
     const targetUser = targetUserSnap.data() as any;
     const requesterUser = requesterUserSnap.data() as any;
+    const rules = resolveFatigueRules(orgSnap.exists ? orgSnap.data() : null);
 
     if (source.assignedUserId !== requesterUid) {
       throw new HttpsError('failed-precondition', 'The source shift is no longer assigned to the requester.');
@@ -484,10 +453,10 @@ export const respondShiftSwap = onCall(async (req) => {
       if (!ACTIVE_SHIFT_STATUSES.has(String(targetShift.status || '').trim())) {
         throw new HttpsError('failed-precondition', 'The target shift is no longer switchable.');
       }
-      await assertUserCanTakeShift(tx, db, orgId, requesterUid, requesterUser, targetShiftId, targetShift, excludedIds);
+      await assertUserCanTakeShift(tx, db, orgId, requesterUid, requesterUser, targetShiftId, targetShift, excludedIds, rules);
     }
 
-    await assertUserCanTakeShift(tx, db, orgId, targetUid, targetUser, sourceShiftId, source, excludedIds);
+    await assertUserCanTakeShift(tx, db, orgId, targetUid, targetUser, sourceShiftId, source, excludedIds, rules);
 
     tx.update(sourceRef, {
       assignedUserId: targetUid,

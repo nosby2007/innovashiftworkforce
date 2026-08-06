@@ -4,32 +4,8 @@ import { resolveTenantWithFallback } from '../infra/tenancy';
 import { writeAudit } from '../infra/audit';
 import { Timestamp } from 'firebase-admin/firestore';
 import { shiftRoleMatches } from '../domain/job-roles';
-
-const MAX_ASSIGNED_HOURS_PER_DAY = 16;
-
-function overlaps(aStart: any, aEnd: any, bStart: any, bEnd: any): boolean {
-  const as = aStart?.toMillis ? aStart.toMillis() : Number(aStart);
-  const ae = aEnd?.toMillis ? aEnd.toMillis() : Number(aEnd);
-  const bs = bStart?.toMillis ? bStart.toMillis() : Number(bStart);
-  const be = bEnd?.toMillis ? bEnd.toMillis() : Number(bEnd);
-  return as < be && bs < ae;
-}
-
-function utcDayKeyFromTs(ts: any): string {
-  const ms = ts?.toMillis ? ts.toMillis() : Number(ts || 0);
-  const d = new Date(ms);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function durationHours(startAt: any, endAt: any): number {
-  const startMs = startAt?.toMillis ? startAt.toMillis() : Number(startAt || 0);
-  const endMs = endAt?.toMillis ? endAt.toMillis() : Number(endAt || 0);
-  if (!startMs || !endMs || endMs <= startMs) return 0;
-  return (endMs - startMs) / 3_600_000;
-}
+import { toMillis } from '../domain/dates';
+import { checkShiftEligibility, computeFatigueWindowMs, resolveFatigueRules, ShiftSlice } from '../domain/shift-eligibility';
 
 export const assignShift = onCall(async (req) => {
   const admin = initFirebase();
@@ -51,7 +27,8 @@ export const assignShift = onCall(async (req) => {
   const userRef  = db.collection('orgs').doc(orgId).collection('users').doc(assigneeUid);
 
   await db.runTransaction(async (tx) => {
-    const [shiftSnap, userSnap] = await Promise.all([tx.get(shiftRef), tx.get(userRef)]);
+    const orgRef = db.collection('orgs').doc(orgId);
+    const [shiftSnap, userSnap, orgSnap] = await Promise.all([tx.get(shiftRef), tx.get(userRef), tx.get(orgRef)]);
     if (!shiftSnap.exists) throw new HttpsError('not-found', 'Shift not found.');
     if (!userSnap.exists) throw new HttpsError('not-found', 'Assignee not found in org.');
 
@@ -65,34 +42,32 @@ export const assignShift = onCall(async (req) => {
       throw new HttpsError('failed-precondition', `This shift requires ${Array.isArray(s.requiredJobRoles) && s.requiredJobRoles.length ? s.requiredJobRoles.join(', ') : String(s.requiredJobRole || 'a specific role')} role.`);
     }
 
-    const startAt = s.startAt;
-    const endAt = s.endAt;
-    if (!startAt || !endAt) throw new HttpsError('failed-precondition', 'Shift startAt/endAt required.');
+    const startMs = toMillis(s.startAt);
+    const endMs = toMillis(s.endAt);
+    if (!startMs || !endMs || endMs <= startMs) throw new HttpsError('failed-precondition', 'Shift startAt/endAt required.');
 
-    const targetDay = utcDayKeyFromTs(startAt);
-    let targetDayHours = durationHours(startAt, endAt);
+    const rules = resolveFatigueRules(orgSnap.exists ? orgSnap.data() : null);
+    const { windowStartMs, windowEndMs } = computeFatigueWindowMs(startMs, rules);
 
-    const q = db.collection('orgs').doc(orgId).collection('shifts')
-      .where('assignedUserId', '==', assigneeUid)
-      .limit(200);
-
-    const qsnap = await tx.get(q);
-    for (const d of qsnap.docs) {
+    const qsnap = await tx.get(
+      db.collection('orgs').doc(orgId).collection('shifts')
+        .where('assignedUserId', '==', assigneeUid)
+        .where('startAt', '>=', Timestamp.fromMillis(windowStartMs))
+        .where('startAt', '<', Timestamp.fromMillis(windowEndMs))
+        .limit(500)
+    );
+    const otherShifts: ShiftSlice[] = qsnap.docs.map((d) => {
       const other: any = d.data();
-      if (d.id === shiftId) continue;
-      if (!other?.startAt || !other?.endAt) continue;
-      if (['cancelled', 'completed', 'expired', 'no_show'].includes(other.status)) continue;
-      if (utcDayKeyFromTs(other.startAt) === targetDay) {
-        targetDayHours += durationHours(other.startAt, other.endAt);
-      }
-      if (overlaps(startAt, endAt, other.startAt, other.endAt)) {
-        throw new HttpsError('failed-precondition', 'Overlap detected for this staff member.');
-      }
-    }
+      return { id: d.id, startAtMs: toMillis(other.startAt), endAtMs: toMillis(other.endAt), status: String(other.status || '') };
+    });
 
-    if (targetDayHours > MAX_ASSIGNED_HOURS_PER_DAY) {
-      throw new HttpsError('failed-precondition', `Assignment would exceed ${MAX_ASSIGNED_HOURS_PER_DAY} scheduled hours for this staff member on that day.`);
-    }
+    const violation = checkShiftEligibility({
+      targetShift: { id: shiftId, startAtMs: startMs, endAtMs: endMs },
+      otherShifts,
+      rules,
+      personLabel: 'This staff member',
+    });
+    if (violation) throw new HttpsError('failed-precondition', violation.message);
 
     const assignedUserName = String(userData.displayName || userData.email || userData.name || assigneeUid).trim();
 

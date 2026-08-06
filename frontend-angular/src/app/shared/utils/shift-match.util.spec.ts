@@ -72,4 +72,27 @@ describe('scoreShiftMatch', () => {
     const m = scoreShiftMatch(shift, [shift], 'RN');
     expect(m.hasConflict).toBe(false);
   });
+
+  it('uses the default 8h minRestHours when not passed', () => {
+    const shift = makeShift({ id: 'new', requiredJobRole: 'RN', startAt: ts(Date.UTC(2026, 0, 11, 2, 0)), endAt: ts(Date.UTC(2026, 0, 11, 10, 0)) });
+    const existing = makeShift({ id: 'existing', requiredJobRole: 'RN', status: 'assigned', startAt: ts(Date.UTC(2026, 0, 10, 12, 0)), endAt: ts(Date.UTC(2026, 0, 10, 20, 0)) });
+    const m = scoreShiftMatch(shift, [existing], 'RN');
+    expect(m.label).toBe('tight_turnaround');
+  });
+
+  it('does not flag a gap that would fail the 8h default when a lower custom minRestHours is used', () => {
+    const shift = makeShift({ id: 'new', requiredJobRole: 'RN', startAt: ts(Date.UTC(2026, 0, 11, 2, 0)), endAt: ts(Date.UTC(2026, 0, 11, 10, 0)) });
+    const existing = makeShift({ id: 'existing', requiredJobRole: 'RN', status: 'assigned', startAt: ts(Date.UTC(2026, 0, 10, 12, 0)), endAt: ts(Date.UTC(2026, 0, 10, 20, 0)) });
+    const m = scoreShiftMatch(shift, [existing], 'RN', 4);
+    expect(m.label).toBe('great_fit');
+  });
+
+  it('flags a gap that would pass the 8h default when a higher custom minRestHours is used', () => {
+    const shift = makeShift({ id: 'new', requiredJobRole: 'RN', startAt: ts(Date.UTC(2026, 0, 11, 6, 0)), endAt: ts(Date.UTC(2026, 0, 11, 14, 0)) });
+    const existing = makeShift({ id: 'existing', requiredJobRole: 'RN', status: 'assigned', startAt: ts(Date.UTC(2026, 0, 10, 10, 0)), endAt: ts(Date.UTC(2026, 0, 10, 20, 0)) }); // 10h gap
+    const passes = scoreShiftMatch(shift, [existing], 'RN');
+    expect(passes.label).toBe('great_fit');
+    const flagged = scoreShiftMatch(shift, [existing], 'RN', 12);
+    expect(flagged.label).toBe('tight_turnaround');
+  });
 });

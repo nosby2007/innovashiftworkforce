@@ -7,7 +7,7 @@
  * best-first rather than removing anyone from the list.
  */
 
-const MIN_REST_HOURS = 8;
+const DEFAULT_MIN_REST_HOURS = 8;
 
 export type SwapMatchLabel = 'great_fit' | 'conflict' | 'tight_turnaround';
 
@@ -22,9 +22,9 @@ export interface SwapShiftSlice {
   endAtMs: number;
 }
 
-export function scoreSwapCandidate(source: SwapShiftSlice, candidateShifts: SwapShiftSlice[]): SwapMatch {
+export function scoreSwapCandidate(source: SwapShiftSlice, candidateShifts: SwapShiftSlice[], minRestHours = DEFAULT_MIN_REST_HOURS): SwapMatch {
   let hasConflict = false;
-  let minRestHours = Infinity;
+  let restHours = Infinity;
 
   for (const other of candidateShifts) {
     if (source.startAtMs < other.endAtMs && source.endAtMs > other.startAtMs) {
@@ -34,10 +34,10 @@ export function scoreSwapCandidate(source: SwapShiftSlice, candidateShifts: Swap
     const gapHours = other.startAtMs >= source.endAtMs
       ? (other.startAtMs - source.endAtMs) / 3_600_000
       : (source.startAtMs - other.endAtMs) / 3_600_000;
-    minRestHours = Math.min(minRestHours, gapHours);
+    restHours = Math.min(restHours, gapHours);
   }
 
   if (hasConflict) return { score: -1000, label: 'conflict', hasConflict: true };
-  if (minRestHours < MIN_REST_HOURS) return { score: -15, label: 'tight_turnaround', hasConflict: false };
+  if (restHours < minRestHours) return { score: -15, label: 'tight_turnaround', hasConflict: false };
   return { score: 10, label: 'great_fit', hasConflict: false };
 }
