@@ -10,10 +10,15 @@ All flags default to `false`, so the stable experience remains active unless an 
 
 ## Flags
 
-- `nextRosterWorkflow`
 - `nextSchedulerActions`
 - `nextStaffAttendanceCard`
-- `nextMobileShell`
+
+`nextRosterWorkflow` and `nextMobileShell` were removed — they were scaffolded
+in the original rollout but never got any consuming code, so toggling them
+never changed anything. Separately, the `*ngIf` gating for the two flags
+above was accidentally dropped during a merge-conflict resolution shortly
+after the original rollout, which made their "next" UI permanent for
+everyone regardless of the switch; that gating has since been restored.
 
 ## Soft rollback
 
