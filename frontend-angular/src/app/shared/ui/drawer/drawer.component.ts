@@ -7,8 +7,8 @@ import { CommonModule } from '@angular/common';
   imports: [CommonModule],
   template: `
     <ng-container *ngIf="open">
-      <div class="backdrop" (click)="close.emit()"></div>
-      <div class="drawer">
+      <div class="backdrop" animate.enter="vs-fade-in" animate.leave="vs-fade-out" (click)="close.emit()"></div>
+      <div class="drawer" animate.enter="vs-drawer-in" animate.leave="vs-drawer-out">
         <div class="header">
           <div class="title">{{ title }}</div>
           <button class="x" (click)="close.emit()">×</button>

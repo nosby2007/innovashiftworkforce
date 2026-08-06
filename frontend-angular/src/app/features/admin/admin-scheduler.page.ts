@@ -7,7 +7,7 @@ import { Timestamp } from 'firebase/firestore';
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { ExperienceFlagsService } from '../../core/experience/experience-flags.service';
 import { OrgExperienceService } from '../../core/experience/org-experience.service';
-import { resolveJobRoleOptions } from '../../shared/utils/job-role-catalog.util';
+import { resolveJobRoleOptions, mergeCustomJobRoles } from '../../shared/utils/job-role-catalog.util';
 import { PayPeriodService } from '../../core/tenancy/pay-period.service';
 import { PayPeriodSelectorComponent } from '../../shared/ui/pay-period-selector/pay-period-selector.component';
 import { ShiftsRepo } from '../../core/repos/shifts.repo';
@@ -1063,6 +1063,7 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
   staffSearch = '';
   staffPickForShiftId: string | null = null;
   orgIndustry = 'Healthcare';
+  customJobRoles: string[] = [];
 
   // Not { static: true }: these <ng-template>s live inside the *ngIf="orgId"
   // container, which is still false on the first change-detection pass
@@ -1487,13 +1488,15 @@ export class AdminSchedulerPage implements OnDestroy, AfterViewInit {
       const snap = await getDoc(doc(getFirestore(), 'orgs', orgId));
       const industry = String((snap.data() as any)?.industry || '').trim();
       if (industry) this.orgIndustry = industry;
+      const customJobRoles = (snap.data() as any)?.customJobRoles;
+      this.customJobRoles = Array.isArray(customJobRoles) ? customJobRoles : [];
     } catch {
       // Keep default catalog if the org doc is unavailable.
     }
   }
 
   jobRoleOptions() {
-    return resolveJobRoleOptions(this.orgIndustry, this.orgExperience.config());
+    return mergeCustomJobRoles(resolveJobRoleOptions(this.orgIndustry, this.orgExperience.config()), this.customJobRoles);
   }
 
   private normalizeStatus(status: string | undefined): string {

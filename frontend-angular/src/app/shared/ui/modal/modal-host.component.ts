@@ -9,8 +9,8 @@ import { ModalService, ModalRef } from './modal.service';
   imports: [CommonModule],
   template: `
     <ng-container *ngIf="ref as r">
-      <div class="backdrop" (click)="close()"></div>
-      <div class="panel" role="dialog" aria-modal="true">
+      <div class="backdrop" animate.enter="vs-fade-in" animate.leave="vs-fade-out" (click)="close()"></div>
+      <div class="panel" animate.enter="vs-modal-in" animate.leave="vs-modal-out" role="dialog" aria-modal="true">
         <div class="header">
           <div class="title">{{ r.title }}</div>
           <button class="x" (click)="close()">×</button>

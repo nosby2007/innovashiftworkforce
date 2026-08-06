@@ -616,9 +616,34 @@ table tr.vs-row { display: table-row; }
   from { background-position: -400px 0; }
   to   { background-position: 400px 0; }
 }
+@keyframes vsFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes vsModalIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes vsModalOut {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.96); }
+}
+@keyframes vsDrawerIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes vsDrawerOut {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
+}
 
 .vs-animate-in   { animation: vsSlideInUp 300ms var(--t-slow) both; }
 .vs-fade-in      { animation: vsFadeIn 250ms ease both; }
+.vs-fade-out     { animation: vsFadeOut 150ms ease both; }
+.vs-modal-in     { animation: vsModalIn 200ms var(--t-slow) both; }
+.vs-modal-out    { animation: vsModalOut 150ms ease both; }
+.vs-drawer-in    { animation: vsDrawerIn 250ms var(--t-slow) both; }
+.vs-drawer-out   { animation: vsDrawerOut 200ms ease both; }
 .vs-pulse        { animation: vsPulse 1.8s ease-in-out infinite; }
 
 /* Skeleton loader */
