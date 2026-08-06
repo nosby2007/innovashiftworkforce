@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { TranslocoModule, TranslocoService } from '@jsverse/transloco';
 
 import { OrgContextService } from '../../core/tenancy/org-context.service';
 import { OrgExperienceService } from '../../core/experience/org-experience.service';
@@ -190,20 +191,20 @@ const PLAN_BADGE: Record<string, string> = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule],
+  imports: [CommonModule, FormsModule, RouterLink, MatIconModule, MatButtonModule, TranslocoModule],
   template: `
     <div class="vs-page-pad">
 
       <!-- Header -->
       <div class="vs-page-header">
         <div class="vs-page-title">
-          <h1 class="vs-title">Organization Settings</h1>
-          <p class="vs-page-subtitle">Manage your organization's profile and configuration</p>
+          <h1 class="vs-title">{{ 'orgSettings.title' | transloco }}</h1>
+          <p class="vs-page-subtitle">{{ 'orgSettings.subtitle' | transloco }}</p>
         </div>
         <div class="vs-page-actions">
           <span class="vs-badge {{ planBadge() }}">
             <mat-icon style="font-size:13px;">workspace_premium</mat-icon>
-            {{ settings().plan | uppercase }} plan
+            {{ 'orgSettings.planLabel' | transloco: { plan: (settings().plan | uppercase) } }}
           </span>
         </div>
       </div>
@@ -211,7 +212,7 @@ const PLAN_BADGE: Record<string, string> = {
       <!-- No org -->
       <div *ngIf="!orgId" class="ors-no-org vs-glass">
         <mat-icon>warning_amber</mat-icon>
-        No organization context. Contact a Super Admin.
+        {{ 'orgSettings.noOrgContext' | transloco }}
       </div>
 
       <ng-container *ngIf="orgId">
@@ -220,56 +221,56 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Organization Profile</div>
-              <div class="vs-panel-subtitle">Basic information about your organization</div>
+              <div class="vs-panel-title">{{ 'orgSettings.profileTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.profileSubtitle' | transloco }}</div>
             </div>
             <mat-icon class="ors-section-icon">business</mat-icon>
           </div>
           <div class="vs-panel-body ors-form">
             <div class="vs-form-row vs-form-row--2">
               <div>
-                <label class="vs-field-label" for="ors-name">Organization Name *</label>
-                <input id="ors-name" class="vs-input" [(ngModel)]="draft.name" placeholder="Acme Healthcare Inc.">
+                <label class="vs-field-label" for="ors-name">{{ 'orgSettings.orgNameLabel' | transloco }}</label>
+                <input id="ors-name" class="vs-input" [(ngModel)]="draft.name" [placeholder]="'orgSettings.orgNamePlaceholder' | transloco">
               </div>
               <div>
-                <label class="vs-field-label" for="ors-email">Contact Email</label>
+                <label class="vs-field-label" for="ors-email">{{ 'orgSettings.contactEmailLabel' | transloco }}</label>
                 <input id="ors-email" class="vs-input" type="email" [(ngModel)]="draft.contactEmail" placeholder="admin@example.com">
               </div>
             </div>
             <div class="vs-form-row vs-form-row--2">
               <div>
-                <label class="vs-field-label" for="ors-industry">Industry</label>
+                <label class="vs-field-label" for="ors-industry">{{ 'orgSettings.industryLabel' | transloco }}</label>
                 <select id="ors-industry" class="vs-select" [(ngModel)]="draft.industry">
                   <option *ngFor="let i of industries" [value]="i">{{ i }}</option>
                 </select>
               </div>
               <div>
-                <label class="vs-field-label" for="ors-tz">Timezone</label>
+                <label class="vs-field-label" for="ors-tz">{{ 'orgSettings.timezoneLabel' | transloco }}</label>
                 <select id="ors-tz" class="vs-select" [(ngModel)]="draft.timezone">
                   <option *ngFor="let tz of timezones" [value]="tz">{{ tz }}</option>
                 </select>
               </div>
             </div>
-            
+
             <div class="vs-form-row vs-form-row--2" style="margin-top:16px;">
               <div>
-                <label class="vs-field-label" for="ors-pay">Default Pay Rate ({{ draft.currencyCode }}/hr)</label>
+                <label class="vs-field-label" for="ors-pay">{{ 'orgSettings.defaultPayRateLabel' | transloco: { currency: draft.currencyCode } }}</label>
                 <input id="ors-pay" type="number" class="vs-input" [(ngModel)]="draft.defaultPayRate" placeholder="40.00">
-                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Applies automatically when creating new shifts</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">{{ 'orgSettings.defaultPayRateHint' | transloco }}</div>
               </div>
               <div>
-                <label class="vs-field-label" for="ors-break-threshold">Break Required After</label>
+                <label class="vs-field-label" for="ors-break-threshold">{{ 'orgSettings.breakRequiredAfterLabel' | transloco }}</label>
                 <select id="ors-break-threshold" class="vs-select" [(ngModel)]="draft.breakRequiredAfterHours">
-                  <option [value]="4">4 hours</option>
-                  <option [value]="6">6 hours</option>
+                  <option [value]="4">{{ 'orgSettings.breakOption4h' | transloco }}</option>
+                  <option [value]="6">{{ 'orgSettings.breakOption6h' | transloco }}</option>
                 </select>
-                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Staff must take a break before checkout past this threshold</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">{{ 'orgSettings.breakRequiredAfterHint' | transloco }}</div>
               </div>
             </div>
 
             <div class="vs-form-row vs-form-row--2" style="margin-top:16px;">
               <div>
-                <label class="vs-field-label" for="ors-break-min">Minimum Break Duration (minutes)</label>
+                <label class="vs-field-label" for="ors-break-min">{{ 'orgSettings.minBreakDurationLabel' | transloco }}</label>
                 <input id="ors-break-min" type="number" class="vs-input" min="1" [(ngModel)]="draft.minRequiredBreakMinutes" placeholder="30">
               </div>
             </div>
@@ -279,22 +280,22 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Industry Profile</div>
-              <div class="vs-panel-subtitle">Tailor terminology and workflows to your industry</div>
+              <div class="vs-panel-title">{{ 'orgSettings.industryProfileTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.industryProfileSubtitle' | transloco }}</div>
             </div>
             <mat-icon class="ors-section-icon">tune</mat-icon>
           </div>
           <div class="vs-panel-body ors-industry-profile-body">
             <ng-container *ngIf="experienceConfig().configurationStatus === 'configured'; else notConfigured">
-              <span class="vs-badge vs-badge--success">Active</span>
+              <span class="vs-badge vs-badge--success">{{ 'orgSettings.active' | transloco }}</span>
               <span>{{ experienceConfig().industryProfileId }}</span>
             </ng-container>
             <ng-template #notConfigured>
-              <span class="vs-badge vs-badge--neutral">Not set up</span>
-              <span>Using generic workforce defaults</span>
+              <span class="vs-badge vs-badge--neutral">{{ 'orgSettings.notSetUp' | transloco }}</span>
+              <span>{{ 'orgSettings.usingGenericDefaults' | transloco }}</span>
             </ng-template>
             <a class="vs-btn-ghost" routerLink="/admin/industry-setup">
-              <mat-icon>arrow_forward</mat-icon> Set up industry profile
+              <mat-icon>arrow_forward</mat-icon> {{ 'orgSettings.setUpIndustryProfile' | transloco }}
             </a>
           </div>
         </section>
@@ -302,27 +303,27 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Finance, Payroll & Tax</div>
-              <div class="vs-panel-subtitle">Currency, pay cycle, and statutory payroll profile for this organization</div>
+              <div class="vs-panel-title">{{ 'orgSettings.financeTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.financeSubtitle' | transloco }}</div>
             </div>
             <mat-icon class="ors-section-icon">account_balance</mat-icon>
           </div>
           <div class="vs-panel-body ors-form">
             <div class="vs-form-row vs-form-row--3">
               <div>
-                <label class="vs-field-label" for="ors-country">Country / Jurisdiction</label>
+                <label class="vs-field-label" for="ors-country">{{ 'orgSettings.countryLabel' | transloco }}</label>
                 <select id="ors-country" class="vs-select" [(ngModel)]="draft.countryCode">
                   <option *ngFor="let c of countries" [value]="c.code">{{ c.label }}</option>
                 </select>
               </div>
               <div>
-                <label class="vs-field-label" for="ors-currency">Currency</label>
+                <label class="vs-field-label" for="ors-currency">{{ 'orgSettings.currencyLabel' | transloco }}</label>
                 <select id="ors-currency" class="vs-select" [(ngModel)]="draft.currencyCode">
                   <option *ngFor="let c of currencies" [value]="c.code">{{ c.label }}</option>
                 </select>
               </div>
               <div>
-                <label class="vs-field-label" for="ors-pay-frequency">Payment Cycle</label>
+                <label class="vs-field-label" for="ors-pay-frequency">{{ 'orgSettings.paymentCycleLabel' | transloco }}</label>
                 <select id="ors-pay-frequency" class="vs-select" [(ngModel)]="draft.payFrequency">
                   <option *ngFor="let f of payFrequencies" [value]="f.value">{{ f.label }}</option>
                 </select>
@@ -330,15 +331,15 @@ const PLAN_BADGE: Record<string, string> = {
             </div>
             <div class="vs-form-row vs-form-row--2" style="margin-top:16px;">
               <div>
-                <label class="vs-field-label" for="ors-tax-profile">Tax Profile</label>
+                <label class="vs-field-label" for="ors-tax-profile">{{ 'orgSettings.taxProfileLabel' | transloco }}</label>
                 <select id="ors-tax-profile" class="vs-select" [(ngModel)]="draft.taxProfile" (ngModelChange)="onTaxProfileChange($event)">
                   <option *ngFor="let t of taxProfiles" [value]="t.value">{{ t.label }}</option>
                 </select>
                 <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">{{ taxProfileDescription(draft.taxProfile) }}</div>
               </div>
               <div>
-                <label class="vs-field-label" for="ors-tax-notes">Payroll Tax Notes</label>
-                <textarea id="ors-tax-notes" class="vs-input" rows="3" [(ngModel)]="draft.payrollTaxNotes" placeholder="Local statutory notes, accountant contact, external payroll provider..."></textarea>
+                <label class="vs-field-label" for="ors-tax-notes">{{ 'orgSettings.payrollTaxNotesLabel' | transloco }}</label>
+                <textarea id="ors-tax-notes" class="vs-input" rows="3" [(ngModel)]="draft.payrollTaxNotes" [placeholder]="'orgSettings.payrollTaxNotesPlaceholder' | transloco"></textarea>
               </div>
             </div>
           </div>
@@ -348,8 +349,8 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Overtime & Paid Holidays</div>
-              <div class="vs-panel-subtitle">Overtime premium and company-paid holidays used when calculating payroll</div>
+              <div class="vs-panel-title">{{ 'orgSettings.otHolidaysTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.otHolidaysSubtitle' | transloco }}</div>
             </div>
             <mat-icon class="ors-section-icon">schedule</mat-icon>
           </div>
@@ -357,14 +358,14 @@ const PLAN_BADGE: Record<string, string> = {
             <label class="ors-toggle-row">
               <input type="checkbox" [(ngModel)]="draft.overtimeEnabled">
               <div>
-                <div class="ors-toggle-title">Enable overtime pay</div>
-                <div class="vs-muted">When on, hours worked beyond the weekly threshold are paid at the overtime multiplier below.</div>
+                <div class="ors-toggle-title">{{ 'orgSettings.enableOvertimeLabel' | transloco }}</div>
+                <div class="vs-muted">{{ 'orgSettings.enableOvertimeHint' | transloco }}</div>
               </div>
             </label>
 
             <div class="vs-form-row vs-form-row--2" style="margin-top:16px;" *ngIf="draft.overtimeEnabled">
               <div>
-                <label class="vs-field-label" for="ors-ot-multiplier">Overtime Multiplier</label>
+                <label class="vs-field-label" for="ors-ot-multiplier">{{ 'orgSettings.otMultiplierLabel' | transloco }}</label>
                 <input id="ors-ot-multiplier" type="number" class="vs-input" min="1" step="0.1" [(ngModel)]="draft.overtimeMultiplier" placeholder="1.5">
                 <div class="ors-quick-set">
                   <button class="vs-btn-ghost ors-quick-set-btn" type="button" (click)="draft.overtimeMultiplier = 1.5">1.5x</button>
@@ -372,54 +373,54 @@ const PLAN_BADGE: Record<string, string> = {
                 </div>
               </div>
               <div>
-                <label class="vs-field-label" for="ors-ot-threshold">Weekly Overtime Threshold (hours)</label>
+                <label class="vs-field-label" for="ors-ot-threshold">{{ 'orgSettings.weeklyOtThresholdLabel' | transloco }}</label>
                 <input id="ors-ot-threshold" type="number" class="vs-input" min="1" [(ngModel)]="draft.overtimeWeeklyThresholdHours" placeholder="40">
-                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Hours worked beyond this in a Monday–Sunday week are paid as overtime.</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">{{ 'orgSettings.weeklyOtThresholdHint' | transloco }}</div>
               </div>
             </div>
 
             <div class="vs-form-row" style="margin-top:16px;">
               <div>
-                <label class="vs-field-label" for="ors-holiday-multiplier">Holiday-Worked Multiplier</label>
+                <label class="vs-field-label" for="ors-holiday-multiplier">{{ 'orgSettings.holidayMultiplierLabel' | transloco }}</label>
                 <input id="ors-holiday-multiplier" type="number" class="vs-input" min="1" step="0.1" [(ngModel)]="draft.holidayWorkMultiplier" placeholder="1.5">
-                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Pay rate multiplier for hours actually worked on a paid holiday below (instead of overtime).</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">{{ 'orgSettings.holidayMultiplierHint' | transloco }}</div>
               </div>
             </div>
 
             <div class="ors-site-actions" style="justify-content:space-between; margin-top:16px;">
-              <strong>Paid Holidays</strong>
+              <strong>{{ 'orgSettings.paidHolidays' | transloco }}</strong>
               <button class="vs-btn-ghost" (click)="addHoliday()" type="button">
-                <mat-icon>add</mat-icon> Add Holiday
+                <mat-icon>add</mat-icon> {{ 'orgSettings.addHoliday' | transloco }}
               </button>
             </div>
 
             <div *ngIf="draft.holidays.length === 0" class="ors-empty-site vs-glass">
               <mat-icon>event_busy</mat-icon>
               <div>
-                <strong>No paid holidays configured.</strong>
-                <div class="vs-muted">Add a holiday so staff automatically get paid for it, and worked hours on that day use the holiday multiplier.</div>
+                <strong>{{ 'orgSettings.noHolidaysTitle' | transloco }}</strong>
+                <div class="vs-muted">{{ 'orgSettings.noHolidaysHint' | transloco }}</div>
               </div>
             </div>
 
             <div class="ors-site-card" *ngFor="let holiday of draft.holidays; index as i">
               <div class="vs-form-row vs-form-row--3">
                 <div>
-                  <label class="vs-field-label">Holiday Name *</label>
-                  <input class="vs-input" [(ngModel)]="holiday.name" placeholder="Independence Day">
+                  <label class="vs-field-label">{{ 'orgSettings.holidayNameLabel' | transloco }}</label>
+                  <input class="vs-input" [(ngModel)]="holiday.name" [placeholder]="'orgSettings.holidayNamePlaceholder' | transloco">
                 </div>
                 <div>
-                  <label class="vs-field-label">Date</label>
+                  <label class="vs-field-label">{{ 'orgSettings.dateLabel' | transloco }}</label>
                   <input class="vs-input" type="date" [(ngModel)]="holiday.date">
                 </div>
                 <div>
-                  <label class="vs-field-label">Paid Hours</label>
+                  <label class="vs-field-label">{{ 'orgSettings.paidHoursLabel' | transloco }}</label>
                   <input class="vs-input" type="number" min="0" step="0.5" [(ngModel)]="holiday.paidHours" placeholder="8">
                 </div>
               </div>
               <div class="ors-site-footer">
-                <span class="vs-muted">Staff who don't work this day are paid these hours automatically; staff who do work it get the holiday multiplier instead.</span>
+                <span class="vs-muted">{{ 'orgSettings.holidayFooterHint' | transloco }}</span>
                 <button class="vs-btn-ghost" type="button" (click)="removeHoliday(i)">
-                  <mat-icon>delete</mat-icon> Remove
+                  <mat-icon>delete</mat-icon> {{ 'orgSettings.remove' | transloco }}
                 </button>
               </div>
             </div>
@@ -430,37 +431,37 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Custom Job Roles</div>
-              <div class="vs-panel-subtitle">Roles specific to your organization, shown alongside the built-in list when inviting staff or creating shifts</div>
+              <div class="vs-panel-title">{{ 'orgSettings.customRolesTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.customRolesSubtitle' | transloco }}</div>
             </div>
             <mat-icon class="ors-section-icon">badge</mat-icon>
           </div>
           <div class="vs-panel-body ors-form">
             <div class="ors-site-actions" style="justify-content:space-between;">
-              <strong>Custom Roles</strong>
+              <strong>{{ 'orgSettings.customRolesHeader' | transloco }}</strong>
               <button class="vs-btn-ghost" (click)="addCustomJobRole()" type="button">
-                <mat-icon>add</mat-icon> Add Role
+                <mat-icon>add</mat-icon> {{ 'orgSettings.addRole' | transloco }}
               </button>
             </div>
 
             <div *ngIf="draft.customJobRoles.length === 0" class="ors-empty-site vs-glass">
               <mat-icon>badge</mat-icon>
               <div>
-                <strong>No custom roles added.</strong>
-                <div class="vs-muted">Custom roles appear before "Other" in every job-role dropdown across the app.</div>
+                <strong>{{ 'orgSettings.noCustomRolesTitle' | transloco }}</strong>
+                <div class="vs-muted">{{ 'orgSettings.noCustomRolesHint' | transloco }}</div>
               </div>
             </div>
 
             <div class="ors-site-card" *ngFor="let role of draft.customJobRoles; index as i">
               <div class="vs-form-row">
                 <div>
-                  <label class="vs-field-label">Role Name *</label>
-                  <input class="vs-input" [(ngModel)]="draft.customJobRoles[i]" placeholder="e.g. Line Cook">
+                  <label class="vs-field-label">{{ 'orgSettings.roleNameLabel' | transloco }}</label>
+                  <input class="vs-input" [(ngModel)]="draft.customJobRoles[i]" [placeholder]="'orgSettings.roleNamePlaceholder' | transloco">
                 </div>
               </div>
               <div class="ors-site-footer">
                 <button class="vs-btn-ghost" type="button" (click)="removeCustomJobRole(i)">
-                  <mat-icon>delete</mat-icon> Remove
+                  <mat-icon>delete</mat-icon> {{ 'orgSettings.remove' | transloco }}
                 </button>
               </div>
             </div>
@@ -471,92 +472,92 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Payroll Deductions & Benefits</div>
-              <div class="vs-panel-subtitle">Default withholding rates and reusable benefit plans used when payroll runs for staff who haven't overridden them on their own profile</div>
+              <div class="vs-panel-title">{{ 'orgSettings.deductionsTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.deductionsSubtitle' | transloco }}</div>
             </div>
             <mat-icon class="ors-section-icon">account_balance_wallet</mat-icon>
           </div>
           <div class="vs-panel-body ors-form">
             <div class="vs-muted" style="margin-bottom:8px;" *ngIf="draft.countryCode === 'US'; else nonUsDeductionsNote">
-              Federal/state tax are flat estimated percentages, not real bracket-based withholding — set to whatever your accountant or external payroll provider estimates. Social Security and Medicare default to the actual US federal rates.
+              {{ 'orgSettings.usDeductionsNote' | transloco }}
             </div>
             <ng-template #nonUsDeductionsNote>
               <div class="vs-muted" style="margin-bottom:8px;">
-                These are general-purpose percentage fields — Social Security/Medicare are US-specific and don't apply outside the US. Set whatever rates match your own country's statutory deductions (or leave at 0 and handle payroll tax externally).
+                {{ 'orgSettings.nonUsDeductionsNote' | transloco }}
               </div>
             </ng-template>
             <div class="vs-form-row vs-form-row--3">
               <div>
-                <label class="vs-field-label" for="ors-fed-tax">Federal Tax %</label>
+                <label class="vs-field-label" for="ors-fed-tax">{{ 'orgSettings.federalTaxLabel' | transloco }}</label>
                 <input id="ors-fed-tax" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.defaultFederalTaxPercent" placeholder="0">
               </div>
               <div>
-                <label class="vs-field-label" for="ors-state-tax">State Tax %</label>
+                <label class="vs-field-label" for="ors-state-tax">{{ 'orgSettings.stateTaxLabel' | transloco }}</label>
                 <input id="ors-state-tax" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.defaultStateTaxPercent" placeholder="0">
               </div>
               <div>
-                <label class="vs-field-label" for="ors-401k-match">401(k) Employer Match %</label>
+                <label class="vs-field-label" for="ors-401k-match">{{ 'orgSettings.match401kLabel' | transloco }}</label>
                 <input id="ors-401k-match" type="number" class="vs-input" min="0" step="0.1" [(ngModel)]="draft.default401kMatchPercent" placeholder="0">
               </div>
             </div>
             <div class="vs-form-row vs-form-row--3" style="margin-top:16px;">
               <div>
-                <label class="vs-field-label" for="ors-ss">Social Security %</label>
+                <label class="vs-field-label" for="ors-ss">{{ 'orgSettings.ssLabel' | transloco }}</label>
                 <input id="ors-ss" type="number" class="vs-input" min="0" step="0.01" [(ngModel)]="draft.defaultSocialSecurityPercent" placeholder="0">
               </div>
               <div>
-                <label class="vs-field-label" for="ors-medicare">Medicare %</label>
+                <label class="vs-field-label" for="ors-medicare">{{ 'orgSettings.medicareLabel' | transloco }}</label>
                 <input id="ors-medicare" type="number" class="vs-input" min="0" step="0.01" [(ngModel)]="draft.defaultMedicarePercent" placeholder="0">
               </div>
               <div>
-                <label class="vs-field-label" for="ors-401k-provider">401(k) Provider</label>
-                <input id="ors-401k-provider" class="vs-input" [(ngModel)]="draft.default401kProvider" placeholder="Fidelity, Empower, Vanguard…">
+                <label class="vs-field-label" for="ors-401k-provider">{{ 'orgSettings.provider401kLabel' | transloco }}</label>
+                <input id="ors-401k-provider" class="vs-input" [(ngModel)]="draft.default401kProvider" [placeholder]="'orgSettings.provider401kPlaceholder' | transloco">
               </div>
             </div>
             <button class="vs-btn-ghost ors-quick-set-btn" type="button" style="margin-top:10px;" *ngIf="draft.countryCode === 'US'" (click)="useUsDeductionDefaults()">
-              Use US rates (Federal 10% / State 4% / SS 6.2% / Medicare 1.45%)
+              {{ 'orgSettings.useUsRates' | transloco }}
             </button>
 
             <div class="ors-site-actions" style="justify-content:space-between; margin-top:16px;">
-              <strong>Benefit Plans</strong>
+              <strong>{{ 'orgSettings.benefitPlansHeader' | transloco }}</strong>
               <button class="vs-btn-ghost" (click)="addBenefitPlan()" type="button">
-                <mat-icon>add</mat-icon> Add Benefit Plan
+                <mat-icon>add</mat-icon> {{ 'orgSettings.addBenefitPlan' | transloco }}
               </button>
             </div>
 
             <div *ngIf="draft.benefitPlans.length === 0" class="ors-empty-site vs-glass">
               <mat-icon>favorite_border</mat-icon>
               <div>
-                <strong>No benefit plans configured.</strong>
-                <div class="vs-muted">Add plans like Health, Dental, Vision, or Life Insurance so HR can quickly attach them to an employee's profile with the right amounts pre-filled.</div>
+                <strong>{{ 'orgSettings.noBenefitPlansTitle' | transloco }}</strong>
+                <div class="vs-muted">{{ 'orgSettings.noBenefitPlansHint' | transloco }}</div>
               </div>
             </div>
 
             <div class="ors-site-card" *ngFor="let plan of draft.benefitPlans; index as i">
               <div class="vs-form-row vs-form-row--2">
                 <div>
-                  <label class="vs-field-label">Plan Name *</label>
-                  <input class="vs-input" [(ngModel)]="plan.label" placeholder="Health Insurance">
+                  <label class="vs-field-label">{{ 'orgSettings.planNameLabel' | transloco }}</label>
+                  <input class="vs-input" [(ngModel)]="plan.label" [placeholder]="'orgSettings.planNamePlaceholder' | transloco">
                 </div>
                 <div>
-                  <label class="vs-field-label">Provider / Carrier</label>
-                  <input class="vs-input" [(ngModel)]="plan.provider" placeholder="Blue Cross Blue Shield, VSP, Delta Dental…">
+                  <label class="vs-field-label">{{ 'orgSettings.providerCarrierLabel' | transloco }}</label>
+                  <input class="vs-input" [(ngModel)]="plan.provider" [placeholder]="'orgSettings.providerCarrierPlaceholder' | transloco">
                 </div>
               </div>
               <div class="vs-form-row vs-form-row--2" style="margin-top:12px;">
                 <div>
-                  <label class="vs-field-label">Employee Cost / Paycheck</label>
+                  <label class="vs-field-label">{{ 'orgSettings.employeeCostLabel' | transloco }}</label>
                   <input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="plan.employeeAmount" placeholder="50.00">
                 </div>
                 <div>
-                  <label class="vs-field-label">Employer Contribution / Paycheck</label>
+                  <label class="vs-field-label">{{ 'orgSettings.employerContribLabel' | transloco }}</label>
                   <input class="vs-input" type="number" min="0" step="0.01" [(ngModel)]="plan.employerAmount" placeholder="200.00">
                 </div>
               </div>
               <div class="ors-site-footer">
-                <span class="vs-muted">Available to attach to any employee from their profile's Payroll & Deductions section.</span>
+                <span class="vs-muted">{{ 'orgSettings.benefitFooterHint' | transloco }}</span>
                 <button class="vs-btn-ghost" type="button" (click)="removeBenefitPlan(i)">
-                  <mat-icon>delete</mat-icon> Remove
+                  <mat-icon>delete</mat-icon> {{ 'orgSettings.remove' | transloco }}
                 </button>
               </div>
             </div>
@@ -566,8 +567,8 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Next Experience Rollout</div>
-              <div class="vs-panel-subtitle">Safe feature flags for the futuristic roster upgrade. Keep them off until each workflow is validated.</div>
+              <div class="vs-panel-title">{{ 'orgSettings.nextExpTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.nextExpSubtitle' | transloco }}</div>
             </div>
             <mat-icon class="ors-section-icon">rocket_launch</mat-icon>
           </div>
@@ -575,8 +576,8 @@ const PLAN_BADGE: Record<string, string> = {
             <div class="ors-rollout-warning">
               <mat-icon>published_with_changes</mat-icon>
               <div>
-                <strong>Rollback protected</strong>
-                <span>These switches do not delete legacy screens. Turning a switch off returns users to the current stable experience.</span>
+                <strong>{{ 'orgSettings.rollbackProtectedTitle' | transloco }}</strong>
+                <span>{{ 'orgSettings.rollbackProtectedBody' | transloco }}</span>
               </div>
             </div>
             <div class="ors-flag-grid">
@@ -590,7 +591,7 @@ const PLAN_BADGE: Record<string, string> = {
                   <small>{{ option.description }}</small>
                 </span>
                 <span class="vs-badge" [class.vs-badge--success]="experienceFlagEnabled(option.key)" [class.vs-badge--neutral]="!experienceFlagEnabled(option.key)">
-                  {{ experienceFlagEnabled(option.key) ? 'On' : 'Off' }}
+                  {{ (experienceFlagEnabled(option.key) ? 'orgSettings.on' : 'orgSettings.off') | transloco }}
                 </span>
               </label>
             </div>
@@ -601,47 +602,47 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Data Retention</div>
-              <div class="vs-panel-subtitle">How long payroll-adjacent records are kept before automatic deletion. See docs/DATA_RETENTION_POLICY.md for the legal basis and per-jurisdiction caveats.</div>
+              <div class="vs-panel-title">{{ 'orgSettings.retentionTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.retentionSubtitle' | transloco }}</div>
             </div>
             <mat-icon class="ors-section-icon">auto_delete</mat-icon>
           </div>
           <div class="vs-panel-body ors-form">
             <div class="vs-muted" style="margin-bottom:8px;">
-              Leave a field blank to never auto-delete that category — this is the safe default. Only fill in a number once your own legal/compliance advisor has confirmed the retention period required for your country (this app spans many tax jurisdictions with different rules). A wrong number here is a real compliance risk in either direction, so nothing here defaults to anything except "keep forever."
+              {{ 'orgSettings.retentionNote' | transloco }}
             </div>
             <div class="vs-form-row vs-form-row--3">
               <div>
-                <label class="vs-field-label" for="ors-ret-time">Time Entries (years)</label>
-                <input id="ors-ret-time" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.timeEntriesYears" placeholder="Never">
+                <label class="vs-field-label" for="ors-ret-time">{{ 'orgSettings.timeEntriesYearsLabel' | transloco }}</label>
+                <input id="ors-ret-time" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.timeEntriesYears" [placeholder]="'orgSettings.never' | transloco">
               </div>
               <div>
-                <label class="vs-field-label" for="ors-ret-payroll">Payroll Runs (years)</label>
-                <input id="ors-ret-payroll" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.payrollRunsYears" placeholder="Never">
+                <label class="vs-field-label" for="ors-ret-payroll">{{ 'orgSettings.payrollRunsYearsLabel' | transloco }}</label>
+                <input id="ors-ret-payroll" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.payrollRunsYears" [placeholder]="'orgSettings.never' | transloco">
               </div>
               <div>
-                <label class="vs-field-label" for="ors-ret-accrual">PTO/Accrual Ledger (years)</label>
-                <input id="ors-ret-accrual" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.accrualLedgerYears" placeholder="Never">
+                <label class="vs-field-label" for="ors-ret-accrual">{{ 'orgSettings.accrualLedgerYearsLabel' | transloco }}</label>
+                <input id="ors-ret-accrual" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.accrualLedgerYears" [placeholder]="'orgSettings.never' | transloco">
               </div>
             </div>
             <div class="vs-form-row vs-form-row--3" style="margin-top:16px;">
               <div>
-                <label class="vs-field-label" for="ors-ret-requests">Time-Off Requests (years)</label>
-                <input id="ors-ret-requests" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.timeOffRequestsYears" placeholder="Never">
+                <label class="vs-field-label" for="ors-ret-requests">{{ 'orgSettings.timeOffRequestsYearsLabel' | transloco }}</label>
+                <input id="ors-ret-requests" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.timeOffRequestsYears" [placeholder]="'orgSettings.never' | transloco">
               </div>
               <div>
-                <label class="vs-field-label" for="ors-ret-docs">Employee Documents, years after termination</label>
-                <input id="ors-ret-docs" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.employeeDocumentsYearsAfterTermination" placeholder="Never">
+                <label class="vs-field-label" for="ors-ret-docs">{{ 'orgSettings.employeeDocsYearsLabel' | transloco }}</label>
+                <input id="ors-ret-docs" type="number" class="vs-input" min="1" step="1" [(ngModel)]="draft.dataRetention.employeeDocumentsYearsAfterTermination" [placeholder]="'orgSettings.never' | transloco">
               </div>
               <div>
-                <label class="vs-field-label">Last confirmed</label>
+                <label class="vs-field-label">{{ 'orgSettings.lastConfirmedLabel' | transloco }}</label>
                 <div class="vs-input" style="display:flex; align-items:center; background:transparent; cursor:default;">
-                  {{ draft.dataRetention.confirmedAt ? (draft.dataRetention.confirmedBy + ' · ' + formatConfirmedAt()) : 'Not yet confirmed' }}
+                  {{ draft.dataRetention.confirmedAt ? (draft.dataRetention.confirmedBy + ' · ' + formatConfirmedAt()) : ('orgSettings.notYetConfirmed' | transloco) }}
                 </div>
               </div>
             </div>
             <button class="vs-btn-ghost ors-quick-set-btn" type="button" style="margin-top:10px;" (click)="confirmDataRetention()">
-              Mark these figures as legally confirmed
+              {{ 'orgSettings.markConfirmed' | transloco }}
             </button>
           </div>
         </section>
@@ -650,8 +651,8 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">PTO Accrual Policy</div>
-              <div class="vs-panel-subtitle">Define how employees earn paid time off and sick time automatically</div>
+              <div class="vs-panel-title">{{ 'orgSettings.ptoTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.ptoSubtitle' | transloco }}</div>
             </div>
             <mat-icon class="ors-section-icon">event_available</mat-icon>
           </div>
@@ -659,53 +660,53 @@ const PLAN_BADGE: Record<string, string> = {
             <label class="ors-toggle-row">
               <input type="checkbox" [(ngModel)]="draft.accrualPolicy.enabled">
               <div>
-                <div class="ors-toggle-title">Enable automatic PTO accrual</div>
-                <div class="vs-muted">When on, employee PTO/sick balances grow automatically on the schedule below, based on tenure.</div>
+                <div class="ors-toggle-title">{{ 'orgSettings.enableAccrualLabel' | transloco }}</div>
+                <div class="vs-muted">{{ 'orgSettings.enableAccrualHint' | transloco }}</div>
               </div>
             </label>
 
             <ng-container *ngIf="draft.accrualPolicy.enabled">
               <div class="vs-form-row vs-form-row--2" style="margin-top:16px;">
                 <div>
-                  <label class="vs-field-label" for="ors-accrual-cadence">Accrual Cadence</label>
+                  <label class="vs-field-label" for="ors-accrual-cadence">{{ 'orgSettings.accrualCadenceLabel' | transloco }}</label>
                   <select id="ors-accrual-cadence" class="vs-select" [(ngModel)]="draft.accrualPolicy.cadence">
                     <option *ngFor="let c of cadenceOptions" [value]="c.value">{{ c.label }}</option>
                   </select>
                   <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">{{ cadenceDescription(draft.accrualPolicy.cadence) }}</div>
                 </div>
                 <div>
-                  <label class="vs-field-label" for="ors-accrual-cap">Balance Cap (hours)</label>
+                  <label class="vs-field-label" for="ors-accrual-cap">{{ 'orgSettings.balanceCapLabel' | transloco }}</label>
                   <input id="ors-accrual-cap" class="vs-input" type="number" min="0" [(ngModel)]="draft.accrualPolicy.maxBalanceHours" placeholder="240">
-                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Accrual grants stop once an employee's PTO balance reaches this cap.</div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">{{ 'orgSettings.balanceCapHint' | transloco }}</div>
                 </div>
               </div>
 
               <div class="ors-site-actions" style="justify-content:space-between; margin-top:16px;">
-                <strong>Tenure Tiers</strong>
+                <strong>{{ 'orgSettings.tenureTiersHeader' | transloco }}</strong>
                 <button class="vs-btn-ghost" (click)="addAccrualTier()" type="button">
-                  <mat-icon>add</mat-icon> Add Tier
+                  <mat-icon>add</mat-icon> {{ 'orgSettings.addTier' | transloco }}
                 </button>
               </div>
 
               <div class="ors-site-card" *ngFor="let tier of draft.accrualPolicy.tiers; index as i">
                 <div class="vs-form-row vs-form-row--3">
                   <div>
-                    <label class="vs-field-label">Min. Tenure (months)</label>
+                    <label class="vs-field-label">{{ 'orgSettings.minTenureLabel' | transloco }}</label>
                     <input class="vs-input" type="number" min="0" [(ngModel)]="tier.minTenureMonths" placeholder="0">
                   </div>
                   <div>
-                    <label class="vs-field-label">PTO Hours / Year</label>
+                    <label class="vs-field-label">{{ 'orgSettings.ptoHoursYearLabel' | transloco }}</label>
                     <input class="vs-input" type="number" min="0" [(ngModel)]="tier.ptoHoursPerYear" placeholder="80">
                   </div>
                   <div>
-                    <label class="vs-field-label">Sick Hours / Year</label>
+                    <label class="vs-field-label">{{ 'orgSettings.sickHoursYearLabel' | transloco }}</label>
                     <input class="vs-input" type="number" min="0" [(ngModel)]="tier.sickHoursPerYear" placeholder="40">
                   </div>
                 </div>
                 <div class="ors-site-footer">
-                  <span class="vs-muted">Applies once an employee has this many months of tenure or more.</span>
+                  <span class="vs-muted">{{ 'orgSettings.tierFooterHint' | transloco }}</span>
                   <button class="vs-btn-ghost" type="button" (click)="removeAccrualTier(i)" [disabled]="draft.accrualPolicy.tiers.length <= 1">
-                    <mat-icon>delete</mat-icon> Remove
+                    <mat-icon>delete</mat-icon> {{ 'orgSettings.remove' | transloco }}
                   </button>
                 </div>
               </div>
@@ -717,37 +718,37 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Subscription & Plan</div>
-              <div class="vs-panel-subtitle">Your current plan limits and billing status</div>
+              <div class="vs-panel-title">{{ 'orgSettings.subscriptionTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.subscriptionSubtitle' | transloco }}</div>
             </div>
             <mat-icon class="ors-section-icon">credit_card</mat-icon>
           </div>
           <div class="vs-panel-body">
             <div class="ors-plan-grid">
               <div class="ors-plan-item vs-glass">
-                <div class="vs-stat-label">Current Plan</div>
+                <div class="vs-stat-label">{{ 'orgSettings.currentPlanLabel' | transloco }}</div>
                 <div class="ors-plan-val">{{ settings().plan | titlecase }}</div>
                 <span class="vs-badge {{ planBadge() }}">{{ settings().planStatus }}</span>
               </div>
               <div class="ors-plan-item vs-glass">
-                <div class="vs-stat-label">Max Employees</div>
+                <div class="vs-stat-label">{{ 'orgSettings.maxEmployeesLabel' | transloco }}</div>
                 <div class="ors-plan-val">{{ settings().maxEmployees }}</div>
-                <span class="vs-muted" style="font-size:12px;">seats included</span>
+                <span class="vs-muted" style="font-size:12px;">{{ 'orgSettings.seatsIncluded' | transloco }}</span>
               </div>
               <div class="ors-plan-item vs-glass ors-plan-upgrade">
-                <div class="vs-stat-label">Change Plan</div>
+                <div class="vs-stat-label">{{ 'orgSettings.changePlanLabel' | transloco }}</div>
                 <div class="ors-plan-choices">
                   <button class="vs-btn-ghost ors-plan-choice-btn" type="button" (click)="upgradeToPlan('starter')" [disabled]="billingBusy() || settings().plan === 'starter'">
-                    <mat-icon>{{ billingBusy() ? 'hourglass_empty' : 'bolt' }}</mat-icon> Starter — $49/mo
+                    <mat-icon>{{ billingBusy() ? 'hourglass_empty' : 'bolt' }}</mat-icon> {{ 'orgSettings.starterPlanBtn' | transloco }}
                   </button>
                   <button class="vs-btn-primary ors-plan-choice-btn" type="button" (click)="upgradeToPlan('pro')" [disabled]="billingBusy() || settings().plan === 'pro'">
-                    <mat-icon>{{ billingBusy() ? 'hourglass_empty' : 'workspace_premium' }}</mat-icon> Pro — $149/mo
+                    <mat-icon>{{ billingBusy() ? 'hourglass_empty' : 'workspace_premium' }}</mat-icon> {{ 'orgSettings.proPlanBtn' | transloco }}
                   </button>
                 </div>
                 <button class="vs-btn-ghost ors-upgrade-btn" type="button" (click)="manageBilling()" [disabled]="billingBusy() || !hasBillingCustomer()" *ngIf="hasBillingCustomer()">
-                  <mat-icon>credit_card</mat-icon> Manage Subscription / Billing Portal
+                  <mat-icon>credit_card</mat-icon> {{ 'orgSettings.manageBillingBtn' | transloco }}
                 </button>
-                <span class="vs-muted" style="font-size:12px;">Need Enterprise or a custom plan? <a href="mailto:contact@innovacarereview.com">Contact sales</a>.</span>
+                <span class="vs-muted" style="font-size:12px;">{{ 'orgSettings.needEnterprise' | transloco }} <a href="mailto:contact@innovacarereview.com">{{ 'orgSettings.contactSales' | transloco }}</a>.</span>
               </div>
             </div>
           </div>
@@ -756,8 +757,8 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Attendance Controls</div>
-              <div class="vs-panel-subtitle">Configure GPS attendance and geofence policies</div>
+              <div class="vs-panel-title">{{ 'orgSettings.attendanceControlsTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.attendanceControlsSubtitle' | transloco }}</div>
             </div>
             <mat-icon class="ors-section-icon">pin_drop</mat-icon>
           </div>
@@ -766,8 +767,8 @@ const PLAN_BADGE: Record<string, string> = {
               <label class="ors-toggle-row">
                 <input type="checkbox" [(ngModel)]="draft.gpsAttendanceEnabled">
                 <div>
-                  <div class="ors-toggle-title">Require GPS-verified attendance</div>
-                  <div class="vs-muted">Staff will need approved browser geolocation within a configured site radius to clock in and out.</div>
+                  <div class="ors-toggle-title">{{ 'orgSettings.requireGpsLabel' | transloco }}</div>
+                  <div class="vs-muted">{{ 'orgSettings.requireGpsHint' | transloco }}</div>
                 </div>
               </label>
             </div>
@@ -775,8 +776,8 @@ const PLAN_BADGE: Record<string, string> = {
               <div class="ors-upgrade-card">
                 <mat-icon>workspace_premium</mat-icon>
                 <div>
-                  <strong>Pro feature</strong>
-                  <div>GPS attendance and geofence enforcement unlock on Pro and Enterprise plans.</div>
+                  <strong>{{ 'orgSettings.proFeatureTitle' | transloco }}</strong>
+                  <div>{{ 'orgSettings.gpsUpgradeHint' | transloco }}</div>
                 </div>
               </div>
             </ng-template>
@@ -786,15 +787,15 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Sites & Geofences</div>
-              <div class="vs-panel-subtitle">Define the places where shifts can be scheduled and attendance can be verified</div>
+              <div class="vs-panel-title">{{ 'orgSettings.sitesTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.sitesSubtitle' | transloco }}</div>
             </div>
             <div class="ors-site-actions">
               <span class="vs-badge" [class.vs-badge--warning]="hasMultiSite()" [class.vs-badge--neutral]="!hasMultiSite()">
-                {{ hasMultiSite() ? 'Enterprise multi-site' : 'Single-site mode' }}
+                {{ (hasMultiSite() ? 'orgSettings.enterpriseMultiSite' : 'orgSettings.singleSiteMode') | transloco }}
               </span>
               <button class="vs-btn-ghost" (click)="addSite()" type="button" [disabled]="!canManageSites()">
-                <mat-icon>add</mat-icon> Add Site
+                <mat-icon>add</mat-icon> {{ 'orgSettings.addSite' | transloco }}
               </button>
             </div>
           </div>
@@ -802,39 +803,39 @@ const PLAN_BADGE: Record<string, string> = {
             <div *ngIf="draft.sites.length === 0" class="ors-empty-site vs-glass">
               <mat-icon>location_off</mat-icon>
               <div>
-                <strong>No sites configured.</strong>
-                <div class="vs-muted">Add at least one site before enforcing GPS attendance.</div>
+                <strong>{{ 'orgSettings.noSitesTitle' | transloco }}</strong>
+                <div class="vs-muted">{{ 'orgSettings.noSitesHint' | transloco }}</div>
               </div>
             </div>
 
             <div class="ors-site-card" *ngFor="let site of draft.sites; index as i">
               <div class="ors-site-actions" style="justify-content:space-between;">
-                <strong>Site {{ i + 1 }}</strong>
+                <strong>{{ 'orgSettings.siteNumber' | transloco: { n: i + 1 } }}</strong>
                 <button class="vs-btn-ghost" type="button" (click)="selectSite(i)">
-                  <mat-icon>map</mat-icon> Edit On Map
+                  <mat-icon>map</mat-icon> {{ 'orgSettings.editOnMap' | transloco }}
                 </button>
               </div>
               <div class="vs-form-row vs-form-row--2">
                 <div>
-                  <label class="vs-field-label">Site Name *</label>
-                  <input class="vs-input" [(ngModel)]="site.name" placeholder="Downtown Clinic">
+                  <label class="vs-field-label">{{ 'orgSettings.siteNameLabel' | transloco }}</label>
+                  <input class="vs-input" [(ngModel)]="site.name" [placeholder]="'orgSettings.siteNamePlaceholder' | transloco">
                 </div>
                 <div>
-                  <label class="vs-field-label">Address</label>
-                  <input class="vs-input" [(ngModel)]="site.address" placeholder="123 Main St, Atlanta, GA">
+                  <label class="vs-field-label">{{ 'orgSettings.addressLabel' | transloco }}</label>
+                  <input class="vs-input" [(ngModel)]="site.address" [placeholder]="'orgSettings.addressPlaceholder' | transloco">
                 </div>
               </div>
               <div class="vs-form-row vs-form-row--3">
                 <div>
-                  <label class="vs-field-label">Latitude</label>
+                  <label class="vs-field-label">{{ 'orgSettings.latitudeLabel' | transloco }}</label>
                   <input class="vs-input" type="number" [(ngModel)]="site.latitude" (ngModelChange)="onSiteRadiusChange()" placeholder="33.7490">
                 </div>
                 <div>
-                  <label class="vs-field-label">Longitude</label>
+                  <label class="vs-field-label">{{ 'orgSettings.longitudeLabel' | transloco }}</label>
                   <input class="vs-input" type="number" [(ngModel)]="site.longitude" (ngModelChange)="onSiteRadiusChange()" placeholder="-84.3880">
                 </div>
                 <div>
-                  <label class="vs-field-label">Radius (meters)</label>
+                  <label class="vs-field-label">{{ 'orgSettings.radiusLabel' | transloco }}</label>
                   <input class="vs-input" type="number" min="25" [(ngModel)]="site.radiusM" (ngModelChange)="onSiteRadiusChange()" placeholder="150">
                 </div>
               </div>
@@ -842,12 +843,12 @@ const PLAN_BADGE: Record<string, string> = {
                 <label class="ors-toggle-row">
                   <input type="checkbox" [(ngModel)]="site.active">
                   <div>
-                    <div class="ors-toggle-title">Active site</div>
-                    <div class="vs-muted">Only active sites are valid for GPS verification and shift assignment.</div>
+                    <div class="ors-toggle-title">{{ 'orgSettings.activeSiteLabel' | transloco }}</div>
+                    <div class="vs-muted">{{ 'orgSettings.activeSiteHint' | transloco }}</div>
                   </div>
                 </label>
                 <button class="vs-btn-ghost" type="button" (click)="removeSite(i)">
-                  <mat-icon>delete</mat-icon> Remove
+                  <mat-icon>delete</mat-icon> {{ 'orgSettings.remove' | transloco }}
                 </button>
               </div>
             </div>
@@ -855,14 +856,14 @@ const PLAN_BADGE: Record<string, string> = {
             <div *ngIf="!canManageSites()" class="ors-upgrade-card">
               <mat-icon>lock</mat-icon>
               <div>
-                <strong>Starter plan</strong>
-                <div>Site and geofence configuration requires Pro for one site, Enterprise for multi-site operations.</div>
+                <strong>{{ 'orgSettings.starterPlanTitle' | transloco }}</strong>
+                <div>{{ 'orgSettings.sitesUpgradeHint' | transloco }}</div>
               </div>
             </div>
 
             <div class="ors-map-shell" *ngIf="canManageSites() && draft.sites.length > 0">
-              <div class="vs-field-label">Geofence Map</div>
-              <div class="vs-muted" style="margin-bottom:8px;">Click on the map to set latitude/longitude for the selected site.</div>
+              <div class="vs-field-label">{{ 'orgSettings.geofenceMapLabel' | transloco }}</div>
+              <div class="vs-muted" style="margin-bottom:8px;">{{ 'orgSettings.geofenceMapHint' | transloco }}</div>
               <div #geofenceMap class="ors-map"></div>
             </div>
           </div>
@@ -871,8 +872,8 @@ const PLAN_BADGE: Record<string, string> = {
         <section class="vs-glass-strong ors-section" *ngIf="hasEnterpriseControls(); else enterpriseUpgrade">
           <div class="vs-panel-head">
             <div>
-              <div class="vs-panel-title">Enterprise Access</div>
-              <div class="vs-panel-subtitle">SSO and custom integration settings for enterprise deployments</div>
+              <div class="vs-panel-title">{{ 'orgSettings.enterpriseTitle' | transloco }}</div>
+              <div class="vs-panel-subtitle">{{ 'orgSettings.enterpriseSubtitle' | transloco }}</div>
             </div>
             <mat-icon class="ors-section-icon">shield_lock</mat-icon>
           </div>
@@ -880,46 +881,46 @@ const PLAN_BADGE: Record<string, string> = {
             <label class="ors-toggle-row" *ngIf="hasSsoConfig()">
               <input type="checkbox" [(ngModel)]="draft.ssoEnabled">
               <div>
-                <div class="ors-toggle-title">Enable SSO setup</div>
-                <div class="vs-muted">Use this to prepare SAML/OIDC rollout with your implementation team.</div>
+                <div class="ors-toggle-title">{{ 'orgSettings.enableSsoLabel' | transloco }}</div>
+                <div class="vs-muted">{{ 'orgSettings.enableSsoHint' | transloco }}</div>
               </div>
             </label>
 
             <div *ngIf="hasSsoConfig()" class="vs-form-row">
               <div>
-                <label class="vs-field-label">Identity Provider</label>
-                <input class="vs-input" [(ngModel)]="draft.ssoProvider" placeholder="Okta, Azure AD, Ping, Google Workspace">
+                <label class="vs-field-label">{{ 'orgSettings.idpLabel' | transloco }}</label>
+                <input class="vs-input" [(ngModel)]="draft.ssoProvider" [placeholder]="'orgSettings.idpPlaceholder' | transloco">
               </div>
             </div>
 
             <div *ngIf="hasCustomIntegrations()">
-              <div class="ors-subhead">Custom Integrations</div>
+              <div class="ors-subhead">{{ 'orgSettings.customIntegrationsHeader' | transloco }}</div>
               <div class="ors-site-card" *ngFor="let integration of draft.integrationConfigs; index as i">
                 <div class="vs-form-row vs-form-row--2">
                   <div>
-                    <label class="vs-field-label">Label</label>
-                    <input class="vs-input" [(ngModel)]="integration.label" placeholder="Payroll Export">
+                    <label class="vs-field-label">{{ 'orgSettings.integrationLabelLabel' | transloco }}</label>
+                    <input class="vs-input" [(ngModel)]="integration.label" [placeholder]="'orgSettings.integrationLabelPlaceholder' | transloco">
                   </div>
                   <div>
-                    <label class="vs-field-label">Endpoint or Notes</label>
-                    <input class="vs-input" [(ngModel)]="integration.endpoint" placeholder="https://api.partner.com/push-shifts">
+                    <label class="vs-field-label">{{ 'orgSettings.endpointNotesLabel' | transloco }}</label>
+                    <input class="vs-input" [(ngModel)]="integration.endpoint" [placeholder]="'orgSettings.endpointNotesPlaceholder' | transloco">
                   </div>
                 </div>
                 <div class="ors-site-footer">
                   <label class="ors-toggle-row">
                     <input type="checkbox" [(ngModel)]="integration.active">
                     <div>
-                      <div class="ors-toggle-title">Enabled</div>
-                      <div class="vs-muted">Use this as a deployment checklist before backend activation.</div>
+                      <div class="ors-toggle-title">{{ 'orgSettings.enabledLabel' | transloco }}</div>
+                      <div class="vs-muted">{{ 'orgSettings.enabledHint' | transloco }}</div>
                     </div>
                   </label>
                   <button class="vs-btn-ghost" type="button" (click)="removeIntegration(i)">
-                    <mat-icon>delete</mat-icon> Remove
+                    <mat-icon>delete</mat-icon> {{ 'orgSettings.remove' | transloco }}
                   </button>
                 </div>
               </div>
               <button class="vs-btn-ghost" type="button" (click)="addIntegration()">
-                <mat-icon>add_link</mat-icon> Add Integration
+                <mat-icon>add_link</mat-icon> {{ 'orgSettings.addIntegration' | transloco }}
               </button>
             </div>
           </div>
@@ -928,8 +929,8 @@ const PLAN_BADGE: Record<string, string> = {
           <section class="vs-glass-strong ors-section">
             <div class="vs-panel-head">
               <div>
-                <div class="vs-panel-title">Enterprise Access</div>
-                <div class="vs-panel-subtitle">SSO and integrations are reserved for enterprise customers</div>
+                <div class="vs-panel-title">{{ 'orgSettings.enterpriseTitle' | transloco }}</div>
+                <div class="vs-panel-subtitle">{{ 'orgSettings.enterpriseUpgradeSubtitle' | transloco }}</div>
               </div>
               <mat-icon class="ors-section-icon">workspace_premium</mat-icon>
             </div>
@@ -937,8 +938,8 @@ const PLAN_BADGE: Record<string, string> = {
               <div class="ors-upgrade-card">
                 <mat-icon>workspace_premium</mat-icon>
                 <div>
-                  <strong>Enterprise feature set</strong>
-                  <div>Unlock multi-site scheduling, SSO setup, and custom integrations on the Enterprise plan.</div>
+                  <strong>{{ 'orgSettings.enterpriseFeatureSetTitle' | transloco }}</strong>
+                  <div>{{ 'orgSettings.enterpriseFeatureSetHint' | transloco }}</div>
                 </div>
               </div>
             </div>
@@ -953,7 +954,7 @@ const PLAN_BADGE: Record<string, string> = {
           <button class="vs-btn-primary ors-save-btn"
                   (click)="save()"
                   [disabled]="saving() || !draft.name">
-            <span *ngIf="!saving()"><mat-icon>save</mat-icon> Save Changes</span>
+            <span *ngIf="!saving()"><mat-icon>save</mat-icon> {{ 'orgSettings.saveChanges' | transloco }}</span>
             <span *ngIf="saving()" class="ors-spinner"></span>
           </button>
         </div>
@@ -1131,7 +1132,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   private marker: Leaflet.Marker | null = null;
   private circle: Leaflet.Circle | null = null;
 
-  constructor(private ctx: OrgContextService, private toast: ToastService, private plans: PlanEntitlementsService, private experience: OrgExperienceService) {
+  constructor(private ctx: OrgContextService, private toast: ToastService, private plans: PlanEntitlementsService, private experience: OrgExperienceService, private i18n: TranslocoService) {
     this.orgId = this.ctx.orgId();
   }
 
@@ -1201,7 +1202,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
 
   planBadge() { return PLAN_BADGE[this.settings().plan] ?? 'vs-badge--neutral'; }
   taxProfileDescription(profile: string) {
-    return this.taxProfiles.find((item) => item.value === profile)?.description ?? 'Manual tax profile.';
+    return this.taxProfiles.find((item) => item.value === profile)?.description ?? this.i18n.translate('orgSettings.manualTaxProfileFallback');
   }
   onTaxProfileChange(profile: string) {
     if (!this.draft.currencyCode || this.draft.currencyCode === 'USD') {
@@ -1219,11 +1220,11 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
 
   addSite() {
     if (!this.canManageSites()) {
-      this.toast.error('Site management requires Pro or Enterprise plan.');
+      this.toast.error(this.i18n.translate('orgSettings.siteRequiresProEnterprise'));
       return;
     }
     if (!this.hasMultiSite() && this.draft.sites.length >= 1) {
-      this.toast.error('Multiple sites require the Enterprise plan.');
+      this.toast.error(this.i18n.translate('orgSettings.multiSiteRequiresEnterprise'));
       return;
     }
 
@@ -1268,7 +1269,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
       ...this.draft,
       dataRetention: {
         ...this.draft.dataRetention,
-        confirmedBy: this.ctx.displayName() || this.ctx.email() || this.ctx.uid() || 'Unknown',
+        confirmedBy: this.ctx.displayName() || this.ctx.email() || this.ctx.uid() || this.i18n.translate('orgSettings.unknownConfirmedBy'),
         confirmedAt: new Date(),
       },
     };
@@ -1598,10 +1599,10 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
         taxProfile: this.draft.taxProfile,
       });
       this.refreshMapFromSelectedSite();
-      this.saveMsg.set('Organization settings saved successfully.');
+      this.saveMsg.set(this.i18n.translate('orgSettings.settingsSaved'));
       setTimeout(() => this.saveMsg.set(null), 4000);
     } catch (e: any) {
-      this.toast.errorFrom(e, 'Failed to save settings.');
+      this.toast.errorFrom(e, this.i18n.translate('orgSettings.failedToSaveSettings'));
     } finally {
       this.saving.set(false);
     }
@@ -1612,9 +1613,9 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
     const billing = params.get('billing');
     if (!billing) return;
     if (billing === 'success') {
-      this.toast.success('Subscription updated — it may take a moment to reflect below.');
+      this.toast.success(this.i18n.translate('orgSettings.subscriptionUpdated'));
     } else if (billing === 'cancel') {
-      this.toast.info('Checkout was canceled. No changes were made.');
+      this.toast.info(this.i18n.translate('orgSettings.checkoutCanceled'));
     }
     params.delete('billing');
     const query = params.toString();
@@ -1624,7 +1625,7 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
   async manageBilling() {
     if (!this.orgId) return;
     if (!this.hasBillingCustomer()) {
-      this.toast.info('This organization has no active billing customer yet. Upgrade the plan or attach a Stripe customer before opening the portal.');
+      this.toast.info(this.i18n.translate('orgSettings.noBillingCustomerYet'));
       return;
     }
     this.billingBusy.set(true);
@@ -1640,10 +1641,10 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
       }
     } catch (e: any) {
       if (String(e?.code || '').includes('failed-precondition')) {
-        this.toast.info('This organization has no active billing customer yet. Upgrade the plan before opening the Stripe portal.');
+        this.toast.info(this.i18n.translate('orgSettings.noBillingCustomerYetUpgrade'));
         return;
       }
-      this.toast.errorFrom(e, 'Failed to open Stripe Portal.');
+      this.toast.errorFrom(e, this.i18n.translate('orgSettings.failedToOpenPortal'));
     } finally {
       this.billingBusy.set(false);
     }
@@ -1670,10 +1671,10 @@ export class AdminOrgSettingsPage implements OnInit, AfterViewInit, OnDestroy {
       }
     } catch (e: any) {
       if (String(e?.code || '').includes('failed-precondition')) {
-        this.toast.error('Billing isn\'t configured for this plan yet. Contact support.');
+        this.toast.error(this.i18n.translate('orgSettings.billingNotConfigured'));
         return;
       }
-      this.toast.errorFrom(e, 'Failed to start checkout.');
+      this.toast.errorFrom(e, this.i18n.translate('orgSettings.failedToStartCheckout'));
     } finally {
       this.billingBusy.set(false);
     }
