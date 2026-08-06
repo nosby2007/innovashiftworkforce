@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, where, Timestamp } from 'firebase/firestore';
 import { FirestoreClient } from '../firestore/firestore.client';
 
 export interface AiDigestGap {
@@ -60,6 +60,19 @@ export class AiDigestRepo {
     }, (error: unknown) => {
       console.warn('[InnovaShift] AI digest listener failed.', error);
       this.fs.run(() => cb(null));
+    });
+  }
+
+  watchHistory(orgId: string, days: number, cb: (digests: AiDigest[]) => void) {
+    const col = collection(this.fs.db, `orgs/${orgId}/aiDigests`);
+    const since = Timestamp.fromMillis(Date.now() - days * 24 * 60 * 60 * 1000);
+    const q = query(col, where('generatedAt', '>=', since), orderBy('generatedAt', 'asc'));
+    return onSnapshot(q, (snap) => {
+      const digests = snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as any) } as AiDigest));
+      this.fs.run(() => cb(digests));
+    }, (error: unknown) => {
+      console.warn('[InnovaShift] AI digest history listener failed.', error);
+      this.fs.run(() => cb([]));
     });
   }
 }

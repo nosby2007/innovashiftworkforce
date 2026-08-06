@@ -79,6 +79,56 @@ interface UnderstaffingForecast extends UnderstaffingTrend {
   commentary: string | null;
 }
 
+// Staffing evolution snapshot — one doc per org per day, written
+// unconditionally (unlike aiDigests, which only gets a doc on days with
+// gaps/alerts to report). A quiet day for coverage/compliance still has
+// staff scheduled, so this can't reuse that gated write path or its
+// "missing doc = zero" convention.
+export interface StaffingSnapshot {
+  headcountScheduled: number;
+  scheduledHours: number;
+}
+
+export function aggregateStaffingSnapshot(
+  shifts: { assignedUserId: string | null; startAtMs: number; endAtMs: number }[]
+): StaffingSnapshot {
+  const uids = new Set<string>();
+  let hours = 0;
+  for (const s of shifts) {
+    if (!s.assignedUserId) continue;
+    uids.add(s.assignedUserId);
+    hours += Math.max(0, (s.endAtMs - s.startAtMs) / 3_600_000);
+  }
+  return { headcountScheduled: uids.size, scheduledHours: hours };
+}
+
+async function findTodaysAssignedShifts(
+  db: FirebaseFirestore.Firestore,
+  orgId: string,
+  nowMs: number
+): Promise<{ assignedUserId: string | null; startAtMs: number; endAtMs: number }[]> {
+  const dayStart = new Date(new Date(nowMs).toISOString().slice(0, 10) + 'T00:00:00Z').getTime();
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+
+  const snap = await db
+    .collection('orgs').doc(orgId).collection('shifts')
+    .where('startAt', '>=', Timestamp.fromMillis(dayStart))
+    .where('startAt', '<', Timestamp.fromMillis(dayEnd))
+    .limit(500)
+    .get();
+
+  const shifts: { assignedUserId: string | null; startAtMs: number; endAtMs: number }[] = [];
+  for (const doc of snap.docs) {
+    const x = doc.data() as Record<string, unknown>;
+    if (!ASSIGNED_STATUSES.has(String(x.status ?? ''))) continue;
+    const startAtMs = toMs(x.startAt);
+    const endAtMs = toMs(x.endAt);
+    if (startAtMs == null || endAtMs == null) continue;
+    shifts.push({ assignedUserId: String(x.assignedUserId ?? '').trim() || null, startAtMs, endAtMs });
+  }
+  return shifts;
+}
+
 function toMs(value: unknown): number | null {
   if (!value) return null;
   const asAny = value as { toMillis?: () => number };
@@ -355,11 +405,21 @@ async function notifyAdminsOfDigest(db: FirebaseFirestore.Firestore, orgId: stri
 }
 
 async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: string, orgName: string, client: OpenAI | null, nowMs: number, rules: FatigueRules) {
-  const [gaps, alerts] = await Promise.all([
+  const [gaps, alerts, todaysShifts] = await Promise.all([
     findCoverageGaps(db, orgId, nowMs),
     findComplianceAlerts(db, orgId, nowMs, rules),
+    findTodaysAssignedShifts(db, orgId, nowMs),
   ]);
-  if (gaps.length === 0 && alerts.length === 0) return; // nothing to report — skip writing a doc and skip the API call entirely
+
+  // Written every day regardless of gaps/alerts — see the StaffingSnapshot
+  // doc comment for why this can't share the gated aiDigests write below.
+  const dateKey = new Date(nowMs).toISOString().slice(0, 10);
+  const snapshot = aggregateStaffingSnapshot(todaysShifts);
+  await db
+    .collection('orgs').doc(orgId).collection('staffingSnapshots').doc(dateKey)
+    .set({ orgId, dateKey, generatedAt: Timestamp.fromMillis(nowMs), ...snapshot });
+
+  if (gaps.length === 0 && alerts.length === 0) return; // nothing to report — skip writing a digest doc and skip the API call entirely
 
   const proposals: Proposal[] = gaps
     .filter((g) => g.needsPublish)
@@ -380,7 +440,6 @@ async function generateDigestForOrg(db: FirebaseFirestore.Firestore, orgId: stri
     }
   }
 
-  const dateKey = new Date(nowMs).toISOString().slice(0, 10);
   await db
     .collection('orgs').doc(orgId).collection('aiDigests').doc(dateKey)
     .set({
