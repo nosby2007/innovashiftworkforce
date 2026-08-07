@@ -150,35 +150,52 @@ aren't part of this deploy pipeline:
   unauthenticated callable behind the landing page's "Try the demo here"
   button) — needs one manual IAM grant beyond a normal deploy. It's the
   only place in this codebase that calls `admin.auth().createCustomToken()`;
-  since functions run under the Firebase-managed default runtime service
-  account (`atlanta-e04aa@appspot.gserviceaccount.com` — confirm the exact
-  identity on the function's **Details** tab in the [Cloud Functions
-  Console](https://console.cloud.google.com/functions/list?project=atlanta-e04aa),
-  since Google can change the default) with no local private key available,
-  signing a custom token requires calling the IAM `signBlob` API, which
-  needs the **Service Account Token Creator**
-  (`roles/iam.serviceAccountTokenCreator`) role granted **on that same
-  service account, to itself**. This is not granted by default and does
-  not come from any of the roles above. Without it, every
-  `provisionSandboxOrg` call fails late (after the Auth user + org/seed
-  Firestore writes already succeeded) with an `internal` error visible to
-  the client as a raw 500, and under any concurrent load the IAM API's
-  retry/backoff can push the whole call past the function's timeout,
-  surfacing as a 504 instead. Grant it once, from [IAM & Admin →
+  with no local private key available, signing a custom token requires
+  calling the IAM `signBlob` API, which needs the **Service Account Token
+  Creator** (`roles/iam.serviceAccountTokenCreator`) role granted **on the
+  function's own runtime service account, to itself**. This is not granted
+  by default and does not come from any of the roles above. Without it,
+  every `provisionSandboxOrg` call fails late (after the Auth user +
+  org/seed Firestore writes already succeeded) with a
+  `FirebaseAuthError: auth/insufficient-permission` — surfaced to the
+  client as a clean `internal` error (previously a raw 500, and under
+  concurrent load a 504, before the try/catch wrapper below was added).
+
+  **Confirmed on this project (2026-08-07): every backend function here is
+  2nd-gen (`firebase-functions/v2`, backed by Cloud Run — check
+  `resource.type` in any Cloud Logging entry to verify), and 2nd-gen
+  Cloud Functions run under the project's default
+  [**Compute Engine** service
+  account](https://console.cloud.google.com/iam-admin/serviceaccounts?project=atlanta-e04aa)
+  (`<PROJECT_NUMBER>-compute@developer.gserviceaccount.com`), NOT the App
+  Engine default service account (`atlanta-e04aa@appspot.gserviceaccount.com`)
+  that 1st-gen functions used.** Granting the role to the appspot SA is a
+  no-op for this project — `signBlob` still fails, because that isn't the
+  identity the function actually runs as. Confirm the exact runtime SA on
+  the **Security** tab of the `provisionsandboxorg` service in [Cloud
+  Run](https://console.cloud.google.com/run?project=atlanta-e04aa) (or the
+  function's config in the Functions console) before granting anything —
+  don't assume either default without checking, since a project can also
+  have a custom runtime SA configured.
+
+  Grant it once, from [IAM & Admin →
   IAM](https://console.cloud.google.com/iam-admin/iam?project=atlanta-e04aa):
-  find `atlanta-e04aa@appspot.gserviceaccount.com` in the member list (or
-  add it if it isn't listed as a principal yet) → **Edit principal** → **Add
-  another role** → **Service Account Token Creator**. Equivalent one-liner:
+  find the compute default SA (`...-compute@developer.gserviceaccount.com`)
+  in the member list (or add it if it isn't listed as a principal yet) →
+  **Edit principal** → **Add another role** → **Service Account Token
+  Creator**. Equivalent one-liner (replace `PROJECT_NUMBER`, visible on the
+  [project dashboard](https://console.cloud.google.com/home/dashboard?project=atlanta-e04aa)):
   ```bash
   gcloud iam service-accounts add-iam-policy-binding \
-    atlanta-e04aa@appspot.gserviceaccount.com \
-    --member="serviceAccount:atlanta-e04aa@appspot.gserviceaccount.com" \
+    PROJECT_NUMBER-compute@developer.gserviceaccount.com \
+    --member="serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
     --role="roles/iam.serviceAccountTokenCreator" \
     --project=atlanta-e04aa
   ```
-  The function code now cleans up the partially-created Auth user and
-  returns a clean `internal` error on any failure (rather than leaking an
-  orphaned demo Auth account), but that's a symptom fix — this IAM grant is
+  The function code cleans up the partially-created Auth user and returns
+  a clean `internal` error on any failure (rather than leaking an orphaned
+  demo Auth account), but that's a symptom fix — this IAM grant on the
+  **correct** (Compute default, not App Engine default) service account is
   what actually makes sandbox provisioning succeed.
 
 ## Android — deploy to testers (`android-distribute.yml`)
