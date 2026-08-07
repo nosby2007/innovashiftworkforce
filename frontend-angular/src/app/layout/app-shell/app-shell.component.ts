@@ -87,7 +87,7 @@ const ROUTE_TITLES: Record<string, string> = {
     LanguageSwitcherComponent,
   ],
   template: `
-    <mat-sidenav-container class="l-shell" [class.shell-platform]="shellMode() === 'platform'">
+    <mat-sidenav-container class="l-shell" [class.shell-platform]="shellMode() === 'platform'" [class.has-sandbox-banner]="hasSandboxBanner()">
 
       <!-- ═══ SIDEBAR ═══ -->
       <mat-sidenav
@@ -293,6 +293,18 @@ const ROUTE_TITLES: Record<string, string> = {
     .l-shell {
       height: 100vh;
       background: var(--app-bg);
+    }
+
+    /* SandboxBannerComponent is a fixed top:0 overlay outside this
+       component's DOM (mounted in app.component.ts) — reserve matching
+       space so it doesn't cover the toolbar/sidebar's top edge, which
+       otherwise blocks the burger button and first nav items. Height
+       matches the banner's own padding + line height + safe-area inset;
+       kept in sync manually since the two components don't share a
+       measured value. */
+    .l-shell.has-sandbox-banner {
+      height: calc(100vh - 40px - env(safe-area-inset-top, 0px));
+      margin-top: calc(40px + env(safe-area-inset-top, 0px));
     }
 
     .l-shell.shell-platform {
@@ -713,6 +725,11 @@ export class AppLayoutComponent implements OnDestroy {
     const r = this.ctx.accessRole();
     return ['admin','manager','scheduler','hr'].includes(r ?? '');
   });
+  // SandboxBannerComponent is a fixed, top-pinned overlay (z-index 4000)
+  // mounted globally in app.component.ts — without this offset it sits on
+  // top of the sticky toolbar/sidebar (also anchored at top:0), blocking
+  // the burger menu and nav items underneath it.
+  hasSandboxBanner = computed(() => this.ctx.isDemo());
   isSuperAdmin = computed(() => this.ctx.platformRole() === 'superAdmin');
   nextExperienceEnabled = computed(() => this.experience.anyNextExperienceEnabled());
   visibleAdminNav = computed(() => this.adminNav.filter((item) =>
