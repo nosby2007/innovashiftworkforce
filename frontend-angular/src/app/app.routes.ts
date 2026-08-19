@@ -218,6 +218,7 @@ export const APP_ROUTES: Routes = [
     data: { shellMode: 'platform' },
     children: [
       { path: '',         loadComponent: () => import('./features/super-admin/super-admin-dashboard.page').then(m => m.SuperAdminDashboardPage) },
+      { path: 'alerts',   loadComponent: () => import('./features/platform/platform-alerts.page').then(m => m.PlatformAlertsPage) },
       { path: 'settings', loadComponent: () => import('./features/settings/settings.component').then(m => m.SettingsComponent) },
     ],
   },

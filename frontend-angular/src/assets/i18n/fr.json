@@ -95,7 +95,8 @@
     "payroll": "Paie",
     "auditLog": "Journal d'audit",
     "orgSettings": "Paramètres de l'organisation",
-    "platformConsole": "Console plateforme"
+    "platformConsole": "Console plateforme",
+    "platformAlerts": "Alertes plateforme"
   },
   "routeTitles": {
     "dashboard": "Tableau de bord",
@@ -128,6 +129,7 @@
     "adminSettings": "Paramètres admin",
     "employeeDetails": "Détails de l'employé",
     "platform": "Administration de la plateforme",
+    "platformAlerts": "Alertes plateforme",
     "platformSettings": "Paramètres de la plateforme",
     "default": "INNOVASHIFT"
   },
@@ -1050,6 +1052,15 @@
     "notificationUpdateFailed": "Impossible de mettre à jour la notification.",
     "notificationDeleted": "Notification supprimée.",
     "notificationDeleteFailed": "Impossible de supprimer la notification."
+  },
+  "platformAlerts": {
+    "title": "Alertes plateforme",
+    "subtitle": "Nouvelles demandes de démo et signaux d'abus sur la plateforme.",
+    "empty": "Aucune alerte pour le moment.",
+    "markRead": "Marquer comme lue",
+    "markAllRead": "Tout marquer comme lu",
+    "enablePush": "Activer les notifications",
+    "retentionHint": "Les alertes sont conservées pendant {{days}} jours."
   },
   "documents": {
     "kicker": "Centre de documents du personnel",
