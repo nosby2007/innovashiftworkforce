@@ -22,20 +22,34 @@ export const registerPushToken = onCall(async (req) => {
   const tokensCol = db.collection('orgs').doc(ctx.orgId).collection('users').doc(ctx.uid).collection('pushTokens');
   const docId = pushTokenDocId(token);
   const now = Timestamp.now();
+  const tokenDoc = { token, platform, updatedAt: now, createdAt: now };
 
-  await tokensCol.doc(docId).set({
-    token,
-    platform,
-    updatedAt: now,
-    createdAt: now,
-  }, { merge: true });
+  const writes: Array<Promise<unknown>> = [
+    tokensCol.doc(docId).set(tokenDoc, { merge: true }),
+  ];
+
+  // Super admins also get a platform-scoped copy — platformNotifications
+  // alerts (infra/platform-alerts.ts) push to platformUsers/{uid}/pushTokens
+  // rather than an org's subcollection, since a super admin isn't
+  // necessarily scoped to any one org.
+  const platformTokensCol = ctx.isSuperAdmin
+    ? db.collection('platformUsers').doc(ctx.uid).collection('pushTokens')
+    : null;
+  if (platformTokensCol) {
+    writes.push(platformTokensCol.doc(docId).set(tokenDoc, { merge: true }));
+  }
+
+  await Promise.all(writes);
 
   // Cap devices per user — drop the oldest beyond the limit rather than growing unbounded.
-  const snap = await tokensCol.orderBy('updatedAt', 'desc').get();
-  if (snap.size > MAX_TOKENS_PER_USER) {
-    const stale = snap.docs.slice(MAX_TOKENS_PER_USER);
-    await Promise.all(stale.map((d) => d.ref.delete()));
-  }
+  const trimCol = async (col: FirebaseFirestore.CollectionReference) => {
+    const snap = await col.orderBy('updatedAt', 'desc').get();
+    if (snap.size > MAX_TOKENS_PER_USER) {
+      const stale = snap.docs.slice(MAX_TOKENS_PER_USER);
+      await Promise.all(stale.map((d) => d.ref.delete()));
+    }
+  };
+  await Promise.all([trimCol(tokensCol), ...(platformTokensCol ? [trimCol(platformTokensCol)] : [])]);
 
   return { ok: true };
 });

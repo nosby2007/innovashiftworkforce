@@ -95,7 +95,8 @@
     "payroll": "Payroll",
     "auditLog": "Audit Log",
     "orgSettings": "Org Settings",
-    "platformConsole": "Platform Console"
+    "platformConsole": "Platform Console",
+    "platformAlerts": "Platform Alerts"
   },
   "routeTitles": {
     "dashboard": "Dashboard",
@@ -128,6 +129,7 @@
     "adminSettings": "Admin Settings",
     "employeeDetails": "Employee Details",
     "platform": "Platform Administration",
+    "platformAlerts": "Platform Alerts",
     "platformSettings": "Platform Settings",
     "default": "INNOVASHIFT"
   },
@@ -1050,6 +1052,15 @@
     "notificationUpdateFailed": "Unable to update notification.",
     "notificationDeleted": "Notification deleted.",
     "notificationDeleteFailed": "Unable to delete notification."
+  },
+  "platformAlerts": {
+    "title": "Platform Alerts",
+    "subtitle": "New demo requests and rate-limit abuse signals across the platform.",
+    "empty": "No alerts yet.",
+    "markRead": "Mark read",
+    "markAllRead": "Mark all read",
+    "enablePush": "Enable Push",
+    "retentionHint": "Alerts are kept for {{days}} days."
   },
   "documents": {
     "kicker": "Staff Document Center",

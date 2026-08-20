@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 
 import { initFirebase } from '../infra/firebase';
 import { externalNotify, sendgridApiKey } from '../infra/external-notify';
+import { notifyPlatformAdmins } from '../infra/platform-alerts';
+import { evaluateContactAbuseCounter } from '../domain/abuse-detection';
 
 // So a demo request is never just sitting invisibly in Firestore waiting for
 // someone to happen to check the console — this fires immediately and
@@ -98,6 +100,47 @@ export const contactIntake = onRequest({ secrets: [sendgridApiKey] }, async (req
   });
 
   if (blocked) {
+    // Track blocks per-IP (independent of the per-email|ip rate lock above,
+    // which resets every 60s) so a bot rotating email addresses from one
+    // network still gets caught over a rolling 1-hour window.
+    const ipHash = hashText(ip).slice(0, 40);
+    const abuseCounterRef = db.collection('contactAbuseCounters').doc(ipHash);
+    let abuseCount = 0;
+    let shouldAlertAbuse = false;
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(abuseCounterRef);
+      const data = snap.exists ? (snap.data() as any) : null;
+      const existing = data ? {
+        count: Number(data.count || 0),
+        windowStartAtMs: data.windowStartAt?.toMillis ? data.windowStartAt.toMillis() : nowMs,
+        alertedAt: data.alertedAt?.toMillis ? data.alertedAt.toMillis() : null,
+      } : null;
+      const evalResult = evaluateContactAbuseCounter(existing, nowMs);
+      abuseCount = evalResult.count;
+      shouldAlertAbuse = evalResult.shouldAlert;
+
+      tx.set(abuseCounterRef, {
+        ipHash,
+        count: evalResult.count,
+        windowStartAt: Timestamp.fromMillis(evalResult.windowStartAtMs),
+        alertedAt: evalResult.alertedAt != null ? Timestamp.fromMillis(evalResult.alertedAt) : null,
+        expiresAt: Timestamp.fromMillis(nowMs + 60 * 60 * 1000),
+      }, { merge: true });
+    });
+
+    // Outside the transaction — Firestore can retry the callback above on
+    // contention, and notifyPlatformAdmins does non-transactional writes +
+    // network (FCM) calls that must only ever fire once per real block.
+    if (shouldAlertAbuse) {
+      await notifyPlatformAdmins({
+        type: 'contact_abuse',
+        severity: 'warning',
+        title: 'Contact form abuse detected',
+        body: `${abuseCount} blocked submissions from one network in the last hour.`,
+        meta: { ipHash },
+      });
+    }
+
     res.status(429).json({ ok: false, error: 'Too many requests. Please retry in one minute.' });
     return;
   }
@@ -150,10 +193,18 @@ export const contactIntake = onRequest({ secrets: [sendgridApiKey] }, async (req
       message: `Hi ${name},\n\nThanks for your interest in InnovaShift Workforce for ${organization}. Our team will reach out within one business day to schedule your demo.\n\nIn the meantime, feel free to reply to this email with any questions.`,
       meta: { requestId: requestRef.id },
     }),
+    notifyPlatformAdmins({
+      type: 'contact_request',
+      severity: 'info',
+      title: 'New demo request',
+      body: `${name} — ${organization}`,
+      meta: { requestId: requestRef.id, email },
+    }),
   ]).then((outcomes) => {
+    const labels = ['to team', 'to requester', 'to platform admins'];
     outcomes.forEach((outcome, i) => {
       if (outcome.status === 'rejected') {
-        console.error(`[contactIntake] notification ${i === 0 ? 'to team' : 'to requester'} failed`, outcome.reason);
+        console.error(`[contactIntake] notification ${labels[i] ?? i} failed`, outcome.reason);
       }
     });
   });

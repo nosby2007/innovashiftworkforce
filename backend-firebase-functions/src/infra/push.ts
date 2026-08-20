@@ -24,29 +24,18 @@ export interface PushNotificationPayload {
   link?: string;
 }
 
-/**
- * Sends a push notification to every registered device for the given users
- * and prunes tokens FCM reports as no longer valid. Best-effort — failures
- * here must never block the caller's Firestore writes.
- */
-export async function sendPushToUids(orgId: string, uids: string[], payload: PushNotificationPayload): Promise<void> {
-  const uniqueUids = Array.from(new Set(uids.filter(Boolean)));
-  if (!uniqueUids.length) return;
+interface TokenRef {
+  ref: FirebaseFirestore.DocumentReference;
+  token: string;
+}
 
-  const admin = initFirebase();
-  const db = admin.firestore();
-
-  const tokenRefs: Array<{ uid: string; docId: string; token: string }> = [];
-  await Promise.all(uniqueUids.map(async (uid) => {
-    const snap = await db.collection('orgs').doc(orgId).collection('users').doc(uid).collection('pushTokens').get();
-    for (const doc of snap.docs) {
-      const token = String((doc.data() as any)?.token || '').trim();
-      if (token) tokenRefs.push({ uid, docId: doc.id, token });
-    }
-  }));
-
+/** Shared low-level sender — chunks at the FCM multicast limit and prunes
+ *  any token doc FCM reports as no longer valid. Best-effort — failures
+ *  here must never block the caller's Firestore writes. */
+async function sendToTokenRefs(tokenRefs: TokenRef[], payload: PushNotificationPayload, logLabel: string): Promise<void> {
   if (!tokenRefs.length) return;
 
+  const admin = initFirebase();
   const messaging = admin.messaging();
 
   for (let i = 0; i < tokenRefs.length; i += MAX_TOKENS_PER_SEND) {
@@ -67,16 +56,61 @@ export async function sendPushToUids(orgId: string, uids: string[], payload: Pus
       const cleanup: Array<Promise<unknown>> = [];
       res.responses.forEach((r, idx) => {
         if (!r.success && r.error?.code && INVALID_TOKEN_CODES.has(r.error.code)) {
-          const { uid, docId } = chunk[idx];
-          cleanup.push(
-            db.collection('orgs').doc(orgId).collection('users').doc(uid)
-              .collection('pushTokens').doc(docId).delete().catch(() => {})
-          );
+          cleanup.push(chunk[idx].ref.delete().catch(() => {}));
         }
       });
       if (cleanup.length) await Promise.all(cleanup);
     } catch (err) {
-      logger.warn(`[push] sendEachForMulticast failed for org ${orgId}`, err as any);
+      logger.warn(`[push] sendEachForMulticast failed for ${logLabel}`, err as any);
     }
   }
+}
+
+/**
+ * Sends a push notification to every registered device for the given users
+ * and prunes tokens FCM reports as no longer valid. Best-effort — failures
+ * here must never block the caller's Firestore writes.
+ */
+export async function sendPushToUids(orgId: string, uids: string[], payload: PushNotificationPayload): Promise<void> {
+  const uniqueUids = Array.from(new Set(uids.filter(Boolean)));
+  if (!uniqueUids.length) return;
+
+  const admin = initFirebase();
+  const db = admin.firestore();
+
+  const tokenRefs: TokenRef[] = [];
+  await Promise.all(uniqueUids.map(async (uid) => {
+    const snap = await db.collection('orgs').doc(orgId).collection('users').doc(uid).collection('pushTokens').get();
+    for (const doc of snap.docs) {
+      const token = String((doc.data() as any)?.token || '').trim();
+      if (token) tokenRefs.push({ ref: doc.ref, token });
+    }
+  }));
+
+  await sendToTokenRefs(tokenRefs, payload, `org ${orgId}`);
+}
+
+/**
+ * Same as sendPushToUids but reads device tokens from the org-independent
+ * platformUsers/{uid}/pushTokens registry — used for platform-level alerts
+ * (see infra/platform-alerts.ts) where the recipient (a super admin) isn't
+ * necessarily scoped to any single org.
+ */
+export async function sendPushToPlatformAdmins(uids: string[], payload: PushNotificationPayload): Promise<void> {
+  const uniqueUids = Array.from(new Set(uids.filter(Boolean)));
+  if (!uniqueUids.length) return;
+
+  const admin = initFirebase();
+  const db = admin.firestore();
+
+  const tokenRefs: TokenRef[] = [];
+  await Promise.all(uniqueUids.map(async (uid) => {
+    const snap = await db.collection('platformUsers').doc(uid).collection('pushTokens').get();
+    for (const doc of snap.docs) {
+      const token = String((doc.data() as any)?.token || '').trim();
+      if (token) tokenRefs.push({ ref: doc.ref, token });
+    }
+  }));
+
+  await sendToTokenRefs(tokenRefs, payload, 'platform admins');
 }

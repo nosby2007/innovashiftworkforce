@@ -126,6 +126,15 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Platform admin alerts — shared inbox (new demo requests, rate-limit
+    // abuse) written by Cloud Functions only; super admins mark items read
+    // via the readBy array. See infra/platform-alerts.ts.
+    match /platformNotifications/{notifId} {
+      allow read:            if isSuperAdmin();
+      allow create, delete:  if false;
+      allow update:          if isSuperAdmin();
+    }
+
     // Org directory (platform listing of all orgs)
     match /orgDirectory/{orgId} {
       allow read:  if signedIn() && (isSuperAdmin() || isOrgMember(orgId));

@@ -15,8 +15,11 @@ import { writeAudit } from '../infra/audit';
  *       employment ends)
  *     - audit logs, purged only once *past* HIPAA's own 6-year
  *       documentation retention ceiling (45 CFR 164.316(b)(2)(i))
- *     - client error logs and expired contact-form rate locks, both pure
- *       diagnostics/abuse-prevention state with no retention value
+ *     - client error logs, expired contact-form/sandbox rate locks, and
+ *       contact-abuse counters — all pure diagnostics/abuse-prevention
+ *       state with no retention value
+ *     - platform admin alert notifications (platformNotifications), kept
+ *       30 days — long enough to review, short enough not to pile up
  *
  * 2. Confirmed-only — time entries, payroll runs, the PTO ledger,
  *    time-off requests, and employee documents have real legal retention
@@ -35,6 +38,7 @@ import { writeAudit } from '../infra/audit';
 const BANK_INFO_RETENTION_MS = 90 * 24 * 60 * 60 * 1000; // 90 days post-termination
 const AUDIT_LOG_RETENTION_MS = 6 * 365 * 24 * 60 * 60 * 1000; // 6 years (HIPAA ceiling)
 const CLIENT_ERROR_LOG_RETENTION_MS = 365 * 24 * 60 * 60 * 1000; // 1 year
+const PLATFORM_NOTIFICATION_RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const BATCH_LIMIT = 450;
 
 interface OrgDataRetention {
@@ -141,6 +145,33 @@ async function purgeExpiredContactRateLocks(db: FirebaseFirestore.Firestore, now
 async function purgeExpiredSandboxRateLocks(db: FirebaseFirestore.Firestore, nowMs: number): Promise<number> {
   const snap = await db.collection('sandboxProvisionRateLocks')
     .where('expiresAt', '<=', Timestamp.fromMillis(nowMs))
+    .limit(BATCH_LIMIT)
+    .get();
+  if (snap.empty) return 0;
+
+  const batch = db.batch();
+  snap.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+  return snap.size;
+}
+
+async function purgeExpiredContactAbuseCounters(db: FirebaseFirestore.Firestore, nowMs: number): Promise<number> {
+  const snap = await db.collection('contactAbuseCounters')
+    .where('expiresAt', '<=', Timestamp.fromMillis(nowMs))
+    .limit(BATCH_LIMIT)
+    .get();
+  if (snap.empty) return 0;
+
+  const batch = db.batch();
+  snap.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+  return snap.size;
+}
+
+async function purgeOldPlatformNotifications(db: FirebaseFirestore.Firestore, nowMs: number): Promise<number> {
+  const cutoffMs = nowMs - PLATFORM_NOTIFICATION_RETENTION_MS;
+  const snap = await db.collection('platformNotifications')
+    .where('createdAt', '<=', Timestamp.fromMillis(cutoffMs))
     .limit(BATCH_LIMIT)
     .get();
   if (snap.empty) return 0;
@@ -332,19 +363,26 @@ export const enforceDataRetention = onSchedule(
     const bucket = admin.storage().bucket();
     const nowMs = Date.now();
 
-    const [bankInfoPurged, auditLogsPurged, errorLogsPurged, rateLocksPurged, sandboxRateLocksPurged, confirmed] = await Promise.all([
+    const [
+      bankInfoPurged, auditLogsPurged, errorLogsPurged, rateLocksPurged, sandboxRateLocksPurged,
+      contactAbuseCountersPurged, platformNotificationsPurged, confirmed,
+    ] = await Promise.all([
       purgeExpiredBankInfo(db, nowMs),
       purgeExpiredAuditLogs(db, nowMs),
       purgeExpiredClientErrorLogs(db, nowMs),
       purgeExpiredContactRateLocks(db, nowMs),
       purgeExpiredSandboxRateLocks(db, nowMs),
+      purgeExpiredContactAbuseCounters(db, nowMs),
+      purgeOldPlatformNotifications(db, nowMs),
       enforceConfirmedRetentionForOrgs(db, bucket, nowMs),
     ]);
 
     logger.info(
       `[enforceDataRetention] Unconditional: ${bankInfoPurged} bank info record(s), ${auditLogsPurged} audit log(s) past 6yr, ` +
       `${errorLogsPurged} client error log(s) past 1yr, ${rateLocksPurged} expired contact rate lock(s), ` +
-      `${sandboxRateLocksPurged} expired sandbox-provisioning rate lock(s). ` +
+      `${sandboxRateLocksPurged} expired sandbox-provisioning rate lock(s), ` +
+      `${contactAbuseCountersPurged} expired contact-abuse counter(s), ` +
+      `${platformNotificationsPurged} platform notification(s) past 30d. ` +
       `Confirmed-only: ${confirmed.timeEntries} time entries, ${confirmed.payrollRuns} payroll runs, ` +
       `${confirmed.accrualLedger} accrual ledger entries, ${confirmed.timeOffRequests} time-off requests, ` +
       `${confirmed.employeeDocuments} employee documents.`

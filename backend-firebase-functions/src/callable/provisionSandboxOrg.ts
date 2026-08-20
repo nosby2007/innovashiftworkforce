@@ -5,6 +5,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { initFirebase } from '../infra/firebase';
 import { buildSandboxSeed, pickSandboxSeedProfile } from '../domain/sandbox-seed';
 import { DEMO_SESSION_DURATION_MS } from '../domain/sandbox-config';
+import { notifyPlatformAdmins } from '../infra/platform-alerts';
+import { isSandboxDailyCapFirstAlert } from '../domain/abuse-detection';
 
 const SHORT_WINDOW_MS = 15 * 60 * 1000; // 1 provisioning per IP per 15 min
 const DAILY_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -43,6 +45,7 @@ export const provisionSandboxOrg = onCall(
     const lockRef = db.collection('sandboxProvisionRateLocks').doc(ipHash);
 
     let blockReason: 'short-window' | 'daily-cap' | null = null;
+    let shouldAlertDailyCap = false;
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(lockRef);
       const data = snap.exists ? (snap.data() as any) : null;
@@ -58,6 +61,10 @@ export const provisionSandboxOrg = onCall(
       const nextDailyCount = withinDailyWindow ? dailyCount + 1 : 1;
       if (nextDailyCount > DAILY_CAP) {
         blockReason = 'daily-cap';
+        shouldAlertDailyCap = isSandboxDailyCapFirstAlert(data);
+        if (shouldAlertDailyCap) {
+          tx.set(lockRef, { alertedForDailyCap: true }, { merge: true });
+        }
         return;
       }
 
@@ -70,6 +77,19 @@ export const provisionSandboxOrg = onCall(
         expiresAt: Timestamp.fromMillis(nowMs + DAILY_WINDOW_MS),
       }, { merge: true });
     });
+
+    if (blockReason === 'daily-cap' && shouldAlertDailyCap) {
+      // Outside the transaction — see contactIntake.ts's identical comment:
+      // Firestore can retry the callback above on contention, and this does
+      // non-transactional writes + FCM network calls that must fire once.
+      await notifyPlatformAdmins({
+        type: 'sandbox_abuse',
+        severity: 'warning',
+        title: 'Sandbox demo daily limit hit',
+        body: `A network hit today's cap of ${DAILY_CAP} sandbox demos.`,
+        meta: { ipHash },
+      });
+    }
 
     if (blockReason) {
       throw new HttpsError('resource-exhausted',

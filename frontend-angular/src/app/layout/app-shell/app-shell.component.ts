@@ -65,6 +65,7 @@ const ROUTE_TITLES: Record<string, string> = {
   '/admin/org-settings':          'routeTitles.adminOrgSettings',
   '/admin/settings':              'routeTitles.adminSettings',
   '/platform':                    'routeTitles.platform',
+  '/platform/alerts':             'routeTitles.platformAlerts',
   '/platform/settings':           'routeTitles.platformSettings',
 };
 
@@ -676,7 +677,8 @@ export class AppLayoutComponent implements OnDestroy {
   ];
 
   platformNav: NavItem[] = [
-    { label: 'nav.platformConsole', link: '/platform', icon: 'shield', section: 'platform', superAdminOnly: true },
+    { label: 'nav.platformConsole', link: '/platform',        icon: 'shield',              section: 'platform', superAdminOnly: true },
+    { label: 'nav.platformAlerts',  link: '/platform/alerts', icon: 'notifications_active', section: 'platform', superAdminOnly: true },
   ];
 
   constructor(
