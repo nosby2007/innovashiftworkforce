@@ -32,9 +32,11 @@ async function isBootstrapSuperAdmin(uid?: string): Promise<boolean> {
 
     const root = rootSnap.exists ? rootSnap.data() as any : null;
     const platform = platformSnap.exists ? platformSnap.data() as any : null;
+    // Only an explicit platformRole grants platform authority. accessRole 'admin' is an
+    // organization role held by every org admin (createOrg/adminInviteUser write it to
+    // users/{uid}); accepting it here made every org admin a platform super admin.
     const platformRole = normalizePlatformRole(root?.platformRole ?? platform?.platformRole);
-    const accessRole = normalizeAccessRole(root?.accessRole ?? root?.role);
-    return platformRole === 'superAdmin' || accessRole === 'admin';
+    return platformRole === 'superAdmin';
   } catch {
     return false;
   }
