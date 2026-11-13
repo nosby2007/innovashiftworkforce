@@ -1,0 +1,14 @@
+{
+  "name": "innovashift-firestore-rules-tests",
+  "private": true,
+  "type": "module",
+  "description": "Firestore security-rules regression tests, run in the local emulator (no project, no credentials).",
+  "scripts": {
+    "test": "cd ../.. && tests/firestore-rules/node_modules/.bin/firebase emulators:exec --only firestore --project demo-innovashift-rules \"node --test tests/firestore-rules/tenant-boundary.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "4.0.1",
+    "firebase": "11.10.0",
+    "firebase-tools": "14.27.0"
+  }
+}

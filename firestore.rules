@@ -15,11 +15,14 @@ service cloud.firestore {
     function accessRole()    { return request.auth.token.get('accessRole', '') != '' ? request.auth.token.get('accessRole', '') : rootAccessRole(); }
     function platformRole()  { return request.auth.token.get('platformRole', '') != '' ? request.auth.token.get('platformRole', '') : rootPlatformRole(); }
 
+    // Platform super-admin comes ONLY from an explicit platformRole == 'superAdmin'.
+    // accessRole == 'admin' is an ORGANIZATION role: createOrg and adminInviteUser write it
+    // to users/{uid} for every org admin, so treating it as platform authority let any org
+    // admin read and overwrite other tenants' data. Do not reintroduce it here.
     function isBootstrapSuperAdmin() {
       return signedIn() && (
-        get(/databases/$(database)/documents/users/$(uid())).data.platformRole == 'superAdmin' ||
-        get(/databases/$(database)/documents/platformUsers/$(uid())).data.platformRole == 'superAdmin' ||
-        get(/databases/$(database)/documents/users/$(uid())).data.accessRole == 'admin'
+        get(/databases/$(database)/documents/users/$(uid())).data.get('platformRole', '') == 'superAdmin' ||
+        get(/databases/$(database)/documents/platformUsers/$(uid())).data.get('platformRole', '') == 'superAdmin'
       );
     }
 
